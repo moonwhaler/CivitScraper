@@ -23,15 +23,17 @@ class HTMLGenerator:
     Generator for HTML pages.
     """
     
-    def __init__(self, config: Dict[str, Any], template_dir: Optional[str] = None):
+    def __init__(self, config: Dict[str, Any], template_dir: Optional[str] = None, model_processor=None):
         """
         Initialize HTML generator.
         
         Args:
             config: Configuration
             template_dir: Directory containing templates
+            model_processor: ModelProcessor instance for downloading images (optional)
         """
         self.config = config
+        self.model_processor = model_processor
         
         # Get output configuration
         self.output_config = config.get("output", {})
@@ -251,122 +253,53 @@ class HTMLGenerator:
         # Get model stats
         stats = metadata.get("stats", {})
         
-        # Get model images
-        images = metadata.get("images", [])
-        
         # Get max_count from configuration
         max_count = self.output_config.get("images", {}).get("max_count", 4)
         
         # Log the max_count value for debugging
         logger.debug(f"HTMLGenerator using max_count: {max_count} for file: {file_path}")
         
-        # Log the number of images before limiting
-        logger.debug(f"HTMLGenerator number of images before limiting: {len(images)}")
-        
-        # Limit number of images
-        images = images[:max_count]
-        
-        # Log the number of images after limiting
-        logger.debug(f"HTMLGenerator number of images after limiting to max_count {max_count}: {len(images)}")
-        
         # Get image paths
         image_paths = []
-        for i, image in enumerate(images):
-            # Get image URL
-            image_url = image.get("url")
-            if not image_url:
-                continue
+        
+        # If we have a ModelProcessor, use it to download images
+        if self.model_processor:
+            # Use the ModelProcessor to download images
+            logger.debug(f"Using ModelProcessor to download images for {file_path}")
+            image_paths = self.model_processor.download_images(file_path, metadata, max_count)
+        else:
+            # Fallback to checking for existing images
+            logger.debug(f"No ModelProcessor available, checking for existing images for {file_path}")
             
-            # Get image extension
-            ext = os.path.splitext(image_url)[1]
+            # Get model images
+            images = metadata.get("images", [])
             
-            # Get the image path with the index number
-            # The ModelProcessor downloads images with filenames that include the index number
-            image_path = get_image_path(file_path, self.config, f"preview{i}", ext)
+            # Log the number of images before limiting
+            logger.debug(f"HTMLGenerator number of images before limiting: {len(images)}")
             
-            logger.debug(f"Looking for indexed image file ({i}): {image_path}")
+            # Limit number of images
+            images = images[:max_count]
             
-            # Check if the indexed image file exists
-            if os.path.isfile(image_path):
-                # Get image metadata
-                image_meta = image.get("meta", {})
-                # Ensure image_meta is a dictionary, even if meta is None
-                if image_meta is None:
-                    image_meta = {}
+            # Log the number of images after limiting
+            logger.debug(f"HTMLGenerator number of images after limiting to max_count {max_count}: {len(images)}")
+            
+            for i, image in enumerate(images):
+                # Get image URL
+                image_url = image.get("url")
+                if not image_url:
+                    continue
                 
-                # Get HTML path
-                html_path = get_html_path(file_path, self.config)
-                html_dir = os.path.dirname(html_path)
+                # Get image extension
+                ext = os.path.splitext(image_url)[1]
                 
-                # Calculate relative path from HTML to image
-                rel_path = os.path.relpath(image_path, html_dir)
+                # Get the image path with the index number
+                # The ModelProcessor downloads images with filenames that include the index number
+                image_path = get_image_path(file_path, self.config, f"preview{i}", ext)
                 
-                # Log paths for debugging
-                logger.debug(f"HTML path: {html_path}")
-                logger.debug(f"Found indexed image path: {image_path}")
-                logger.debug(f"Relative path: {rel_path}")
+                logger.debug(f"Looking for indexed image file ({i}): {image_path}")
                 
-                # Determine if this is a video file based on extension
-                is_video = image_path.lower().endswith('.mp4')
-                logger.debug(f"File is video: {is_video}")
-                
-                # Add image/video to list
-                image_paths.append({
-                    "path": rel_path,
-                    "prompt": image_meta.get("prompt", ""),
-                    "negative_prompt": image_meta.get("negativePrompt", ""),
-                    "sampler": image_meta.get("sampler", ""),
-                    "cfg_scale": image_meta.get("cfgScale", ""),
-                    "steps": image_meta.get("steps", ""),
-                    "seed": image_meta.get("seed", ""),
-                    "model": image_meta.get("Model", ""),
-                    "is_video": is_video,
-                })
-            else:
-                # If the indexed image file doesn't exist, check if a version with a different extension exists
-                # This handles the case where a video file was renamed from .jpeg to .mp4 by the ModelProcessor
-                
-                # Get the base path without extension
-                base_path = os.path.splitext(image_path)[0]
-                
-                # Check for common video extensions
-                video_path = f"{base_path}.mp4"
-                if os.path.isfile(video_path):
-                    # Found a video file with the same base name
-                    logger.debug(f"Found video file instead of image: {video_path}")
-                    
-                    # Get image metadata
-                    image_meta = image.get("meta", {})
-                    # Ensure image_meta is a dictionary, even if meta is None
-                    if image_meta is None:
-                        image_meta = {}
-                    
-                    # Get HTML path
-                    html_path = get_html_path(file_path, self.config)
-                    html_dir = os.path.dirname(html_path)
-                    
-                    # Calculate relative path from HTML to video
-                    rel_path = os.path.relpath(video_path, html_dir)
-                    
-                    # Log paths for debugging
-                    logger.debug(f"HTML path: {html_path}")
-                    logger.debug(f"Video path: {video_path}")
-                    logger.debug(f"Relative path: {rel_path}")
-                    
-                    # Add video to list
-                    image_paths.append({
-                        "path": rel_path,
-                        "prompt": image_meta.get("prompt", ""),
-                        "negative_prompt": image_meta.get("negativePrompt", ""),
-                        "sampler": image_meta.get("sampler", ""),
-                        "cfg_scale": image_meta.get("cfgScale", ""),
-                        "steps": image_meta.get("steps", ""),
-                        "seed": image_meta.get("seed", ""),
-                        "model": image_meta.get("Model", ""),
-                        "is_video": True,
-                    })
-                # If no video file exists, check if the original image exists
-                elif os.path.isfile(image_path):
+                # Check if the indexed image file exists
+                if os.path.isfile(image_path):
                     # Get image metadata
                     image_meta = image.get("meta", {})
                     # Ensure image_meta is a dictionary, even if meta is None
@@ -382,11 +315,12 @@ class HTMLGenerator:
                     
                     # Log paths for debugging
                     logger.debug(f"HTML path: {html_path}")
-                    logger.debug(f"Image path: {image_path}")
+                    logger.debug(f"Found indexed image path: {image_path}")
                     logger.debug(f"Relative path: {rel_path}")
                     
                     # Determine if this is a video file based on extension
                     is_video = image_path.lower().endswith('.mp4')
+                    logger.debug(f"File is video: {is_video}")
                     
                     # Add image/video to list
                     image_paths.append({
@@ -401,86 +335,89 @@ class HTMLGenerator:
                         "is_video": is_video,
                     })
                 else:
-                    # Check if in dry run mode
-                    if self.dry_run:
-                        logger.info(f"Dry run: Would download image {i+1}/{len(images)} from {image.get('url')} to {image_path}")
+                    # If the indexed image file doesn't exist, check if a version with a different extension exists
+                    # This handles the case where a video file was renamed from .jpeg to .mp4 by the ModelProcessor
+                    
+                    # Get the base path without extension
+                    base_path = os.path.splitext(image_path)[0]
+                    
+                    # Check for common video extensions
+                    video_path = f"{base_path}.mp4"
+                    if os.path.isfile(video_path):
+                        # Found a video file with the same base name
+                        logger.debug(f"Found video file instead of image: {video_path}")
+                        
+                        # Get image metadata
+                        image_meta = image.get("meta", {})
+                        # Ensure image_meta is a dictionary, even if meta is None
+                        if image_meta is None:
+                            image_meta = {}
+                        
+                        # Get HTML path
+                        html_path = get_html_path(file_path, self.config)
+                        html_dir = os.path.dirname(html_path)
+                        
+                        # Calculate relative path from HTML to video
+                        rel_path = os.path.relpath(video_path, html_dir)
+                        
+                        # Log paths for debugging
+                        logger.debug(f"HTML path: {html_path}")
+                        logger.debug(f"Video path: {video_path}")
+                        logger.debug(f"Relative path: {rel_path}")
+                        
+                        # Add video to list
+                        image_paths.append({
+                            "path": rel_path,
+                            "prompt": image_meta.get("prompt", ""),
+                            "negative_prompt": image_meta.get("negativePrompt", ""),
+                            "sampler": image_meta.get("sampler", ""),
+                            "cfg_scale": image_meta.get("cfgScale", ""),
+                            "steps": image_meta.get("steps", ""),
+                            "seed": image_meta.get("seed", ""),
+                            "model": image_meta.get("Model", ""),
+                            "is_video": True,
+                        })
+                    # If no video file exists, check if the original image exists
+                    elif os.path.isfile(image_path):
+                        # Get image metadata
+                        image_meta = image.get("meta", {})
+                        # Ensure image_meta is a dictionary, even if meta is None
+                        if image_meta is None:
+                            image_meta = {}
+                        
+                        # Get HTML path
+                        html_path = get_html_path(file_path, self.config)
+                        html_dir = os.path.dirname(html_path)
+                        
+                        # Calculate relative path from HTML to image
+                        rel_path = os.path.relpath(image_path, html_dir)
+                        
+                        # Log paths for debugging
+                        logger.debug(f"HTML path: {html_path}")
+                        logger.debug(f"Image path: {image_path}")
+                        logger.debug(f"Relative path: {rel_path}")
+                        
+                        # Determine if this is a video file based on extension
+                        is_video = image_path.lower().endswith('.mp4')
+                        
+                        # Add image/video to list
+                        image_paths.append({
+                            "path": rel_path,
+                            "prompt": image_meta.get("prompt", ""),
+                            "negative_prompt": image_meta.get("negativePrompt", ""),
+                            "sampler": image_meta.get("sampler", ""),
+                            "cfg_scale": image_meta.get("cfgScale", ""),
+                            "steps": image_meta.get("steps", ""),
+                            "seed": image_meta.get("seed", ""),
+                            "model": image_meta.get("Model", ""),
+                            "is_video": is_video,
+                        })
+                    # If no image or video file exists, log a warning
                     else:
-                        # Try to download the image
-                        try:
-                            # Create directory if it doesn't exist
-                            os.makedirs(os.path.dirname(image_path), exist_ok=True)
-                            
-                            # Download image
-                            logger.debug(f"Downloading image {i+1}/{len(images)} for {file_path}")
-                            
-                            # Get image URL
-                            image_url = image.get("url")
-                            if image_url:
-                                # Use requests to download the image
-                                import requests
-                                response = requests.get(image_url, stream=True)
-                                if response.status_code == 200:
-                                    with open(image_path, 'wb') as f:
-                                        for chunk in response.iter_content(1024):
-                                            f.write(chunk)
-                                    
-                                    # Get HTML path
-                                    html_path = get_html_path(file_path, self.config)
-                                    html_dir = os.path.dirname(html_path)
-                                    
-                                    # Calculate relative path from HTML to image
-                                    rel_path = os.path.relpath(image_path, html_dir)
-                                    
-                                    # Log paths for debugging
-                                    logger.debug(f"HTML path: {html_path}")
-                                    logger.debug(f"Image path: {image_path}")
-                                    logger.debug(f"Relative path: {rel_path}")
-                                    
-                                    # Get image metadata
-                                    image_meta = image.get("meta", {})
-                                    # Ensure image_meta is a dictionary, even if meta is None
-                                    if image_meta is None:
-                                        image_meta = {}
-                                        
-                                    # Check if the content type indicates a video
-                                    content_type = response.headers.get('Content-Type', '')
-                                    is_video = content_type.startswith('video/')
-                                    logger.debug(f"Downloaded file content type: {content_type}, is_video: {is_video}")
-                                    
-                                    # If it's a video but has a wrong extension, rename it to .mp4
-                                    if is_video and not image_path.lower().endswith('.mp4'):
-                                        # Get the directory and filename without extension
-                                        dir_name = os.path.dirname(image_path)
-                                        base_name = os.path.splitext(os.path.basename(image_path))[0]
-                                        
-                                        # Create new path with .mp4 extension
-                                        new_path = os.path.join(dir_name, f"{base_name}.mp4")
-                                        
-                                        # Rename the file
-                                        try:
-                                            os.rename(image_path, new_path)
-                                            logger.info(f"Renamed video file from {image_path} to {new_path} based on Content-Type: {content_type}")
-                                            # Update the image_path for further processing
-                                            image_path = new_path
-                                            # Update the relative path
-                                            rel_path = os.path.relpath(image_path, html_dir)
-                                        except Exception as e:
-                                            logger.error(f"Failed to rename video file from {image_path} to {new_path}: {e}")
-                                    
-                                    # Add image/video to list
-                                    image_paths.append({
-                                        "path": rel_path,
-                                        "prompt": image_meta.get("prompt", ""),
-                                        "negative_prompt": image_meta.get("negativePrompt", ""),
-                                        "sampler": image_meta.get("sampler", ""),
-                                        "cfg_scale": image_meta.get("cfgScale", ""),
-                                        "steps": image_meta.get("steps", ""),
-                                        "seed": image_meta.get("seed", ""),
-                                        "model": image_meta.get("Model", ""),
-                                        "is_video": is_video,
-                                    })
-                        except Exception as e:
-                            logger.error(f"Error downloading image: {e}")
+                        logger.warning(f"Image file not found: {image_path}")
+                        # In dry run mode, we would normally download the image
+                        if self.dry_run:
+                            logger.info(f"Dry run: Would download image {i+1}/{len(images)} from {image.get('url')} to {image_path}")
         
         # Sanitize and encode image data to avoid JSON parsing issues
         encoded_images = self._sanitize_json_data(image_paths)

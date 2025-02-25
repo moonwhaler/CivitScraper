@@ -114,7 +114,7 @@ class ModelProcessor:
             
             # Download images
             if self.output_config.get("images", {}).get("save", True):
-                self._download_images(file_path, metadata)
+                self.download_images(file_path, metadata)
             
             # Generate HTML
             if self.output_config.get("metadata", {}).get("html", {}).get("enabled", True):
@@ -259,29 +259,31 @@ class ModelProcessor:
         
         return results
     
-    def _download_images(self, file_path: str, metadata: Dict[str, Any]):
+    def download_images(self, file_path: str, metadata: Dict[str, Any], max_count: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Download images for model.
         
         Args:
             file_path: Path to model file
             metadata: Model metadata
+            max_count: Maximum number of images to download (overrides config)
+            
+        Returns:
+            List of dictionaries with information about downloaded images
         """
         # Get image configuration
         image_config = self.output_config.get("images", {})
         
-        # Get maximum number of images to download
-        # IMPORTANT: Hard-code the max_count to 2 for the "full_process" job template
-        # This is a temporary fix until we can properly debug the configuration inheritance
-        
-        # Check if we're running the "fetch-all" job which uses the "full_process" template
-        # We can determine this by checking if the output configuration has max_count=2
-        if image_config.get("max_count") == 2:
-            max_count = 2
-            logger.debug(f"Using hard-coded max_count: {max_count} for file: {file_path}")
-        else:
-            max_count = image_config.get("max_count", 4)
-            logger.debug(f"Using configured max_count: {max_count} for file: {file_path}")
+        # Determine max_count - use provided value or get from config
+        if max_count is None:
+            # Check if we're running the "fetch-all" job which uses the "full_process" template
+            # We can determine this by checking if the output configuration has max_count=2
+            if image_config.get("max_count") == 2:
+                max_count = 2
+                logger.debug(f"Using hard-coded max_count: {max_count} for file: {file_path}")
+            else:
+                max_count = image_config.get("max_count", 4)
+                logger.debug(f"Using configured max_count: {max_count} for file: {file_path}")
         
         # Get model directory
         model_dir = os.path.dirname(file_path)
@@ -316,6 +318,7 @@ class ModelProcessor:
         logger.debug(f"Number of images after limiting to max_count {max_count}: {len(images)}")
         
         # Download images
+        downloaded_images = []
         for i, image in enumerate(images):
             # Get image URL
             image_url = image.get("url")
@@ -329,9 +332,73 @@ class ModelProcessor:
             # This ensures each image gets a unique filename
             image_path = get_image_path(file_path, self.config, f"preview{i}", ext)
             
+            # Get image metadata
+            image_meta = image.get("meta", {})
+            # Ensure image_meta is a dictionary, even if meta is None
+            if image_meta is None:
+                image_meta = {}
+            
+            # Get HTML path for relative path calculation
+            html_path = get_html_path(file_path, self.config)
+            html_dir = os.path.dirname(html_path)
+            
+            # Check if the file already exists
+            if os.path.isfile(image_path):
+                # Calculate relative path from HTML to image
+                rel_path = os.path.relpath(image_path, html_dir)
+                
+                # Determine if this is a video file based on extension
+                is_video = image_path.lower().endswith('.mp4')
+                
+                # Add to downloaded images
+                downloaded_images.append({
+                    "path": rel_path,
+                    "prompt": image_meta.get("prompt", ""),
+                    "negative_prompt": image_meta.get("negativePrompt", ""),
+                    "sampler": image_meta.get("sampler", ""),
+                    "cfg_scale": image_meta.get("cfgScale", ""),
+                    "steps": image_meta.get("steps", ""),
+                    "seed": image_meta.get("seed", ""),
+                    "model": image_meta.get("Model", ""),
+                    "is_video": is_video,
+                })
+                continue
+            
+            # Check if a video version exists
+            video_path = os.path.splitext(image_path)[0] + ".mp4"
+            if os.path.isfile(video_path):
+                # Calculate relative path from HTML to video
+                rel_path = os.path.relpath(video_path, html_dir)
+                
+                # Add to downloaded images
+                downloaded_images.append({
+                    "path": rel_path,
+                    "prompt": image_meta.get("prompt", ""),
+                    "negative_prompt": image_meta.get("negativePrompt", ""),
+                    "sampler": image_meta.get("sampler", ""),
+                    "cfg_scale": image_meta.get("cfgScale", ""),
+                    "steps": image_meta.get("steps", ""),
+                    "seed": image_meta.get("seed", ""),
+                    "model": image_meta.get("Model", ""),
+                    "is_video": True,
+                })
+                continue
+            
             if self.dry_run:
                 # Simulate download in dry run mode
                 logger.info(f"Dry run: Would download image {i+1}/{len(images)} to {image_path}")
+                # Add placeholder for dry run
+                downloaded_images.append({
+                    "path": os.path.relpath(image_path, html_dir),
+                    "prompt": image_meta.get("prompt", ""),
+                    "negative_prompt": image_meta.get("negativePrompt", ""),
+                    "sampler": image_meta.get("sampler", ""),
+                    "cfg_scale": image_meta.get("cfgScale", ""),
+                    "steps": image_meta.get("steps", ""),
+                    "seed": image_meta.get("seed", ""),
+                    "model": image_meta.get("Model", ""),
+                    "is_video": False,
+                })
             else:
                 # Create directory if it doesn't exist
                 os.makedirs(os.path.dirname(image_path), exist_ok=True)
@@ -342,26 +409,47 @@ class ModelProcessor:
                 
                 if not success:
                     logger.warning(f"Failed to download image {i+1}/{len(images)} for {file_path}")
-                elif content_type:
+                else:
+                    # Calculate relative path from HTML to image
+                    rel_path = os.path.relpath(image_path, html_dir)
+                    
                     # Check if the content type indicates a video
-                    if content_type.startswith('video/'):
-                        # If it's a video but has a wrong extension, save it with .mp4 extension
-                        if not image_path.lower().endswith('.mp4'):
-                            # Get the directory and filename without extension
-                            dir_name = os.path.dirname(image_path)
-                            base_name = os.path.splitext(os.path.basename(image_path))[0]
-                            
-                            # Create new path with .mp4 extension
-                            new_path = os.path.join(dir_name, f"{base_name}.mp4")
-                            
-                            # Rename the file (simpler and more atomic operation)
-                            try:
-                                os.rename(image_path, new_path)
-                                logger.info(f"Renamed video file from {image_path} to {new_path} based on Content-Type: {content_type}")
-                                # Update the image_path for further processing
-                                image_path = new_path
-                            except Exception as e:
-                                logger.error(f"Failed to rename video file from {image_path} to {new_path}: {e}")
+                    is_video = content_type and content_type.startswith('video/')
+                    
+                    # If it's a video but has a wrong extension, save it with .mp4 extension
+                    if is_video and not image_path.lower().endswith('.mp4'):
+                        # Get the directory and filename without extension
+                        dir_name = os.path.dirname(image_path)
+                        base_name = os.path.splitext(os.path.basename(image_path))[0]
+                        
+                        # Create new path with .mp4 extension
+                        new_path = os.path.join(dir_name, f"{base_name}.mp4")
+                        
+                        # Rename the file (simpler and more atomic operation)
+                        try:
+                            os.rename(image_path, new_path)
+                            logger.info(f"Renamed video file from {image_path} to {new_path} based on Content-Type: {content_type}")
+                            # Update the image_path for further processing
+                            image_path = new_path
+                            # Update the relative path
+                            rel_path = os.path.relpath(image_path, html_dir)
+                        except Exception as e:
+                            logger.error(f"Failed to rename video file from {image_path} to {new_path}: {e}")
+                    
+                    # Add to downloaded images
+                    downloaded_images.append({
+                        "path": rel_path,
+                        "prompt": image_meta.get("prompt", ""),
+                        "negative_prompt": image_meta.get("negativePrompt", ""),
+                        "sampler": image_meta.get("sampler", ""),
+                        "cfg_scale": image_meta.get("cfgScale", ""),
+                        "steps": image_meta.get("steps", ""),
+                        "seed": image_meta.get("seed", ""),
+                        "model": image_meta.get("Model", ""),
+                        "is_video": is_video,
+                    })
+        
+        return downloaded_images
     
     def _generate_html(self, file_path: str, metadata: Dict[str, Any]):
         """
@@ -387,10 +475,10 @@ class ModelProcessor:
             max_count = self.output_config.get("images", {}).get("max_count", 4)
             logger.debug(f"Using max_count: {max_count} for HTML generation")
             
-            # Create a temporary HTMLGenerator with our output configuration
-            # This ensures the HTMLGenerator uses the same max_count as we do
+            # Create a temporary HTMLGenerator with our output configuration and a reference to this ModelProcessor
+            # This ensures the HTMLGenerator uses the same max_count as we do and can use our download_images method
             from ..html.generator import HTMLGenerator
-            temp_html_generator = HTMLGenerator(self.config)
+            temp_html_generator = HTMLGenerator(self.config, model_processor=self)
             
             # Override the output configuration with our output configuration
             temp_html_generator.output_config = self.output_config
