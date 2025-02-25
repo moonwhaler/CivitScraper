@@ -18,20 +18,20 @@
 {% block content %}
 <div class="model-info-bar">
     <div class="model-info-item">
-        <span class="model-info-label">Type:</span>
+        <span class="model-info-label">Type</span>
         <span class="model-info-value">{{ model_type }}</span>
     </div>
     
     {% if metadata.baseModel %}
     <div class="model-info-item">
-        <span class="model-info-label">Base Model:</span>
+        <span class="model-info-label">Base Model</span>
         <span class="model-info-value">{{ metadata.baseModel }}</span>
     </div>
     {% endif %}
     
     {% if stats and stats.rating %}
     <div class="model-info-item">
-        <span class="model-info-label">Rating:</span>
+        <span class="model-info-label">Rating</span>
         <span class="model-info-value">
             <span class="rating">
                 {% for i in range(5) %}
@@ -43,7 +43,7 @@
                         ☆
                     {% endif %}
                 {% endfor %}
-                <span class="rating-count">({{ stats.ratingCount|default(0) }} ratings)</span>
+                <span class="rating-count">({{ stats.ratingCount|default(0) }})</span>
             </span>
         </span>
     </div>
@@ -51,8 +51,15 @@
     
     {% if stats and stats.downloadCount %}
     <div class="model-info-item">
-        <span class="model-info-label">Downloads:</span>
+        <span class="model-info-label">Downloads</span>
         <span class="model-info-value">{{ stats.downloadCount }}</span>
+    </div>
+    {% endif %}
+    
+    {% if metadata.createdAt %}
+    <div class="model-info-item">
+        <span class="model-info-label">Created</span>
+        <span class="model-info-value">{{ metadata.createdAt|replace('T', ' ')|replace('Z', '')|replace('.000', '') }}</span>
     </div>
     {% endif %}
 </div>
@@ -62,7 +69,7 @@
     <div class="metadata-grid">
         {% if metadata.name %}
         <div class="metadata-item">
-            <div class="metadata-label">Version:</div>
+            <div class="metadata-label">Version Name:</div>
             <div class="metadata-value">{{ metadata.name }}</div>
         </div>
         {% endif %}
@@ -102,10 +109,7 @@
         <div class="metadata-value copy-container">
             {{ metadata.trainedWords|join(', ') }}
             <span class="copy-icon" data-copy="{{ metadata.trainedWords|join(', ') }}">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
+                📋
             </span>
         </div>
     </div>
@@ -149,12 +153,12 @@
             <div class="prompt-section">
                 <h3>Positive Prompt</h3>
                 <div id="positive-prompt" class="prompt"></div>
-                <button class="copy-button" data-target="positive-prompt">Copy</button>
+                <button class="copy-button" data-target="positive-prompt">📋 Copy</button>
             </div>
             <div class="prompt-section">
                 <h3>Negative Prompt</h3>
                 <div id="negative-prompt" class="prompt"></div>
-                <button class="copy-button" data-target="negative-prompt">Copy</button>
+                <button class="copy-button" data-target="negative-prompt">📋 Copy</button>
             </div>
             <div class="additional-info">
                 <h3>Additional Information</h3>
@@ -261,9 +265,9 @@
                 const text = targetElement.textContent;
                 
                 navigator.clipboard.writeText(text).then(() => {
-                    button.textContent = 'Copied!';
+                    button.textContent = '✓ Copied!';
                     setTimeout(() => {
-                        button.textContent = 'Copy';
+                        button.textContent = '📋 Copy';
                     }, 2000);
                 });
             });

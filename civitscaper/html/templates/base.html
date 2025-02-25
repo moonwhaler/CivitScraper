@@ -297,29 +297,42 @@
         }
         
         .model-info-bar {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            padding: 10px 15px;
-            background-color: rgba(0, 0, 0, 0.2);
-            border-radius: 6px;
-            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            padding: 20px;
+            background: linear-gradient(to right, rgba(20, 20, 20, 0.8), rgba(30, 30, 30, 0.8));
+            border-radius: 10px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         .model-info-item {
             display: flex;
-            align-items: center;
-            margin-right: 20px;
+            flex-direction: column;
+            padding: 10px;
+            border-radius: 8px;
+            background-color: rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .model-info-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
         
         .model-info-label {
             color: var(--metadata-label-color);
-            margin-right: 8px;
-            font-size: 0.9rem;
+            font-size: 0.8rem;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         
         .model-info-value {
-            font-size: 0.9rem;
+            font-size: 1.1rem;
+            font-weight: 500;
         }
         
         /* Image viewer styles */
@@ -449,12 +462,13 @@
             }
             
             .model-info-bar {
-                flex-direction: column;
-                align-items: flex-start;
+                grid-template-columns: 1fr;
+                gap: 10px;
+                padding: 15px;
             }
             
             .model-info-item {
-                margin-bottom: 8px;
+                margin-bottom: 0;
             }
         }
     </style>
@@ -489,10 +503,10 @@
                 icon.addEventListener('click', function() {
                     const textToCopy = this.getAttribute('data-copy');
                     navigator.clipboard.writeText(textToCopy).then(() => {
-                        const originalHTML = this.innerHTML;
-                        this.innerHTML = '✓';
+                        const originalText = this.textContent.trim();
+                        this.textContent = '✓';
                         setTimeout(() => {
-                            this.innerHTML = originalHTML;
+                            this.textContent = originalText;
                         }, 2000);
                     });
                 });

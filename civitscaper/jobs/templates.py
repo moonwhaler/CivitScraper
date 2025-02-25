@@ -93,6 +93,7 @@ DEFAULT_JOB_TEMPLATES = {
         "description": "Synchronize LoRA trigger words",
         "recursive": True,
         "loras_file": "loras.json",
+        "paths": [],  # Empty array as default, should be overridden when creating a job
     },
     
     # Gallery generation template

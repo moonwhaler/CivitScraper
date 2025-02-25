@@ -20,9 +20,11 @@ organization:
   # Output directory (can use {model_dir} for relative paths)
   output_dir: "organized_models"  # or "{model_dir}/organized"
 
-  # File operation flags
-  move_files: false  # True to move instead of copy
-  create_symlinks: false  # True to create symlinks instead of copying
+  # Dry run mode (simulate operations without making changes)
+  dry_run: false
+
+  # Operation mode: "copy" (default), "move", or "symlink"
+  operation_mode: "copy"
 ```
 
 Enable organization in jobs:
@@ -40,7 +42,7 @@ jobs:
 
 ### Windows Symlink Requirements
 
-When using symlinks (`create_symlinks: true`) on Windows systems, one of the following conditions must be met:
+When using symlinks (`operation_mode: "symlink"`) on Windows systems, one of the following conditions must be met:
 
 1. Run the application with Administrator privileges
    - Right-click the application/terminal and select "Run as Administrator"
@@ -50,7 +52,7 @@ When using symlinks (`create_symlinks: true`) on Windows systems, one of the fol
    - Navigate to Update & Security > For developers
    - Enable "Developer Mode"
 
-If neither condition is met, symlink operations will fail with a permission error. In such cases, consider using copy (`create_symlinks: false`) or move (`move_files: true`) operations instead.
+If neither condition is met, symlink operations will fail with a permission error. In such cases, consider using copy (`operation_mode: "copy"`) or move (`operation_mode: "move"`) operations instead.
 
 ## Built-in Templates
 
@@ -149,25 +151,24 @@ organization:
 
 ## Operation Modes
 
-Three operation modes are available via configuration flags:
+Three operation modes are available via the `operation_mode` setting:
 
 - **Copy** (default): Create copies of files
   ```yaml
   organization:
-    move_files: false
-    create_symlinks: false
+    operation_mode: "copy"
   ```
 
 - **Move**: Move files to new locations
   ```yaml
   organization:
-    move_files: true
-    create_symlinks: false
+    operation_mode: "move"
   ```
 
 - **Symlink**: Create symbolic links
   ```yaml
   organization:
-    move_files: false
-    create_symlinks: true
+    operation_mode: "symlink"
   ```
+
+> **Note:** For backward compatibility, the legacy configuration using `move_files` and `create_symlinks` flags is still supported, but the `operation_mode` setting is recommended for new configurations.

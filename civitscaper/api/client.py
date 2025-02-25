@@ -281,6 +281,9 @@ class CivitAIClient:
         reset_timeout = config["api"].get("batch", {}).get("circuit_breaker", {}).get("reset_timeout", 60)
         self.circuit_breaker = CircuitBreaker(failure_threshold, reset_timeout)
         
+        # Set up retry delay (convert from ms to seconds)
+        self.base_retry_delay = config["api"].get("batch", {}).get("retry_delay", 2000) / 1000.0
+        
         # Set up cache
         cache_dir = config.get("scanner", {}).get("cache_dir", ".civitscaper_cache")
         cache_validity = config.get("scanner", {}).get("cache_validity", 86400)
@@ -380,8 +383,9 @@ class CivitAIClient:
                 if response.status_code >= 500:
                     self.circuit_breaker.record_failure(endpoint_name)
                     retries += 1
-                    retry_delay = 2 ** retries  # Exponential backoff
-                    logger.warning(f"Server error {response.status_code}, retrying after {retry_delay} seconds")
+                    # Use the configured base_retry_delay with exponential backoff
+                    retry_delay = self.base_retry_delay * (2 ** (retries - 1))
+                    logger.warning(f"Server error {response.status_code}, retrying after {retry_delay:.2f} seconds")
                     time.sleep(retry_delay)
                     continue
                 
@@ -409,8 +413,9 @@ class CivitAIClient:
                 if retries > self.max_retries:
                     raise
                 
-                retry_delay = 2 ** retries  # Exponential backoff
-                logger.warning(f"Request failed: {e}, retrying after {retry_delay} seconds")
+                # Use the configured base_retry_delay with exponential backoff
+                retry_delay = self.base_retry_delay * (2 ** (retries - 1))
+                logger.warning(f"Request failed: {e}, retrying after {retry_delay:.2f} seconds")
                 time.sleep(retry_delay)
     
     def get_model(self, model_id: int, force_refresh: bool = False) -> Dict[str, Any]:

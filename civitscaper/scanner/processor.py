@@ -259,6 +259,22 @@ class ModelProcessor:
         # Get maximum number of images to download
         max_count = image_config.get("max_count", 4)
         
+        # Get model directory
+        model_dir = os.path.dirname(file_path)
+        
+        # Get model name
+        model_name = os.path.splitext(os.path.basename(file_path))[0]
+        
+        # Clean up existing preview images
+        import glob
+        preview_pattern = os.path.join(model_dir, f"{model_name}.preview*")
+        for old_image in glob.glob(preview_pattern):
+            try:
+                os.remove(old_image)
+                logger.debug(f"Removed old preview image: {old_image}")
+            except Exception as e:
+                logger.warning(f"Failed to remove old preview image {old_image}: {e}")
+        
         # Get images
         images = metadata.get("images", [])
         

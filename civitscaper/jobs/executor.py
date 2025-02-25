@@ -113,8 +113,13 @@ class JobExecutor:
             # Get paths
             path_ids = job_config.get("paths", [])
             if not path_ids:
-                logger.error(f"No paths specified for job: {job_name}")
-                return False
+                # If no paths specified, use all LORA paths
+                path_ids = [path_id for path_id, path_config in self.config.get("input_paths", {}).items() 
+                           if path_config.get("type") == "LORA"]
+                if not path_ids:
+                    logger.error(f"No paths specified for job: {job_name} and no LORA paths found in configuration")
+                    return False
+                logger.info(f"No paths specified, using all LORA paths: {path_ids}")
             
             # Get scan options
             recursive = job_config.get("recursive", True)

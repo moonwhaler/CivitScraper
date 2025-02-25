@@ -82,8 +82,21 @@ class FileOrganizer:
             output_dir = output_dir.replace("{model_dir}", os.path.dirname(file_path))
             
             # Get operation mode
-            move_files = self.organization_config.get("move_files", False)
-            create_symlinks = self.organization_config.get("create_symlinks", False)
+            operation_mode = self.organization_config.get("operation_mode", "copy")
+            move_files = False
+            create_symlinks = False
+            
+            # Convert operation_mode to flags
+            if operation_mode == "move":
+                move_files = True
+            elif operation_mode == "symlink":
+                create_symlinks = True
+            
+            # Fallback to legacy configuration if present
+            if "move_files" in self.organization_config:
+                move_files = self.organization_config.get("move_files", False)
+            if "create_symlinks" in self.organization_config:
+                create_symlinks = self.organization_config.get("create_symlinks", False)
             
             # Get dry run flag
             dry_run = self.organization_config.get("dry_run", True)

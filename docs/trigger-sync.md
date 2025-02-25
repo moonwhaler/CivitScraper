@@ -22,6 +22,7 @@ Trigger word synchronization is enabled through input path configuration and job
 The sync-lora-triggers template type requires specific fields to function correctly:
 - `type`: (string, required) - Must be 'sync-lora-triggers'
 - `loras_file`: (string or path, required) - Path to the loras.json file
+- `paths`: (array of strings, required) - List of input_paths IDs to scan for models
 - `recursive`: (boolean, required) - Whether to search subdirectories
 - `description`: (string, optional) - Human-readable description of the template
 
@@ -44,6 +45,7 @@ job_templates:
     description: "Synchronize LoRA trigger words"
     loras_file: "loras.json"  # Path to loras.json file
     recursive: true  # Whether to search subdirectories
+    paths: []  # Empty array as default, should be overridden when creating a job
 
 # Create a sync job using the template
 jobs:

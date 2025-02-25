@@ -196,6 +196,12 @@ class HTMLGenerator:
         # Get model images
         images = metadata.get("images", [])
         
+        # Get max_count from configuration
+        max_count = self.output_config.get("images", {}).get("max_count", 4)
+        
+        # Limit number of images
+        images = images[:max_count]
+        
         # Get image paths
         image_paths = []
         for i, image in enumerate(images):
