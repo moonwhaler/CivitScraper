@@ -246,7 +246,7 @@ def get_image_path(file_path: str, config: Dict[str, Any], image_type: str = "pr
     Args:
         file_path: Path to model file
         config: Configuration
-        image_type: Image type (preview or thumbnail)
+        image_type: Image type (e.g., preview)
         ext: Image file extension
         
     Returns:

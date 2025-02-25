@@ -35,7 +35,6 @@ DEFAULT_JOB_TEMPLATES = {
                 "max_count": 4,
                 "filenames": {
                     "preview": "{model_name}.preview{ext}",
-                    "thumbnail": "{model_name}.thumb{ext}",
                 },
             },
         },
@@ -62,7 +61,6 @@ DEFAULT_JOB_TEMPLATES = {
                 "max_count": 4,
                 "filenames": {
                     "preview": "{model_name}.preview{ext}",
-                    "thumbnail": "{model_name}.thumb{ext}",
                 },
             },
         },
