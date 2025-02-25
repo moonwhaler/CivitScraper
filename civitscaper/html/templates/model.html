@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+
+{% block title %}{{ model_name }} - CivitAI Model{% endblock %}
+
+{% block header %}{{ model_name }}{% endblock %}
+
+{% block header_actions %}
+<a href="https://civitai.com/models/{{ metadata.modelId }}" class="external-link" target="_blank">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+        <polyline points="15 3 21 3 21 9"></polyline>
+        <line x1="10" y1="14" x2="21" y2="3"></line>
+    </svg>
+    View on CivitAI
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="model-info-bar">
+    <div class="model-info-item">
+        <span class="model-info-label">Type:</span>
+        <span class="model-info-value">{{ model_type }}</span>
+    </div>
+    
+    {% if metadata.baseModel %}
+    <div class="model-info-item">
+        <span class="model-info-label">Base Model:</span>
+        <span class="model-info-value">{{ metadata.baseModel }}</span>
+    </div>
+    {% endif %}
+    
+    {% if stats and stats.rating %}
+    <div class="model-info-item">
+        <span class="model-info-label">Rating:</span>
+        <span class="model-info-value">
+            <span class="rating">
+                {% for i in range(5) %}
+                    {% if i < (stats.rating|int) %}
+                        ★
+                    {% elif i < stats.rating and i >= (stats.rating|int) %}
+                        ★
+                    {% else %}
+                        ☆
+                    {% endif %}
+                {% endfor %}
+                <span class="rating-count">({{ stats.ratingCount|default(0) }} ratings)</span>
+            </span>
+        </span>
+    </div>
+    {% endif %}
+    
+    {% if stats and stats.downloadCount %}
+    <div class="model-info-item">
+        <span class="model-info-label">Downloads:</span>
+        <span class="model-info-value">{{ stats.downloadCount }}</span>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2 class="section-title">Model Details</h2>
+    <div class="metadata-grid">
+        {% if metadata.name %}
+        <div class="metadata-item">
+            <div class="metadata-label">Version:</div>
+            <div class="metadata-value">{{ metadata.name }}</div>
+        </div>
+        {% endif %}
+        
+        {% if metadata.createdAt %}
+        <div class="metadata-item">
+            <div class="metadata-label">Created:</div>
+            <div class="metadata-value">{{ metadata.createdAt|replace('T', ' ')|replace('Z', '')|replace('.000', '') }}</div>
+        </div>
+        {% endif %}
+        
+        {% if metadata.updatedAt %}
+        <div class="metadata-item">
+            <div class="metadata-label">Updated:</div>
+            <div class="metadata-value">{{ metadata.updatedAt|replace('T', ' ')|replace('Z', '')|replace('.000', '') }}</div>
+        </div>
+        {% endif %}
+        
+        {% if metadata.status %}
+        <div class="metadata-item">
+            <div class="metadata-label">Status:</div>
+            <div class="metadata-value">{{ metadata.status }}</div>
+        </div>
+        {% endif %}
+        
+        {% if metadata.baseModel %}
+        <div class="metadata-item">
+            <div class="metadata-label">Base Model:</div>
+            <div class="metadata-value">{{ metadata.baseModel }}</div>
+        </div>
+        {% endif %}
+    </div>
+    
+    {% if metadata.trainedWords %}
+    <div class="metadata-item" style="margin-top: 20px;">
+        <div class="metadata-label">Trained Words:</div>
+        <div class="metadata-value copy-container">
+            {{ metadata.trainedWords|join(', ') }}
+            <span class="copy-icon" data-copy="{{ metadata.trainedWords|join(', ') }}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+            </span>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if description %}
+    <div class="metadata-item" style="margin-top: 20px;">
+        <div class="metadata-label">Description:</div>
+        <div class="metadata-value">{{ description|safe }}</div>
+    </div>
+    {% endif %}
+</div>
+
+{% if images %}
+<div class="card">
+    <h2 class="section-title">Gallery</h2>
+    <div class="gallery">
+        {% for image in images %}
+        <div class="gallery-item" data-index="{{ loop.index0 }}">
+            <img src="{{ image.path }}" alt="Preview image" loading="lazy">
+            <div class="image-metadata">
+                {% if image.steps %}
+                <span class="image-meta-item">Steps: {{ image.steps }}</span>
+                {% endif %}
+                {% if image.cfg_scale %}
+                <span class="image-meta-item">CFG: {{ image.cfg_scale }}</span>
+                {% endif %}
+                {% if image.sampler %}
+                <span class="image-meta-item">Sampler: {{ image.sampler }}</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div id="image-viewer" class="image-viewer">
+    <div class="viewer-content">
+        <img id="viewer-image" src="" alt="Full size image">
+        <div class="image-info">
+            <div class="prompt-section">
+                <h3>Positive Prompt</h3>
+                <div id="positive-prompt" class="prompt"></div>
+                <button class="copy-button" data-target="positive-prompt">Copy</button>
+            </div>
+            <div class="prompt-section">
+                <h3>Negative Prompt</h3>
+                <div id="negative-prompt" class="prompt"></div>
+                <button class="copy-button" data-target="negative-prompt">Copy</button>
+            </div>
+            <div class="additional-info">
+                <h3>Additional Information</h3>
+                <div id="additional-info" class="info-content"></div>
+            </div>
+        </div>
+    </div>
+    <button id="close-viewer" class="close-button">×</button>
+    <button id="prev-image" class="nav-button prev">❮</button>
+    <button id="next-image" class="nav-button next">❯</button>
+</div>
+{% endif %}
+
+{% if metadata.files %}
+<div class="card">
+    <h2 class="section-title">Files</h2>
+    {% for file in metadata.files %}
+    <div class="file-item">
+        <div class="file-name">{{ file.name }}</div>
+        <div class="file-meta">
+            <span class="file-size">{{ (file.sizeKB / 1024)|round(2) }} MB</span>
+            {% if file.metadata %}
+                {% if file.metadata.fp %}
+                <span class="file-format">{{ file.metadata.fp }}</span>
+                {% endif %}
+                {% if file.metadata.size %}
+                <span class="file-size-info">{{ file.metadata.size }}</span>
+                {% endif %}
+                {% if file.metadata.format %}
+                <span class="file-format-info">{{ file.metadata.format }}</span>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    // Gallery functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const galleryItems = document.querySelectorAll('.gallery-item');
+        const imageViewer = document.getElementById('image-viewer');
+        const viewerImage = document.getElementById('viewer-image');
+        const positivePrompt = document.getElementById('positive-prompt');
+        const negativePrompt = document.getElementById('negative-prompt');
+        const additionalInfo = document.getElementById('additional-info');
+        const closeButton = document.getElementById('close-viewer');
+        const prevButton = document.getElementById('prev-image');
+        const nextButton = document.getElementById('next-image');
+        const copyButtons = document.querySelectorAll('.copy-button');
+        
+        let currentIndex = 0;
+        // Create image data array from JSON
+        const imageData = JSON.parse('{{ images|tojson|safe }}');
+        
+        // Open image viewer
+        galleryItems.forEach((item, index) => {
+            item.addEventListener('click', () => {
+                currentIndex = index;
+                openImageViewer(currentIndex);
+            });
+        });
+        
+        // Close image viewer
+        closeButton.addEventListener('click', () => {
+            imageViewer.classList.remove('active');
+        });
+        
+        // Navigation
+        prevButton.addEventListener('click', () => {
+            currentIndex = (currentIndex - 1 + imageData.length) % imageData.length;
+            openImageViewer(currentIndex);
+        });
+        
+        nextButton.addEventListener('click', () => {
+            currentIndex = (currentIndex + 1) % imageData.length;
+            openImageViewer(currentIndex);
+        });
+        
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (!imageViewer.classList.contains('active')) return;
+            
+            if (e.key === 'Escape') {
+                imageViewer.classList.remove('active');
+            } else if (e.key === 'ArrowLeft') {
+                currentIndex = (currentIndex - 1 + imageData.length) % imageData.length;
+                openImageViewer(currentIndex);
+            } else if (e.key === 'ArrowRight') {
+                currentIndex = (currentIndex + 1) % imageData.length;
+                openImageViewer(currentIndex);
+            }
+        });
+        
+        // Copy to clipboard
+        copyButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const targetId = button.getAttribute('data-target');
+                const targetElement = document.getElementById(targetId);
+                const text = targetElement.textContent;
+                
+                navigator.clipboard.writeText(text).then(() => {
+                    button.textContent = 'Copied!';
+                    setTimeout(() => {
+                        button.textContent = 'Copy';
+                    }, 2000);
+                });
+            });
+        });
+        
+        function openImageViewer(index) {
+            const data = imageData[index];
+            
+            // Use the same path as in the gallery item
+            const galleryItem = document.querySelector(`.gallery-item[data-index="${index}"]`);
+            const imgElement = galleryItem.querySelector('img');
+            viewerImage.src = imgElement.src;
+            
+            positivePrompt.textContent = data.prompt || 'No positive prompt available';
+            negativePrompt.textContent = data.negative_prompt || 'No negative prompt available';
+            
+            // Format additional info
+            let infoHTML = '';
+            if (data.sampler) infoHTML += `<div><strong>Sampler:</strong> ${data.sampler}</div>`;
+            if (data.cfg_scale) infoHTML += `<div><strong>CFG Scale:</strong> ${data.cfg_scale}</div>`;
+            if (data.steps) infoHTML += `<div><strong>Steps:</strong> ${data.steps}</div>`;
+            if (data.seed) infoHTML += `<div><strong>Seed:</strong> ${data.seed}</div>`;
+            if (data.model) infoHTML += `<div><strong>Model:</strong> ${data.model}</div>`;
+            
+            additionalInfo.innerHTML = infoHTML || 'No additional information available';
+            
+            imageViewer.classList.add('active');
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,4 @@
+requests>=2.25.0
+pyyaml>=5.4.0
+jinja2>=3.0.0
+blake3>=0.3.0

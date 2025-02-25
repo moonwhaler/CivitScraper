@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} - CivitAI Models{% endblock %}
+
+{% block header %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="gallery-container">
+    {% if models %}
+    <div class="models-grid">
+        {% for model in models %}
+        <div class="model-card">
+            <a href="{{ model.html_path }}" class="model-link">
+                {% if model.preview_image_path %}
+                <div class="model-preview">
+                    <img src="{{ model.preview_image_path }}" alt="{{ model.name }}" loading="lazy">
+                </div>
+                {% else %}
+                <div class="model-preview no-image">
+                    <div class="no-image-text">No Preview</div>
+                </div>
+                {% endif %}
+                <div class="model-info">
+                    <h3 class="model-name">{{ model.name }}</h3>
+                    <div class="model-meta">
+                        <span class="model-type">{{ model.type }}</span>
+                        {% if model.creator %}
+                        <span class="model-creator">by {{ model.creator }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-gallery">
+        <p>No models found.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block styles %}
+<style>
+    .gallery-container {
+        margin-top: 20px;
+    }
+    
+    .models-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+    }
+    
+    .model-card {
+        background-color: var(--card-background);
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        border: 1px solid var(--border-color);
+    }
+    
+    .model-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    }
+    
+    .model-link {
+        display: block;
+        color: var(--text-color);
+        text-decoration: none;
+    }
+    
+    .model-preview {
+        height: 200px;
+        overflow: hidden;
+        position: relative;
+        background-color: rgba(0, 0, 0, 0.2);
+    }
+    
+    .model-preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.3s ease;
+    }
+    
+    .model-card:hover .model-preview img {
+        transform: scale(1.05);
+    }
+    
+    .no-image {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: var(--card-background);
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .no-image-text {
+        color: var(--metadata-label-color);
+        font-size: 0.9rem;
+    }
+    
+    .model-info {
+        padding: 15px;
+    }
+    
+    .model-name {
+        margin: 0 0 8px 0;
+        font-size: 1.1rem;
+        font-weight: 500;
+        color: var(--text-color);
+    }
+    
+    .model-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        font-size: 0.85rem;
+    }
+    
+    .model-type {
+        color: var(--primary-color);
+        background-color: rgba(52, 152, 219, 0.1);
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+    
+    .model-creator {
+        color: var(--metadata-label-color);
+    }
+    
+    .empty-gallery {
+        text-align: center;
+        padding: 50px 0;
+        color: var(--metadata-label-color);
+    }
+    
+    @media (max-width: 768px) {
+        .models-grid {
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        }
+        
+        .model-preview {
+            height: 160px;
+        }
+    }
+</style>
+{% endblock %}

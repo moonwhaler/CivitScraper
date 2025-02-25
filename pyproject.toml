@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "civitscaper"
+version = "0.1.0"
+description = "A tool for fetching and managing CivitAI model metadata"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "AGPL-3.0"}
+dependencies = [
+    "requests>=2.25.0",
+    "pyyaml>=5.4.0",
+    "jinja2>=3.0.0",
+    "blake3>=0.3.0",
+]
+
+[project.scripts]
+civitscaper = "civitscaper.cli:main"
+
+[tool.setuptools]
+packages = {find = {include = ["civitscaper", "civitscaper.*"]}}
+include-package-data = true
