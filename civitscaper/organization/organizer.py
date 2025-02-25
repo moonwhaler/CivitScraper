@@ -38,6 +38,7 @@ class FileOrganizer:
             "by_type_and_creator": "{type}/{creator}",
             "by_base_model": "{base_model}/{type}",
             "by_nsfw": "{nsfw}/{type}",
+            "by_type_basemodel_nsfw": "{type}/{base_model}/{nsfw}",
             "by_date": "{year}/{month}/{type}",
             "by_model_info": "{model_type}/{model_name}",
         }
@@ -64,11 +65,17 @@ class FileOrganizer:
             template_name = self.organization_config.get("template")
             custom_template = self.organization_config.get("custom_template")
             
+            # Log the organization configuration for debugging
+            logger.debug(f"Organization configuration: {self.organization_config}")
+            logger.debug(f"Template name from config: {template_name}")
+            
             # Get template
             if custom_template:
                 template = custom_template
+                logger.debug(f"Using custom template: {custom_template}")
             elif template_name and template_name in self.templates:
                 template = self.templates[template_name]
+                logger.debug(f"Using predefined template '{template_name}': {template}")
             else:
                 # Use default template
                 template = self.templates["by_type"]
@@ -85,7 +92,17 @@ class FileOrganizer:
             output_dir = output_dir.replace("{model_dir}", os.path.dirname(file_path))
             
             # Get operation mode
-            operation_mode = self.organization_config.get("operation_mode", "copy")
+            # First check if it's in the organization config
+            operation_mode = self.organization_config.get("operation_mode")
+            
+            # If not, check if it's in the defaults.organization section
+            if operation_mode is None and "defaults" in self.config and "organization" in self.config["defaults"]:
+                operation_mode = self.config["defaults"]["organization"].get("operation_mode", "copy")
+            else:
+                # Default to copy if not found
+                operation_mode = operation_mode or "copy"
+                
+            logger.debug(f"Operation mode from config: {operation_mode}")
             move_files = False
             create_symlinks = False
             
@@ -101,8 +118,10 @@ class FileOrganizer:
             if "create_symlinks" in self.organization_config:
                 create_symlinks = self.organization_config.get("create_symlinks", False)
             
+            logger.debug(f"Final operation flags: move_files={move_files}, create_symlinks={create_symlinks}")
+            
             # Get dry run flag
-            dry_run = self.organization_config.get("dry_run", True)
+            dry_run = self.organization_config.get("dry_run", False)
             
             # Format path using metadata
             relative_path = self._format_path(template, metadata)
@@ -122,9 +141,12 @@ class FileOrganizer:
             if not dry_run:
                 os.makedirs(target_dir, exist_ok=True)
             
+            # Determine operation type for logging
+            operation_type = "move" if move_files else "symlink" if create_symlinks else "copy"
+            
             # Perform file operation
             if dry_run:
-                logger.info(f"Dry run: Would {'move' if move_files else 'symlink' if create_symlinks else 'copy'} {file_path} to {target_path}")
+                logger.info(f"Dry run: Would {operation_type} {file_path} to {target_path}")
             else:
                 if move_files:
                     logger.info(f"Moving {file_path} to {target_path}")
@@ -142,7 +164,7 @@ class FileOrganizer:
                 metadata_target_path = os.path.splitext(target_path)[0] + ".json"
                 
                 if dry_run:
-                    logger.info(f"Dry run: Would {'move' if move_files else 'symlink' if create_symlinks else 'copy'} {metadata_path} to {metadata_target_path}")
+                    logger.info(f"Dry run: Would {operation_type} {metadata_path} to {metadata_target_path}")
                 else:
                     if move_files:
                         logger.info(f"Moving {metadata_path} to {metadata_target_path}")
@@ -160,7 +182,7 @@ class FileOrganizer:
                 html_target_path = os.path.splitext(target_path)[0] + ".html"
                 
                 if dry_run:
-                    logger.info(f"Dry run: Would {'move' if move_files else 'symlink' if create_symlinks else 'copy'} {html_path} to {html_target_path}")
+                    logger.info(f"Dry run: Would {operation_type} {html_path} to {html_target_path}")
                 else:
                     if move_files:
                         logger.info(f"Moving {html_path} to {html_target_path}")
@@ -173,12 +195,38 @@ class FileOrganizer:
                         shutil.copy2(html_path, html_target_path)
             
             # Organize preview images
+            # Get max_count from configuration to know how many preview images to look for
+            max_count = self.config.get("output", {}).get("images", {}).get("max_count", 4)
+            
+            # Check for both indexed preview images and the legacy non-indexed format
+            # First, try the indexed format (preview0.jpeg, preview1.jpeg, etc.)
+            for i in range(max_count):
+                # Check for different possible extensions
+                for ext in [".jpeg", ".jpg", ".png"]:
+                    preview_path = os.path.splitext(file_path)[0] + f".preview{i}{ext}"
+                    if os.path.isfile(preview_path):
+                        preview_target_path = os.path.splitext(target_path)[0] + f".preview{i}{ext}"
+                        
+                        if dry_run:
+                            logger.info(f"Dry run: Would {operation_type} {preview_path} to {preview_target_path}")
+                        else:
+                            if move_files:
+                                logger.info(f"Moving {preview_path} to {preview_target_path}")
+                                shutil.move(preview_path, preview_target_path)
+                            elif create_symlinks:
+                                logger.info(f"Creating symlink from {preview_path} to {preview_target_path}")
+                                os.symlink(os.path.abspath(preview_path), preview_target_path)
+                            else:
+                                logger.info(f"Copying {preview_path} to {preview_target_path}")
+                                shutil.copy2(preview_path, preview_target_path)
+            
+            # Also check for the legacy non-indexed format (preview.jpg)
             preview_path = os.path.splitext(file_path)[0] + ".preview.jpg"
             if os.path.isfile(preview_path):
                 preview_target_path = os.path.splitext(target_path)[0] + ".preview.jpg"
                 
                 if dry_run:
-                    logger.info(f"Dry run: Would {'move' if move_files else 'symlink' if create_symlinks else 'copy'} {preview_path} to {preview_target_path}")
+                    logger.info(f"Dry run: Would {operation_type} {preview_path} to {preview_target_path}")
                 else:
                     if move_files:
                         logger.info(f"Moving {preview_path} to {preview_target_path}")

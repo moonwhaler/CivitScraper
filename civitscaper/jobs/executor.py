@@ -218,7 +218,17 @@ class JobExecutor:
             # Organize files
             if organize:
                 logger.info(f"Organizing {len(metadata_dict)} files")
-                self.file_organizer.organize_files(list(metadata_dict.keys()), metadata_dict, force_organize=True)
+                
+                # Check if we need to use the default organization settings
+                if not job_config.get("organization"):
+                    # If organization is empty in job config, use the defaults
+                    if "defaults" in self.config and "organization" in self.config["defaults"]:
+                        logger.debug("Using default organization settings because job organization is empty")
+                        job_specific_config["organization"] = self.config["defaults"]["organization"]
+                
+                # Create a job-specific organizer with the updated configuration
+                job_organizer = FileOrganizer(job_specific_config)
+                job_organizer.organize_files(list(metadata_dict.keys()), metadata_dict, force_organize=True)
             
             # Generate gallery
             if job_config.get("generate_gallery", False):
