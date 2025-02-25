@@ -272,6 +272,9 @@ class CivitAIClient:
         self.max_retries = config["api"].get("max_retries", 3)
         self.user_agent = config["api"].get("user_agent", "CivitScraper/0.1.0")
         
+        # Get dry run flag
+        self.dry_run = config.get("dry_run", False)
+        
         # Set up rate limiting
         rate_limit = config["api"].get("batch", {}).get("rate_limit", 100)
         self.rate_limiter = RateLimiter(rate_limit)
@@ -547,6 +550,11 @@ class CivitAIClient:
         Returns:
             True if download was successful, False otherwise
         """
+        # Check if in dry run mode
+        if self.dry_run:
+            logger.info(f"Dry run: Would download image from {url} to {output_path}")
+            return True
+        
         try:
             # Acquire rate limit token
             self.rate_limiter.acquire()
@@ -589,6 +597,11 @@ class CivitAIClient:
             if not download_url:
                 logger.error(f"No download URL found for model version {version_id}")
                 return False
+            
+            # Check if in dry run mode
+            if self.dry_run:
+                logger.info(f"Dry run: Would download model from {download_url} to {output_path}")
+                return True
             
             # Acquire rate limit token
             self.rate_limiter.acquire()

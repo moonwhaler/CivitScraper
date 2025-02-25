@@ -46,6 +46,9 @@ class ModelProcessor:
         # Get batch configuration
         self.batch_config = config.get("api", {}).get("batch", {})
         
+        # Get dry run flag
+        self.dry_run = config.get("dry_run", False)
+        
         # Initialize failure tracking
         self.failures = []
     
@@ -89,14 +92,18 @@ class ModelProcessor:
             # Save metadata
             metadata_path = get_metadata_path(file_path, self.config)
             
-            # Create directory if it doesn't exist
-            os.makedirs(os.path.dirname(metadata_path), exist_ok=True)
-            
-            # Save metadata
-            with open(metadata_path, "w") as f:
-                json.dump(metadata, f, indent=2)
-            
-            logger.debug(f"Saved metadata to {metadata_path}")
+            if self.dry_run:
+                # Simulate saving metadata in dry run mode
+                logger.info(f"Dry run: Would save metadata to {metadata_path}")
+            else:
+                # Create directory if it doesn't exist
+                os.makedirs(os.path.dirname(metadata_path), exist_ok=True)
+                
+                # Save metadata
+                with open(metadata_path, "w") as f:
+                    json.dump(metadata, f, indent=2)
+                
+                logger.debug(f"Saved metadata to {metadata_path}")
             
             # Download images
             if self.output_config.get("images", {}).get("save", True):
@@ -265,15 +272,18 @@ class ModelProcessor:
         # Get model name
         model_name = os.path.splitext(os.path.basename(file_path))[0]
         
-        # Clean up existing preview images
-        import glob
-        preview_pattern = os.path.join(model_dir, f"{model_name}.preview*")
-        for old_image in glob.glob(preview_pattern):
-            try:
-                os.remove(old_image)
-                logger.debug(f"Removed old preview image: {old_image}")
-            except Exception as e:
-                logger.warning(f"Failed to remove old preview image {old_image}: {e}")
+        # Clean up existing preview images if not in dry run mode
+        if not self.dry_run:
+            import glob
+            preview_pattern = os.path.join(model_dir, f"{model_name}.preview*")
+            for old_image in glob.glob(preview_pattern):
+                try:
+                    os.remove(old_image)
+                    logger.debug(f"Removed old preview image: {old_image}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove old preview image {old_image}: {e}")
+        else:
+            logger.info(f"Dry run: Would remove old preview images for {file_path}")
         
         # Get images
         images = metadata.get("images", [])
@@ -294,15 +304,19 @@ class ModelProcessor:
             # Get image path with index
             image_path = get_image_path(file_path, self.config, f"preview{i}", ext)
             
-            # Create directory if it doesn't exist
-            os.makedirs(os.path.dirname(image_path), exist_ok=True)
-            
-            # Download image
-            logger.debug(f"Downloading image {i+1}/{len(images)} for {file_path}")
-            success = self.api_client.download_image(image_url, image_path)
-            
-            if not success:
-                logger.warning(f"Failed to download image {i+1}/{len(images)} for {file_path}")
+            if self.dry_run:
+                # Simulate download in dry run mode
+                logger.info(f"Dry run: Would download image {i+1}/{len(images)} to {image_path}")
+            else:
+                # Create directory if it doesn't exist
+                os.makedirs(os.path.dirname(image_path), exist_ok=True)
+                
+                # Download image
+                logger.debug(f"Downloading image {i+1}/{len(images)} for {file_path}")
+                success = self.api_client.download_image(image_url, image_path)
+                
+                if not success:
+                    logger.warning(f"Failed to download image {i+1}/{len(images)} for {file_path}")
     
     def _generate_html(self, file_path: str, metadata: Dict[str, Any]):
         """
@@ -314,6 +328,14 @@ class ModelProcessor:
         """
         logger.debug(f"Generating HTML for {file_path}")
         
+        # Get HTML path
+        html_path = get_html_path(file_path, self.config)
+        
+        if self.dry_run:
+            # Simulate HTML generation in dry run mode
+            logger.info(f"Dry run: Would generate HTML at {html_path}")
+            return
+        
         # Use HTMLGenerator if available
         if self.html_generator:
             # Generate HTML using the HTMLGenerator
@@ -321,8 +343,6 @@ class ModelProcessor:
             logger.debug(f"Generated HTML using templates at {html_path}")
         else:
             # Fallback to simple HTML generation
-            html_path = get_html_path(file_path, self.config)
-            
             # Create directory if it doesn't exist
             os.makedirs(os.path.dirname(html_path), exist_ok=True)
             

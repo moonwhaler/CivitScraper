@@ -57,6 +57,10 @@ def main():
         
         # Override configuration with command-line arguments
         if args.dry_run:
+            # Set dry_run at the top level of the configuration
+            config["dry_run"] = True
+            
+            # Also set it in the organization section for backward compatibility
             if "organization" not in config:
                 config["organization"] = {}
             config["organization"]["dry_run"] = True
