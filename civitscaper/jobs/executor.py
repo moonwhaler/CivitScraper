@@ -143,10 +143,12 @@ class JobExecutor:
             
             # Process files
             logger.info(f"Processing {len(filtered_files)} files")
+            # Get force_refresh setting from scanner configuration
+            force_refresh = self.config.get("scanner", {}).get("force_refresh", False)
             results = self.model_processor.process_files_in_batches(
                 filtered_files,
                 verify_hash=verify_hashes,
-                force_refresh=False,
+                force_refresh=force_refresh,
             )
             
             # Create metadata dictionary

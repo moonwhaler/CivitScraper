@@ -37,6 +37,9 @@ def parse_args():
     # Organization
     parser.add_argument("--dry-run", action="store_true", help="Simulate file operations without making changes")
     
+    # Cache
+    parser.add_argument("--force-refresh", action="store_true", help="Ignore cache and force refresh metadata")
+    
     # Logging
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     parser.add_argument("--quiet", action="store_true", help="Suppress console output")
@@ -65,6 +68,12 @@ def main():
                 config["organization"] = {}
             config["organization"]["dry_run"] = True
         
+        if args.force_refresh:
+            # Set force_refresh in the scanner section
+            if "scanner" not in config:
+                config["scanner"] = {}
+            config["scanner"]["force_refresh"] = True
+        
         # Set up logging
         if args.debug:
             if "logging" not in config:
@@ -80,6 +89,10 @@ def main():
         
         # Set up logging
         logger = setup_logging(config)
+        
+        # Log force refresh if enabled
+        if args.force_refresh:
+            logger.info("Force refresh enabled: Cache will be ignored")
         
         # Create API client
         api_client = CivitAIClient(config)
