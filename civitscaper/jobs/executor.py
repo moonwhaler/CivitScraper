@@ -58,6 +58,32 @@ class JobExecutor:
             logger.error(f"Job not found: {job_name}")
             return False
         
+        # Log the job configuration for debugging
+        logger.debug(f"Job configuration for {job_name} before execution: {job_config}")
+        
+        # Check if the job uses a template
+        template_name = job_config.get("template")
+        if template_name:
+            # Log the template name
+            logger.debug(f"Job {job_name} uses template: {template_name}")
+            
+            # Get the template configuration
+            template_config = self.config.get("job_templates", {}).get(template_name)
+            if template_config:
+                # Log the template configuration
+                logger.debug(f"Template {template_name} configuration: {template_config}")
+                
+                # Check if the template has an output section with max_count
+                template_max_count = template_config.get("output", {}).get("images", {}).get("max_count")
+                if template_max_count:
+                    logger.debug(f"Template {template_name} has max_count: {template_max_count}")
+                    
+                    # Check if the job has an output section
+                    if "output" not in job_config:
+                        # Add the output section from the template to the job configuration
+                        logger.debug(f"Adding output section from template {template_name} to job {job_name}")
+                        job_config["output"] = template_config.get("output", {})
+        
         # Get job type
         job_type = job_config.get("type")
         if not job_type:
@@ -145,7 +171,39 @@ class JobExecutor:
             logger.info(f"Processing {len(filtered_files)} files")
             # Get force_refresh setting from scanner configuration
             force_refresh = self.config.get("scanner", {}).get("force_refresh", False)
-            results = self.model_processor.process_files_in_batches(
+            
+            # Always create a job-specific processor to ensure we use the correct configuration
+            # Create a copy of the global configuration
+            job_specific_config = self.config.copy()
+            
+            # Get the job configuration directly from the job_config parameter
+            # This should be the fully resolved configuration after inheritance
+            
+            # Log the configuration for debugging
+            logger.debug(f"Job configuration for {job_name}: {job_config}")
+            
+            # Log the max_count values for debugging
+            global_max_count = job_specific_config.get("output", {}).get("images", {}).get("max_count", "not set")
+            job_max_count = job_config.get("output", {}).get("images", {}).get("max_count", "not set")
+            logger.debug(f"Global max_count: {global_max_count}, Job max_count: {job_max_count}")
+            
+            # If the job has an output section, use it
+            if "output" in job_config:
+                logger.debug(f"Using job-specific output configuration for job: {job_name}")
+                # Override the output configuration with the job-specific one
+                job_specific_config["output"] = job_config["output"]
+                
+                # Log the max_count value after update
+                updated_max_count = job_specific_config.get("output", {}).get("images", {}).get("max_count", "not set")
+                logger.debug(f"Updated max_count: {updated_max_count}")
+            else:
+                logger.debug(f"No output section found in job configuration for {job_name}")
+            
+            # Create a temporary processor with the job-specific configuration
+            temp_processor = ModelProcessor(job_specific_config, self.api_client, self.html_generator)
+            
+            # Use the temporary processor
+            results = temp_processor.process_files_in_batches(
                 filtered_files,
                 verify_hash=verify_hashes,
                 force_refresh=force_refresh,
@@ -160,7 +218,7 @@ class JobExecutor:
             # Organize files
             if organize:
                 logger.info(f"Organizing {len(metadata_dict)} files")
-                self.file_organizer.organize_files(list(metadata_dict.keys()), metadata_dict)
+                self.file_organizer.organize_files(list(metadata_dict.keys()), metadata_dict, force_organize=True)
             
             # Generate gallery
             if job_config.get("generate_gallery", False):

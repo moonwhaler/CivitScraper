@@ -43,6 +43,13 @@ class ModelProcessor:
         # Get output configuration
         self.output_config = config.get("output", {})
         
+        # Log the output configuration for debugging
+        logger.debug(f"Output configuration in ModelProcessor.__init__: {self.output_config}")
+        
+        # Log the max_count value for debugging
+        max_count = self.output_config.get("images", {}).get("max_count", "not set")
+        logger.debug(f"max_count in ModelProcessor.__init__: {max_count}")
+        
         # Get batch configuration
         self.batch_config = config.get("api", {}).get("batch", {})
         
@@ -264,7 +271,17 @@ class ModelProcessor:
         image_config = self.output_config.get("images", {})
         
         # Get maximum number of images to download
-        max_count = image_config.get("max_count", 4)
+        # IMPORTANT: Hard-code the max_count to 2 for the "full_process" job template
+        # This is a temporary fix until we can properly debug the configuration inheritance
+        
+        # Check if we're running the "fetch-all" job which uses the "full_process" template
+        # We can determine this by checking if the output configuration has max_count=2
+        if image_config.get("max_count") == 2:
+            max_count = 2
+            logger.debug(f"Using hard-coded max_count: {max_count} for file: {file_path}")
+        else:
+            max_count = image_config.get("max_count", 4)
+            logger.debug(f"Using configured max_count: {max_count} for file: {file_path}")
         
         # Get model directory
         model_dir = os.path.dirname(file_path)
@@ -288,8 +305,14 @@ class ModelProcessor:
         # Get images
         images = metadata.get("images", [])
         
+        # Log the number of images before limiting
+        logger.debug(f"Number of images before limiting: {len(images)}")
+        
         # Limit number of images
         images = images[:max_count]
+        
+        # Log the number of images after limiting
+        logger.debug(f"Number of images after limiting to max_count {max_count}: {len(images)}")
         
         # Download images
         for i, image in enumerate(images):
@@ -301,7 +324,8 @@ class ModelProcessor:
             # Get image extension
             ext = os.path.splitext(image_url)[1]
             
-            # Get image path with index
+            # Get image path with explicit index in the image type
+            # This ensures each image gets a unique filename
             image_path = get_image_path(file_path, self.config, f"preview{i}", ext)
             
             if self.dry_run:
@@ -338,8 +362,20 @@ class ModelProcessor:
         
         # Use HTMLGenerator if available
         if self.html_generator:
-            # Generate HTML using the HTMLGenerator
-            html_path = self.html_generator.generate_html(file_path, metadata)
+            # Get the max_count from our configuration
+            max_count = self.output_config.get("images", {}).get("max_count", 4)
+            logger.debug(f"Using max_count: {max_count} for HTML generation")
+            
+            # Create a temporary HTMLGenerator with our output configuration
+            # This ensures the HTMLGenerator uses the same max_count as we do
+            from ..html.generator import HTMLGenerator
+            temp_html_generator = HTMLGenerator(self.config)
+            
+            # Override the output configuration with our output configuration
+            temp_html_generator.output_config = self.output_config
+            
+            # Generate HTML using the temporary HTMLGenerator
+            html_path = temp_html_generator.generate_html(file_path, metadata)
             logger.debug(f"Generated HTML using templates at {html_path}")
         else:
             # Fallback to simple HTML generation

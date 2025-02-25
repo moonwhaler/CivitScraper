@@ -127,9 +127,12 @@ def resolve_inheritance(config: Dict[str, Any]) -> Dict[str, Any]:
     # Resolve job template inheritance
     if "job_templates" in config:
         for template_name, template in config["job_templates"].items():
+            logger.debug(f"Processing template: {template_name}")
             if "inherit" in template:
                 parent_name = template.pop("inherit")
                 parent_path = parent_name.split(".")
+                
+                logger.debug(f"Template {template_name} inherits from {parent_name}")
                 
                 # Find parent template
                 parent = config
@@ -141,18 +144,48 @@ def resolve_inheritance(config: Dict[str, Any]) -> Dict[str, Any]:
                 
                 # Merge parent and child
                 if isinstance(parent, dict):
+                    logger.debug(f"Merging parent {parent_name} into template {template_name}")
+                    logger.debug(f"Parent configuration: {parent}")
+                    logger.debug(f"Template configuration before merge: {template}")
+                    
                     config["job_templates"][template_name] = merge_configs(parent, template)
+                    
+                    logger.debug(f"Template configuration after merge: {config['job_templates'][template_name]}")
+                    
+                    # Check if the template has an output section with max_count
+                    max_count = config["job_templates"][template_name].get("output", {}).get("images", {}).get("max_count")
+                    if max_count:
+                        logger.debug(f"Template {template_name} has max_count: {max_count} after inheritance resolution")
     
     # Resolve job inheritance
     if "jobs" in config:
         for job_name, job in config["jobs"].items():
+            logger.debug(f"Processing job: {job_name}")
             if "template" in job:
                 template_name = job.pop("template")
+                
+                logger.debug(f"Job {job_name} uses template: {template_name}")
                 
                 # Find template
                 if "job_templates" in config and template_name in config["job_templates"]:
                     template = config["job_templates"][template_name]
+                    
+                    logger.debug(f"Template configuration: {template}")
+                    logger.debug(f"Job configuration before merge: {job}")
+                    
+                    # Check if the template has an output section with max_count
+                    template_max_count = template.get("output", {}).get("images", {}).get("max_count")
+                    if template_max_count:
+                        logger.debug(f"Template {template_name} has max_count: {template_max_count}")
+                    
                     config["jobs"][job_name] = merge_configs(template, job)
+                    
+                    logger.debug(f"Job configuration after merge: {config['jobs'][job_name]}")
+                    
+                    # Check if the job has an output section with max_count after merge
+                    job_max_count = config["jobs"][job_name].get("output", {}).get("images", {}).get("max_count")
+                    if job_max_count:
+                        logger.debug(f"Job {job_name} has max_count: {job_max_count} after inheritance resolution")
                 else:
                     logger.warning(f"Template {template_name} not found for job {job_name}")
     

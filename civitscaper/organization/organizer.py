@@ -42,19 +42,20 @@ class FileOrganizer:
             "by_model_info": "{model_type}/{model_name}",
         }
     
-    def organize_file(self, file_path: str, metadata: Dict[str, Any]) -> Optional[str]:
+    def organize_file(self, file_path: str, metadata: Dict[str, Any], force_organize: bool = False) -> Optional[str]:
         """
         Organize a model file.
         
         Args:
             file_path: Path to model file
             metadata: Model metadata
+            force_organize: If True, organize even if disabled in config
             
         Returns:
             Path to organized file or None if organization failed
         """
-        # Check if organization is enabled
-        if not self.organization_config.get("enabled", False):
+        # Check if organization is enabled (either in config or forced)
+        if not (self.organization_config.get("enabled", False) or force_organize):
             logger.debug("Organization is disabled")
             return None
         
@@ -66,17 +67,19 @@ class FileOrganizer:
             # Get template
             if custom_template:
                 template = custom_template
-            elif template_name in self.templates:
+            elif template_name and template_name in self.templates:
                 template = self.templates[template_name]
             else:
-                logger.error(f"Unknown template: {template_name}")
-                return None
+                # Use default template
+                template = self.templates["by_type"]
+                logger.info(f"Using default template 'by_type' because template '{template_name}' was not specified or not found")
             
             # Get output directory
             output_dir = self.organization_config.get("output_dir")
             if not output_dir:
-                logger.error("No output directory specified")
-                return None
+                # Use default output directory
+                output_dir = "{model_dir}/organized"
+                logger.info(f"Using default output directory '{output_dir}' because none was specified")
             
             # Replace {model_dir} with model directory
             output_dir = output_dir.replace("{model_dir}", os.path.dirname(file_path))
@@ -193,19 +196,20 @@ class FileOrganizer:
             logger.error(f"Error organizing {file_path}: {e}")
             return None
     
-    def organize_files(self, file_paths: List[str], metadata_dict: Dict[str, Dict[str, Any]]) -> List[Tuple[str, Optional[str]]]:
+    def organize_files(self, file_paths: List[str], metadata_dict: Dict[str, Dict[str, Any]], force_organize: bool = False) -> List[Tuple[str, Optional[str]]]:
         """
         Organize multiple model files.
         
         Args:
             file_paths: List of file paths
             metadata_dict: Dictionary of file path -> metadata
+            force_organize: If True, organize even if disabled in config
             
         Returns:
             List of (file_path, target_path) tuples
         """
-        # Check if organization is enabled
-        if not self.organization_config.get("enabled", False):
+        # Check if organization is enabled (either in config or forced)
+        if not (self.organization_config.get("enabled", False) or force_organize):
             logger.debug("Organization is disabled")
             return [(file_path, None) for file_path in file_paths]
         
@@ -221,7 +225,7 @@ class FileOrganizer:
                 continue
             
             # Organize file
-            target_path = self.organize_file(file_path, metadata)
+            target_path = self.organize_file(file_path, metadata, force_organize)
             
             # Add to results
             results.append((file_path, target_path))

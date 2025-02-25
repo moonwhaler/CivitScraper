@@ -212,8 +212,17 @@ class HTMLGenerator:
         # Get max_count from configuration
         max_count = self.output_config.get("images", {}).get("max_count", 4)
         
+        # Log the max_count value for debugging
+        logger.debug(f"HTMLGenerator using max_count: {max_count} for file: {file_path}")
+        
+        # Log the number of images before limiting
+        logger.debug(f"HTMLGenerator number of images before limiting: {len(images)}")
+        
         # Limit number of images
         images = images[:max_count]
+        
+        # Log the number of images after limiting
+        logger.debug(f"HTMLGenerator number of images after limiting to max_count {max_count}: {len(images)}")
         
         # Get image paths
         image_paths = []
@@ -226,10 +235,13 @@ class HTMLGenerator:
             # Get image extension
             ext = os.path.splitext(image_url)[1]
             
-            # Get image path
+            # Get the image path with the index number
+            # The ModelProcessor downloads images with filenames that include the index number
             image_path = get_image_path(file_path, self.config, f"preview{i}", ext)
             
-            # Check if image exists
+            logger.debug(f"Looking for indexed image file ({i}): {image_path}")
+            
+            # Check if the indexed image file exists
             if os.path.isfile(image_path):
                 # Get image metadata
                 image_meta = image.get("meta", {})
@@ -246,7 +258,7 @@ class HTMLGenerator:
                 
                 # Log paths for debugging
                 logger.debug(f"HTML path: {html_path}")
-                logger.debug(f"Image path: {image_path}")
+                logger.debug(f"Found indexed image path: {image_path}")
                 logger.debug(f"Relative path: {rel_path}")
                 
                 # Add image to list
@@ -261,60 +273,94 @@ class HTMLGenerator:
                     "model": image_meta.get("Model", ""),
                 })
             else:
-                # Check if in dry run mode
-                if self.dry_run:
-                    logger.info(f"Dry run: Would download image {i+1}/{len(images)} from {image.get('url')} to {image_path}")
+                # If the indexed image file doesn't exist, try to download it
+                
+                # Check if image exists
+                if os.path.isfile(image_path):
+                    # Get image metadata
+                    image_meta = image.get("meta", {})
+                    # Ensure image_meta is a dictionary, even if meta is None
+                    if image_meta is None:
+                        image_meta = {}
+                    
+                    # Get HTML path
+                    html_path = get_html_path(file_path, self.config)
+                    html_dir = os.path.dirname(html_path)
+                    
+                    # Calculate relative path from HTML to image
+                    rel_path = os.path.relpath(image_path, html_dir)
+                    
+                    # Log paths for debugging
+                    logger.debug(f"HTML path: {html_path}")
+                    logger.debug(f"Image path: {image_path}")
+                    logger.debug(f"Relative path: {rel_path}")
+                    
+                    # Add image to list
+                    image_paths.append({
+                        "path": rel_path,
+                        "prompt": image_meta.get("prompt", ""),
+                        "negative_prompt": image_meta.get("negativePrompt", ""),
+                        "sampler": image_meta.get("sampler", ""),
+                        "cfg_scale": image_meta.get("cfgScale", ""),
+                        "steps": image_meta.get("steps", ""),
+                        "seed": image_meta.get("seed", ""),
+                        "model": image_meta.get("Model", ""),
+                    })
                 else:
-                    # Try to download the image
-                    try:
-                        # Create directory if it doesn't exist
-                        os.makedirs(os.path.dirname(image_path), exist_ok=True)
-                        
-                        # Download image
-                        logger.debug(f"Downloading image {i+1}/{len(images)} for {file_path}")
-                        
-                        # Get image URL
-                        image_url = image.get("url")
-                        if image_url:
-                            # Use requests to download the image
-                            import requests
-                            response = requests.get(image_url, stream=True)
-                            if response.status_code == 200:
-                                with open(image_path, 'wb') as f:
-                                    for chunk in response.iter_content(1024):
-                                        f.write(chunk)
-                                
-                                # Get HTML path
-                                html_path = get_html_path(file_path, self.config)
-                                html_dir = os.path.dirname(html_path)
-                                
-                                # Calculate relative path from HTML to image
-                                rel_path = os.path.relpath(image_path, html_dir)
-                                
-                                # Log paths for debugging
-                                logger.debug(f"HTML path: {html_path}")
-                                logger.debug(f"Image path: {image_path}")
-                                logger.debug(f"Relative path: {rel_path}")
-                                
-                                # Get image metadata
-                                image_meta = image.get("meta", {})
-                                # Ensure image_meta is a dictionary, even if meta is None
-                                if image_meta is None:
-                                    image_meta = {}
+                    # Check if in dry run mode
+                    if self.dry_run:
+                        logger.info(f"Dry run: Would download image {i+1}/{len(images)} from {image.get('url')} to {image_path}")
+                    else:
+                        # Try to download the image
+                        try:
+                            # Create directory if it doesn't exist
+                            os.makedirs(os.path.dirname(image_path), exist_ok=True)
+                            
+                            # Download image
+                            logger.debug(f"Downloading image {i+1}/{len(images)} for {file_path}")
+                            
+                            # Get image URL
+                            image_url = image.get("url")
+                            if image_url:
+                                # Use requests to download the image
+                                import requests
+                                response = requests.get(image_url, stream=True)
+                                if response.status_code == 200:
+                                    with open(image_path, 'wb') as f:
+                                        for chunk in response.iter_content(1024):
+                                            f.write(chunk)
                                     
-                                # Add image to list
-                                image_paths.append({
-                                    "path": rel_path,
-                                    "prompt": image_meta.get("prompt", ""),
-                                    "negative_prompt": image_meta.get("negativePrompt", ""),
-                                    "sampler": image_meta.get("sampler", ""),
-                                    "cfg_scale": image_meta.get("cfgScale", ""),
-                                    "steps": image_meta.get("steps", ""),
-                                    "seed": image_meta.get("seed", ""),
-                                    "model": image_meta.get("Model", ""),
-                                })
-                    except Exception as e:
-                        logger.error(f"Error downloading image: {e}")
+                                    # Get HTML path
+                                    html_path = get_html_path(file_path, self.config)
+                                    html_dir = os.path.dirname(html_path)
+                                    
+                                    # Calculate relative path from HTML to image
+                                    rel_path = os.path.relpath(image_path, html_dir)
+                                    
+                                    # Log paths for debugging
+                                    logger.debug(f"HTML path: {html_path}")
+                                    logger.debug(f"Image path: {image_path}")
+                                    logger.debug(f"Relative path: {rel_path}")
+                                    
+                                    # Get image metadata
+                                    image_meta = image.get("meta", {})
+                                    # Ensure image_meta is a dictionary, even if meta is None
+                                    if image_meta is None:
+                                        image_meta = {}
+                                        
+                                    # Add image to list
+                                    image_paths.append({
+                                        "path": rel_path,
+                                        "prompt": image_meta.get("prompt", ""),
+                                        "negative_prompt": image_meta.get("negativePrompt", ""),
+                                        "sampler": image_meta.get("sampler", ""),
+                                        "cfg_scale": image_meta.get("cfgScale", ""),
+                                        "steps": image_meta.get("steps", ""),
+                                        "seed": image_meta.get("seed", ""),
+                                        "model": image_meta.get("Model", ""),
+                                    })
+                        except Exception as e:
+                            logger.error(f"Error downloading image: {e}")
         
         # Create context
         context = {

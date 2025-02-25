@@ -246,7 +246,7 @@ def get_image_path(file_path: str, config: Dict[str, Any], image_type: str = "pr
     Args:
         file_path: Path to model file
         config: Configuration
-        image_type: Image type (e.g., preview)
+        image_type: Image type (e.g., preview, preview0, preview1, etc.)
         ext: Image file extension
         
     Returns:
@@ -258,9 +258,17 @@ def get_image_path(file_path: str, config: Dict[str, Any], image_type: str = "pr
     # Get path template
     path_template = output_config.get("path", "{model_dir}")
     
-    # Get filename template
-    # Strip any numbers from the end of the image type (e.g., "preview0" -> "preview")
-    base_image_type = ''.join([c for c in image_type if not c.isdigit()])
+    # Extract the base image type and index number
+    import re
+    match = re.match(r'([a-zA-Z_]+)(\d*)', image_type)
+    if match:
+        base_image_type = match.group(1)  # The non-digit part (e.g., "preview")
+        index_number = match.group(2)     # The digit part (e.g., "0", "1", etc.)
+    else:
+        base_image_type = image_type  # No digits found, use the full image_type
+        index_number = ""
+    
+    # Get the filename template using the base image type
     filename_template = output_config.get("filenames", {}).get(
         base_image_type, "{model_name}.{image_type}{ext}"
     )
@@ -282,8 +290,17 @@ def get_image_path(file_path: str, config: Dict[str, Any], image_type: str = "pr
     # Format filename
     filename = filename_template.replace("{model_name}", model_name)
     filename = filename.replace("{model_type}", model_type)
-    filename = filename.replace("{image_type}", image_type)
+    filename = filename.replace("{image_type}", base_image_type)  # Use base_image_type without index
     filename = filename.replace("{ext}", ext)
+    
+    # Insert the index number before the extension
+    # This ensures each image gets a unique filename regardless of the template
+    if index_number:
+        # Find the position of the extension in the filename
+        ext_pos = filename.rfind(ext)
+        if ext_pos != -1:
+            # Insert the index number before the extension
+            filename = filename[:ext_pos] + index_number + filename[ext_pos:]
     
     # Combine path and filename
     return os.path.join(path, filename)
