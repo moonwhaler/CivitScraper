@@ -7,6 +7,8 @@ This module handles generating HTML pages for models using Jinja templates.
 import os
 import json
 import logging
+import re
+import base64
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -173,6 +175,42 @@ class HTMLGenerator:
         logger.debug(f"Generated gallery at {output_path}")
         
         return output_path
+    
+    def _sanitize_json_data(self, data: List[Dict[str, Any]]) -> str:
+        """
+        Sanitize and encode image data to avoid JSON parsing issues.
+        
+        Args:
+            data: List of image data dictionaries
+            
+        Returns:
+            Base64 encoded JSON string
+        """
+        try:
+            # First, sanitize any problematic strings in the data
+            sanitized_data = []
+            for item in data:
+                sanitized_item = {}
+                for key, value in item.items():
+                    if isinstance(value, str):
+                        # Fix common escaping issues in strings
+                        # Replace double-escaped parentheses with single-escaped
+                        value = re.sub(r'\\\\([()])', r'\\\1', value)
+                    sanitized_item[key] = value
+                sanitized_data.append(sanitized_item)
+            
+            # Convert to JSON string
+            json_str = json.dumps(sanitized_data, ensure_ascii=False)
+            
+            # Encode as base64 to avoid any escaping issues
+            encoded = base64.b64encode(json_str.encode('utf-8')).decode('utf-8')
+            
+            logger.debug(f"Successfully encoded image data (length: {len(json_str)})")
+            return encoded
+        except Exception as e:
+            logger.error(f"Error encoding image data: {e}")
+            # Return empty array as fallback
+            return base64.b64encode("[]".encode('utf-8')).decode('utf-8')
     
     def _prepare_context(self, file_path: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -362,6 +400,9 @@ class HTMLGenerator:
                         except Exception as e:
                             logger.error(f"Error downloading image: {e}")
         
+        # Sanitize and encode image data to avoid JSON parsing issues
+        encoded_images = self._sanitize_json_data(image_paths)
+        
         # Create context
         context = {
             "title": model_name,
@@ -372,6 +413,7 @@ class HTMLGenerator:
             "tags": tags,
             "stats": stats,
             "images": image_paths,
+            "images_encoded": encoded_images,
             "metadata": metadata,
         }
         
