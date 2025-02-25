@@ -155,6 +155,12 @@ class HTMLGenerator:
                 logger.debug(f"Preview image path: {preview_image_path}")
                 logger.debug(f"Preview relative path: {preview_rel_path}")
             
+            # Check if the preview is a video
+            is_video = False
+            if preview_rel_path and preview_image_path.lower().endswith('.mp4'):
+                is_video = True
+                logger.debug(f"Preview is video: {is_video}")
+            
             # Add model to context
             context["models"].append({
                 "name": metadata.get("name", "Unknown"),
@@ -163,6 +169,7 @@ class HTMLGenerator:
                 "description": metadata.get("description", ""),
                 "html_path": html_rel_path,
                 "preview_image_path": preview_rel_path,
+                "is_video": is_video,
             })
         
         # Render template
@@ -299,7 +306,11 @@ class HTMLGenerator:
                 logger.debug(f"Found indexed image path: {image_path}")
                 logger.debug(f"Relative path: {rel_path}")
                 
-                # Add image to list
+                # Determine if this is a video file based on extension
+                is_video = image_path.lower().endswith('.mp4')
+                logger.debug(f"File is video: {is_video}")
+                
+                # Add image/video to list
                 image_paths.append({
                     "path": rel_path,
                     "prompt": image_meta.get("prompt", ""),
@@ -309,12 +320,53 @@ class HTMLGenerator:
                     "steps": image_meta.get("steps", ""),
                     "seed": image_meta.get("seed", ""),
                     "model": image_meta.get("Model", ""),
+                    "is_video": is_video,
                 })
             else:
-                # If the indexed image file doesn't exist, try to download it
+                # If the indexed image file doesn't exist, check if a version with a different extension exists
+                # This handles the case where a video file was renamed from .jpeg to .mp4 by the ModelProcessor
                 
-                # Check if image exists
-                if os.path.isfile(image_path):
+                # Get the base path without extension
+                base_path = os.path.splitext(image_path)[0]
+                
+                # Check for common video extensions
+                video_path = f"{base_path}.mp4"
+                if os.path.isfile(video_path):
+                    # Found a video file with the same base name
+                    logger.debug(f"Found video file instead of image: {video_path}")
+                    
+                    # Get image metadata
+                    image_meta = image.get("meta", {})
+                    # Ensure image_meta is a dictionary, even if meta is None
+                    if image_meta is None:
+                        image_meta = {}
+                    
+                    # Get HTML path
+                    html_path = get_html_path(file_path, self.config)
+                    html_dir = os.path.dirname(html_path)
+                    
+                    # Calculate relative path from HTML to video
+                    rel_path = os.path.relpath(video_path, html_dir)
+                    
+                    # Log paths for debugging
+                    logger.debug(f"HTML path: {html_path}")
+                    logger.debug(f"Video path: {video_path}")
+                    logger.debug(f"Relative path: {rel_path}")
+                    
+                    # Add video to list
+                    image_paths.append({
+                        "path": rel_path,
+                        "prompt": image_meta.get("prompt", ""),
+                        "negative_prompt": image_meta.get("negativePrompt", ""),
+                        "sampler": image_meta.get("sampler", ""),
+                        "cfg_scale": image_meta.get("cfgScale", ""),
+                        "steps": image_meta.get("steps", ""),
+                        "seed": image_meta.get("seed", ""),
+                        "model": image_meta.get("Model", ""),
+                        "is_video": True,
+                    })
+                # If no video file exists, check if the original image exists
+                elif os.path.isfile(image_path):
                     # Get image metadata
                     image_meta = image.get("meta", {})
                     # Ensure image_meta is a dictionary, even if meta is None
@@ -333,7 +385,10 @@ class HTMLGenerator:
                     logger.debug(f"Image path: {image_path}")
                     logger.debug(f"Relative path: {rel_path}")
                     
-                    # Add image to list
+                    # Determine if this is a video file based on extension
+                    is_video = image_path.lower().endswith('.mp4')
+                    
+                    # Add image/video to list
                     image_paths.append({
                         "path": rel_path,
                         "prompt": image_meta.get("prompt", ""),
@@ -343,6 +398,7 @@ class HTMLGenerator:
                         "steps": image_meta.get("steps", ""),
                         "seed": image_meta.get("seed", ""),
                         "model": image_meta.get("Model", ""),
+                        "is_video": is_video,
                     })
                 else:
                     # Check if in dry run mode
@@ -386,7 +442,32 @@ class HTMLGenerator:
                                     if image_meta is None:
                                         image_meta = {}
                                         
-                                    # Add image to list
+                                    # Check if the content type indicates a video
+                                    content_type = response.headers.get('Content-Type', '')
+                                    is_video = content_type.startswith('video/')
+                                    logger.debug(f"Downloaded file content type: {content_type}, is_video: {is_video}")
+                                    
+                                    # If it's a video but has a wrong extension, rename it to .mp4
+                                    if is_video and not image_path.lower().endswith('.mp4'):
+                                        # Get the directory and filename without extension
+                                        dir_name = os.path.dirname(image_path)
+                                        base_name = os.path.splitext(os.path.basename(image_path))[0]
+                                        
+                                        # Create new path with .mp4 extension
+                                        new_path = os.path.join(dir_name, f"{base_name}.mp4")
+                                        
+                                        # Rename the file
+                                        try:
+                                            os.rename(image_path, new_path)
+                                            logger.info(f"Renamed video file from {image_path} to {new_path} based on Content-Type: {content_type}")
+                                            # Update the image_path for further processing
+                                            image_path = new_path
+                                            # Update the relative path
+                                            rel_path = os.path.relpath(image_path, html_dir)
+                                        except Exception as e:
+                                            logger.error(f"Failed to rename video file from {image_path} to {new_path}: {e}")
+                                    
+                                    # Add image/video to list
                                     image_paths.append({
                                         "path": rel_path,
                                         "prompt": image_meta.get("prompt", ""),
@@ -396,6 +477,7 @@ class HTMLGenerator:
                                         "steps": image_meta.get("steps", ""),
                                         "seed": image_meta.get("seed", ""),
                                         "model": image_meta.get("Model", ""),
+                                        "is_video": is_video,
                                     })
                         except Exception as e:
                             logger.error(f"Error downloading image: {e}")

@@ -414,7 +414,7 @@ class CivitAIClient:
         
         return self._make_request("GET", "images", params=params, force_refresh=force_refresh, response_type=ImageSearchResult)
     
-    def download_image(self, url: str, output_path: str) -> bool:
+    def download_image(self, url: str, output_path: str) -> tuple[bool, Optional[str]]:
         """
         Download image from URL.
         
@@ -423,7 +423,9 @@ class CivitAIClient:
             output_path: Output file path
             
         Returns:
-            True if download was successful, False otherwise
+            Tuple of (success_status, content_type) where:
+            - success_status: True if download was successful, False otherwise
+            - content_type: The Content-Type of the downloaded file, or None if not available
         """
         return self.request_handler.download(url, output_path, dry_run=self.dry_run)
     

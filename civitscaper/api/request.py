@@ -300,7 +300,7 @@ class RequestHandler:
         """
         return self.request("DELETE", endpoint)
     
-    def download(self, url: str, output_path: str, dry_run: bool = False) -> bool:
+    def download(self, url: str, output_path: str, dry_run: bool = False) -> tuple[bool, Optional[str]]:
         """
         Download file from URL.
         
@@ -310,12 +310,14 @@ class RequestHandler:
             dry_run: If True, simulate download
             
         Returns:
-            True if download was successful, False otherwise
+            Tuple of (success_status, content_type) where:
+            - success_status: True if download was successful, False otherwise
+            - content_type: The Content-Type of the downloaded file, or None if not available
         """
         # Check if in dry run mode
         if dry_run:
             logger.info(f"Dry run: Would download file from {url} to {output_path}")
-            return True
+            return True, None
         
         try:
             # Acquire rate limit token
@@ -325,6 +327,10 @@ class RequestHandler:
             response = self.session.get(url, timeout=self.timeout, stream=True)
             response.raise_for_status()
             
+            # Get content type
+            content_type = response.headers.get('Content-Type')
+            logger.debug(f"Content-Type for {url}: {content_type}")
+            
             # Create directory if it doesn't exist
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             
@@ -333,8 +339,8 @@ class RequestHandler:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
             
-            return True
+            return True, content_type
         
         except Exception as e:
             logger.error(f"Error downloading file: {e}")
-            return False
+            return False, None

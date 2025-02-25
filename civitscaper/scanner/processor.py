@@ -292,7 +292,8 @@ class ModelProcessor:
         # Clean up existing preview images if not in dry run mode
         if not self.dry_run:
             import glob
-            preview_pattern = os.path.join(model_dir, f"{model_name}.preview*")
+            # Use a more comprehensive pattern to catch all preview files with any extension
+            preview_pattern = os.path.join(model_dir, f"{model_name}.preview*.*")
             for old_image in glob.glob(preview_pattern):
                 try:
                     os.remove(old_image)
@@ -337,10 +338,30 @@ class ModelProcessor:
                 
                 # Download image
                 logger.debug(f"Downloading image {i+1}/{len(images)} for {file_path}")
-                success = self.api_client.download_image(image_url, image_path)
+                success, content_type = self.api_client.download_image(image_url, image_path)
                 
                 if not success:
                     logger.warning(f"Failed to download image {i+1}/{len(images)} for {file_path}")
+                elif content_type:
+                    # Check if the content type indicates a video
+                    if content_type.startswith('video/'):
+                        # If it's a video but has a wrong extension, save it with .mp4 extension
+                        if not image_path.lower().endswith('.mp4'):
+                            # Get the directory and filename without extension
+                            dir_name = os.path.dirname(image_path)
+                            base_name = os.path.splitext(os.path.basename(image_path))[0]
+                            
+                            # Create new path with .mp4 extension
+                            new_path = os.path.join(dir_name, f"{base_name}.mp4")
+                            
+                            # Rename the file (simpler and more atomic operation)
+                            try:
+                                os.rename(image_path, new_path)
+                                logger.info(f"Renamed video file from {image_path} to {new_path} based on Content-Type: {content_type}")
+                                # Update the image_path for further processing
+                                image_path = new_path
+                            except Exception as e:
+                                logger.error(f"Failed to rename video file from {image_path} to {new_path}: {e}")
     
     def _generate_html(self, file_path: str, metadata: Dict[str, Any]):
         """

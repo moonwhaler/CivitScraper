@@ -129,7 +129,12 @@
     <div class="gallery">
         {% for image in images %}
         <div class="gallery-item" data-index="{{ loop.index0 }}">
+            {% if image.is_video %}
+            <video src="{{ image.path }}" controls preload="metadata" class="preview-video"></video>
+            <div class="video-indicator">VIDEO</div>
+            {% else %}
             <img src="{{ image.path }}" alt="Preview image" loading="lazy">
+            {% endif %}
             <div class="image-metadata">
                 {% if image.steps %}
                 <span class="image-meta-item">Steps: {{ image.steps }}</span>
@@ -148,7 +153,10 @@
 
 <div id="image-viewer" class="image-viewer">
     <div class="viewer-content">
-        <img id="viewer-image" src="" alt="Full size image">
+        <div id="viewer-media-container">
+            <img id="viewer-image" src="" alt="Full size image" style="display: none;">
+            <video id="viewer-video" controls style="display: none;"></video>
+        </div>
         <div class="image-info">
             <div class="prompt-section">
                 <h3>Positive Prompt</h3>
@@ -264,6 +272,8 @@
                 return;
             }
             
+            const viewerVideo = document.getElementById('viewer-video');
+            
             // Open image viewer with improved error handling
             function openImageViewer(index) {
                 try {
@@ -283,13 +293,34 @@
                         return;
                     }
                     
-                    const imgElement = galleryItem.querySelector('img');
-                    if (!imgElement) {
-                        console.error(`Image element not found in gallery item at index: ${index}`);
-                        return;
-                    }
+                    // Check if this is a video or image
+                    const isVideo = data.is_video || false;
                     
-                    viewerImage.src = imgElement.src;
+                    if (isVideo) {
+                        // Handle video
+                        const videoElement = galleryItem.querySelector('video');
+                        if (!videoElement) {
+                            console.error(`Video element not found in gallery item at index: ${index}`);
+                            return;
+                        }
+                        
+                        // Show video, hide image
+                        viewerVideo.src = videoElement.src;
+                        viewerVideo.style.display = 'block';
+                        viewerImage.style.display = 'none';
+                    } else {
+                        // Handle image
+                        const imgElement = galleryItem.querySelector('img');
+                        if (!imgElement) {
+                            console.error(`Image element not found in gallery item at index: ${index}`);
+                            return;
+                        }
+                        
+                        // Show image, hide video
+                        viewerImage.src = imgElement.src;
+                        viewerImage.style.display = 'block';
+                        viewerVideo.style.display = 'none';
+                    }
                     
                     positivePrompt.textContent = data.prompt || 'No positive prompt available';
                     negativePrompt.textContent = data.negative_prompt || 'No negative prompt available';
