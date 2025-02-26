@@ -287,7 +287,7 @@ class CacheManager:
         self.config = config
         
         # Get cache directory
-        cache_dir = config.get("scanner", {}).get("cache_dir", ".civitscaper_cache")
+        cache_dir = config.get("scanner", {}).get("cache_dir", ".civitscraper_cache")
         
         # Get cache validity
         cache_validity = config.get("scanner", {}).get("cache_validity", 86400)

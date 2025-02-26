@@ -68,7 +68,7 @@ class CivitAIClient:
         self.base_retry_delay = config["api"].get("batch", {}).get("retry_delay", 2000) / 1000.0
         
         # Set up cache
-        cache_dir = config.get("scanner", {}).get("cache_dir", ".civitscaper_cache")
+        cache_dir = config.get("scanner", {}).get("cache_dir", ".civitscraper_cache")
         cache_validity = config.get("scanner", {}).get("cache_validity", 86400)
         self.cache_manager = CacheManager(config)
         

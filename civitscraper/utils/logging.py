@@ -69,7 +69,7 @@ def setup_logging(config: Dict[str, Any]) -> logging.Logger:
         
         # Get log file name
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_file = os.path.join(log_dir, f"civitscaper_{timestamp}.log")
+        log_file = os.path.join(log_dir, f"civitscraper_{timestamp}.log")
         
         # Get max size and backup count
         max_size = logging_config.get("file", {}).get("max_size", 10) * 1024 * 1024  # MB to bytes

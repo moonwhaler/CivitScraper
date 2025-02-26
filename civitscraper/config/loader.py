@@ -2,7 +2,7 @@
 Configuration loader for CivitScraper.
 
 This module handles loading configuration from various sources:
-1. Environment variable: CIVITSCAPER_CONFIG
+1. Environment variable: CIVITSCRAPER_CONFIG
 2. User configuration files
 3. Default configuration
 """
@@ -16,11 +16,11 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_PATH = "./config/default.yaml"
 USER_CONFIG_PATHS = [
-    "./civitscaper.yaml",
-    "./civitscaper.yml",
+    "./civitscraper.yaml",
+    "./civitscraper.yml",
     "./config/default.yaml",
-    os.path.expanduser("~/.config/civitscaper/config.yaml"),
-    os.path.expanduser("~/.civitscaper.yaml"),
+    os.path.expanduser("~/.config/civitscraper/config.yaml"),
+    os.path.expanduser("~/.civitscraper.yaml"),
 ]
 
 
@@ -57,7 +57,7 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     
     Priority order:
     1. Specified config_path parameter
-    2. Environment variable: CIVITSCAPER_CONFIG
+    2. Environment variable: CIVITSCRAPER_CONFIG
     3. User configuration files
     4. Default configuration
     
@@ -75,7 +75,7 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
         return load_yaml_config(config_path)
     
     # Check environment variable
-    env_config_path = os.environ.get("CIVITSCAPER_CONFIG")
+    env_config_path = os.environ.get("CIVITSCRAPER_CONFIG")
     if env_config_path and os.path.exists(env_config_path):
         return load_yaml_config(env_config_path)
     

@@ -169,8 +169,6 @@ class JobExecutor:
             
             # Process files
             logger.info(f"Processing {len(filtered_files)} files")
-            # Get force_refresh setting from scanner configuration
-            force_refresh = self.config.get("scanner", {}).get("force_refresh", False)
             
             # Always create a job-specific processor to ensure we use the correct configuration
             # Create a copy of the global configuration
@@ -201,6 +199,9 @@ class JobExecutor:
             
             # Create a temporary processor with the job-specific configuration
             temp_processor = ModelProcessor(job_specific_config, self.api_client, self.html_generator)
+            
+            # Get force_refresh setting from job-specific scanner configuration
+            force_refresh = job_specific_config.get("scanner", {}).get("force_refresh", False)
             
             # Use the temporary processor
             results = temp_processor.process_files_in_batches(
