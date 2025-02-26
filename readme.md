@@ -1,5 +1,7 @@
 # CivitScraper - make it local again.
 
+CivitScraper is your AI model collection's digital curator, transforming raw files into a structured, searchable archive with rich metadata and visual previews. It seamlessly connects to CivitAI to fetch critical information while keeping your creative assets organized locally—empowering you to manage your growing model library with professional precision.
+
 ## Table of Contents
 - [Overview](#overview)
 - [Installation](#installation)
@@ -36,8 +38,6 @@
   - [Logging](#logging)
 
 ## Overview
-
-CivitScraper is a powerful tool designed for fetching and managing metadata for AI model files from CivitAI. It provides a comprehensive solution for organizing, documenting, and previewing your AI model collection.
 
 ### Key Features
 
