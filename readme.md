@@ -71,11 +71,7 @@ CivitScraper works by:
 ### Installation Steps
 
 ```bash
-# Install from PyPI
-pip install civitscraper
-
-# Or install from source
-git clone https://github.com/yourusername/civitscraper.git
+git clone https://github.com/moonwhaler/civitscraper.git
 cd civitscraper
 pip install -e .
 ```
@@ -460,7 +456,7 @@ Jobs are specific tasks that CivitScraper can execute. Each job has a type and c
 
 The main job types are:
 - `scan-paths`: Scan directories for model files and process them
-- `sync-lora-triggers`: Synchronize LORA trigger words with a loras.json file
+- `sync-lora-triggers`: Synchronize LORA trigger words with a Krita AI Diffusion (loras.json) file
 
 ### Job Templates
 
