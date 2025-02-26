@@ -458,6 +458,8 @@ output:
 
 CivitScraper can organize model files based on metadata. The organization is controlled by the organization settings:
 
+> **⚠️ WARNING**: The file organization feature will change file locations (in "move" mode) or create new files (in "copy" mode). The author takes no responsibility for any unexpected outcomes when using this feature. Always back up your files before using the organization functionality - and test it before production run!
+
 ```yaml
 organization:
   enabled: false            # Enable model organization
