@@ -1,4 +1,4 @@
-# CivitScraper Documentation
+# CivitScraper - make it local again.
 
 ## Table of Contents
 - [Overview](#overview)
