@@ -1,0 +1,200 @@
+# CivitScraper Configuration File
+# This is the main configuration file that controls how CivitScraper operates.
+
+# =============================================================================
+# Global Defaults
+# These settings apply to all operations unless overridden in specific sections
+# =============================================================================
+defaults:
+  scan:
+    recursive: true      # Search in subdirectories
+    skip_existing: true  # Skip files that already have metadata
+    verify_hashes: true  # Verify file hashes against CivitAI data
+
+  output:
+    metadata:
+      format: "json"
+      path: "{model_dir}"     # Where to save metadata
+      filename: "{model_name}.json"  # Metadata filename
+      html:
+        enabled: true         # Generate HTML preview pages
+        filename: "{model_name}.html"  # HTML filename
+    images:
+      save: true             # Download preview images
+      path: "{model_dir}"    # Where to save images
+      max_count: 4           # Maximum number of images to download
+      filenames:
+        preview: "{model_name}.preview{ext}"  # Preview image filename pattern
+
+  organization:
+    enabled: false            # Enable model organization
+    dry_run: false          # [true/false] Simulate file operations without making changes
+    template: "by_type_and_basemodel"      # Organization template to use (see below for options)
+    custom_template: ""      # Custom organization path template (leave empty to use predefined template)
+    output_dir: "{model_dir}/organized"  # Where to put organized files
+    operation_mode: "move"   # [copy/move/symlink] How to organize files
+
+# =============================================================================
+# API Configuration
+# Settings for connecting to the CivitAI API
+# =============================================================================
+api:
+  key: "YOUR_API_KEY_HERE"                # Your CivitAI API key (Set via CIVITAI_API_KEY environment variable)
+  base_url: "https://civitai.com/api/v1"  # API endpoint
+  timeout: 30             # [seconds] API request timeout
+  max_retries: 3         # Number of times to retry failed requests
+  user_agent: "CivitScraper/0.2.0"  # User agent string
+
+  # Batch processing settings (for advanced users)
+  batch:
+    enabled: true         # [true/false] Enable batch processing
+    max_concurrent: 4     # Maximum parallel requests using thread-safe semaphore
+    rate_limit: 100      # Requests/minute (uses token bucket with per-endpoint tracking)
+    retry_delay: 1000    # Base delay (ms) for exponential backoff when rate limited
+    cache_size: 100      # LRU cache size - evicts least recently used entries when full
+
+    # Advanced batch settings
+    # Circuit breaker prevents API abuse during outages by tracking failures per endpoint
+    circuit_breaker:
+      failure_threshold: 5    # Number of failures before blocking requests to an endpoint
+      reset_timeout: 60       # Seconds to wait before auto-recovery after blocking
+
+# =============================================================================
+# Input Paths
+# Define where to look for different types of model files
+# Example paths shown - adjust these to match your setup
+# =============================================================================
+input_paths:
+  # LORA models directory
+  lora:
+    path: "/path/to/loras"           # Directory containing LORA models
+    type: LORA                      # Model type identifier
+    patterns: ["*.safetensors"]  # File patterns to match
+
+  # Stable Diffusion checkpoints
+  checkpoints:
+    path: "/path/to/checkpoints"  # Directory containing checkpoints
+    type: Checkpoint                   # Model type identifier
+    patterns: ["*.safetensors"]  # File patterns to match
+
+  # Textual Inversion embeddings
+  embeddings:
+    path: "./models/embeddings"     # Directory containing embeddings
+    type: TextualInversion         # Model type identifier
+    patterns: ["*.pt", "*.safetensors"]  # File patterns to match
+
+# =============================================================================
+# Job Templates
+# Predefined configurations for common tasks
+# Use these as building blocks for your jobs
+# =============================================================================
+job_templates:
+  # Basic scan without organization
+  # Use this for quickly scanning models without reorganizing them
+  base_scan:
+    type: scan-paths
+    inherit: defaults.scan          # Inherits scanning settings from defaults
+    output:
+      metadata:
+        format: "json"
+        path: "{model_dir}"
+        filename: "{model_name}.json"
+        html:
+          enabled: true
+          filename: "{model_name}.html"
+      images:
+        save: true
+        path: "{model_dir}"
+        max_count: 4
+        filenames:
+          preview: "{model_name}.preview{ext}"
+    organize: false                 # Don't organize files
+
+  # Full processing with organization
+  # Use this for complete model processing including organization
+  full_process:
+    type: scan-paths              # Required type field
+    inherit: job_templates.base_scan  # Builds upon base_scan template
+    output:
+      metadata:
+        format: "json"
+        path: "{model_dir}"
+        filename: "{model_name}.json"
+        html:
+          enabled: true
+          filename: "{model_name}.html"
+      images:
+        save: true
+        path: "{model_dir}"
+        max_count: 4
+        filenames:
+          preview: "{model_name}.preview{ext}"
+    organize: false                 # Enable organization
+    organization: 
+      inherit:
+        defaults.organization  # Use default organization settings
+
+  # Metadata-only template
+  # Use this when you only want to update metadata without downloading images
+  metadata_only:
+    type: scan-paths              # Required type field
+    inherit: job_templates.base_scan
+    output:
+      inherit: defaults.output
+      images:
+        save: false             # Disable image downloads
+
+  # Trigger word synchronization template
+  sync_triggers:
+    type: sync-lora-triggers
+    description: "Synchronize LoRA trigger words"
+    inherit: defaults.scan  # Inherit basic scanning settings
+    loras_file: "loras.json"  # Default path to loras.json
+    paths: []  # Empty array as default, should be overridden when creating a job
+
+# =============================================================================
+# Default Job
+# The job to run when no job is specified
+# =============================================================================
+default_job: "fetch-all"
+
+# =============================================================================
+# Jobs
+# Define specific tasks to run
+# Each job uses a template and can override specific settings
+# =============================================================================
+jobs:
+  # Process all model types
+  fetch-all:
+    template: full_process         # Use full processing template
+    paths: ["lora"]  # Process all path types
+
+# =============================================================================
+# Scanner Settings
+# Configure how the scanner operates and caches data
+# =============================================================================
+scanner:
+  cache_dir: ".civitscraper_cache"  # Where to store cache files
+  cache_validity: 86400            # [seconds] Cache lifetime (24 hours)
+  force_refresh: false             # [true/false] Ignore cache and force refresh
+
+# =============================================================================
+# Logging Configuration
+# Control how the application logs information
+# =============================================================================
+logging:
+  level: DEBUG                     # [DEBUG/INFO/WARNING/ERROR/CRITICAL] Main log level
+
+  # Console output settings
+  console:
+    enabled: true                  # [true/false] Log to console
+    level: INFO                # Console log level
+    simple: false                  # Use detailed format for debugging
+
+  # File logging settings
+  file:
+    enabled: true                  # [true/false] Log to file
+    level: DEBUG                   # File log level
+    directory: logs                # Log file directory
+    max_size: 10                  # [MB] Max log file size
+    backup_count: 5               # Number of backup files to keep
