@@ -5,11 +5,12 @@ This module handles organizing model files based on metadata.
 """
 
 import os
-import json
-import shutil
 import logging
 from typing import Dict, Any, List, Optional, Tuple
-from pathlib import Path
+
+from .config import OrganizationConfig
+from .path_formatter import PathFormatter
+from .operations import FileOperationHandler
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,8 @@ logger = logging.getLogger(__name__)
 class FileOrganizer:
     """
     Organizer for model files.
+    
+    This class coordinates the organization of model files based on metadata.
     """
     
     def __init__(self, config: Dict[str, Any]):
@@ -24,26 +27,19 @@ class FileOrganizer:
         Initialize file organizer.
         
         Args:
-            config: Configuration
+            config: Configuration dictionary
         """
         self.config = config
-        
-        # Get organization configuration
-        self.organization_config = config.get("organization", {})
-        
-        # Get predefined templates
-        self.templates = {
-            "by_type": "{type}",
-            "by_creator": "{creator}",
-            "by_type_and_creator": "{type}/{creator}",
-            "by_base_model": "{base_model}/{type}",
-            "by_nsfw": "{nsfw}/{type}",
-            "by_type_basemodel_nsfw": "{type}/{base_model}/{nsfw}",
-            "by_date": "{year}/{month}/{type}",
-            "by_model_info": "{model_type}/{model_name}",
-        }
+        self.org_config = OrganizationConfig.from_dict(config)
+        self.path_formatter = PathFormatter()
+        self.file_handler = FileOperationHandler(config)
     
-    def organize_file(self, file_path: str, metadata: Dict[str, Any], force_organize: bool = False) -> Optional[str]:
+    def organize_file(
+        self, 
+        file_path: str, 
+        metadata: Dict[str, Any], 
+        force_organize: bool = False
+    ) -> Optional[str]:
         """
         Organize a model file.
         
@@ -56,33 +52,19 @@ class FileOrganizer:
             Path to organized file or None if organization failed
         """
         # Check if organization is enabled (either in config or forced)
-        if not (self.organization_config.get("enabled", False) or force_organize):
+        if not (self.org_config.enabled or force_organize):
             logger.debug("Organization is disabled")
             return None
         
         try:
-            # Get organization template
-            template_name = self.organization_config.get("template")
-            custom_template = self.organization_config.get("custom_template")
-            
-            # Log the organization configuration for debugging
-            logger.debug(f"Organization configuration: {self.organization_config}")
-            logger.debug(f"Template name from config: {template_name}")
-            
             # Get template
-            if custom_template:
-                template = custom_template
-                logger.debug(f"Using custom template: {custom_template}")
-            elif template_name and template_name in self.templates:
-                template = self.templates[template_name]
-                logger.debug(f"Using predefined template '{template_name}': {template}")
-            else:
-                # Use default template
-                template = self.templates["by_type"]
-                logger.info(f"Using default template 'by_type' because template '{template_name}' was not specified or not found")
+            template = self.path_formatter.get_template(
+                self.org_config.template, 
+                self.org_config.custom_template
+            )
             
             # Get output directory
-            output_dir = self.organization_config.get("output_dir")
+            output_dir = self.org_config.output_dir
             if not output_dir:
                 # Use default output directory
                 output_dir = "{model_dir}/organized"
@@ -91,40 +73,8 @@ class FileOrganizer:
             # Replace {model_dir} with model directory
             output_dir = output_dir.replace("{model_dir}", os.path.dirname(file_path))
             
-            # Get operation mode
-            # First check if it's in the organization config
-            operation_mode = self.organization_config.get("operation_mode")
-            
-            # If not, check if it's in the defaults.organization section
-            if operation_mode is None and "defaults" in self.config and "organization" in self.config["defaults"]:
-                operation_mode = self.config["defaults"]["organization"].get("operation_mode", "copy")
-            else:
-                # Default to copy if not found
-                operation_mode = operation_mode or "copy"
-                
-            logger.debug(f"Operation mode from config: {operation_mode}")
-            move_files = False
-            create_symlinks = False
-            
-            # Convert operation_mode to flags
-            if operation_mode == "move":
-                move_files = True
-            elif operation_mode == "symlink":
-                create_symlinks = True
-            
-            # Fallback to legacy configuration if present
-            if "move_files" in self.organization_config:
-                move_files = self.organization_config.get("move_files", False)
-            if "create_symlinks" in self.organization_config:
-                create_symlinks = self.organization_config.get("create_symlinks", False)
-            
-            logger.debug(f"Final operation flags: move_files={move_files}, create_symlinks={create_symlinks}")
-            
-            # Get dry run flag
-            dry_run = self.organization_config.get("dry_run", False)
-            
             # Format path using metadata
-            relative_path = self._format_path(template, metadata)
+            relative_path = self.path_formatter.format_path(template, metadata)
             
             # Create target path
             target_dir = os.path.join(output_dir, relative_path)
@@ -135,108 +85,36 @@ class FileOrganizer:
                 logger.warning(f"Target path already exists: {target_path}")
                 
                 # Handle collision
-                target_path = self._handle_collision(target_path)
+                target_path = self.path_formatter.handle_collision(target_path)
             
-            # Create directory if it doesn't exist
-            if not dry_run:
-                os.makedirs(target_dir, exist_ok=True)
-            
-            # Determine operation type for logging
-            operation_type = "move" if move_files else "symlink" if create_symlinks else "copy"
+            # Determine operation type
+            operation_type = self.org_config.operation_mode
             
             # Perform file operation
-            if dry_run:
-                logger.info(f"Dry run: Would {operation_type} {file_path} to {target_path}")
-            else:
-                if move_files:
-                    logger.info(f"Moving {file_path} to {target_path}")
-                    shutil.move(file_path, target_path)
-                elif create_symlinks:
-                    logger.info(f"Creating symlink from {file_path} to {target_path}")
-                    os.symlink(os.path.abspath(file_path), target_path)
-                else:
-                    logger.info(f"Copying {file_path} to {target_path}")
-                    shutil.copy2(file_path, target_path)
+            success = self.file_handler.perform_operation(
+                file_path, 
+                target_path, 
+                operation_type, 
+                self.org_config.dry_run
+            )
             
-            # Organize metadata file
-            metadata_path = os.path.splitext(file_path)[0] + ".json"
-            if os.path.isfile(metadata_path):
-                metadata_target_path = os.path.splitext(target_path)[0] + ".json"
+            if not success:
+                return None
+            
+            # Organize related files
+            related_files = self.file_handler.get_related_files(file_path)
+            
+            for related_path, file_type in related_files:
+                # Create target path for related file
+                related_target_path = os.path.splitext(target_path)[0] + os.path.splitext(related_path)[0].replace(os.path.splitext(file_path)[0], "") + os.path.splitext(related_path)[1]
                 
-                if dry_run:
-                    logger.info(f"Dry run: Would {operation_type} {metadata_path} to {metadata_target_path}")
-                else:
-                    if move_files:
-                        logger.info(f"Moving {metadata_path} to {metadata_target_path}")
-                        shutil.move(metadata_path, metadata_target_path)
-                    elif create_symlinks:
-                        logger.info(f"Creating symlink from {metadata_path} to {metadata_target_path}")
-                        os.symlink(os.path.abspath(metadata_path), metadata_target_path)
-                    else:
-                        logger.info(f"Copying {metadata_path} to {metadata_target_path}")
-                        shutil.copy2(metadata_path, metadata_target_path)
-            
-            # Organize HTML file
-            html_path = os.path.splitext(file_path)[0] + ".html"
-            if os.path.isfile(html_path):
-                html_target_path = os.path.splitext(target_path)[0] + ".html"
-                
-                if dry_run:
-                    logger.info(f"Dry run: Would {operation_type} {html_path} to {html_target_path}")
-                else:
-                    if move_files:
-                        logger.info(f"Moving {html_path} to {html_target_path}")
-                        shutil.move(html_path, html_target_path)
-                    elif create_symlinks:
-                        logger.info(f"Creating symlink from {html_path} to {html_target_path}")
-                        os.symlink(os.path.abspath(html_path), html_target_path)
-                    else:
-                        logger.info(f"Copying {html_path} to {html_target_path}")
-                        shutil.copy2(html_path, html_target_path)
-            
-            # Organize preview images
-            # Get max_count from configuration to know how many preview images to look for
-            max_count = self.config.get("output", {}).get("images", {}).get("max_count", 4)
-            
-            # Check for both indexed preview images and the legacy non-indexed format
-            # First, try the indexed format (preview0.jpeg, preview1.jpeg, etc.)
-            for i in range(max_count):
-                # Check for different possible extensions
-                for ext in [".jpeg", ".jpg", ".png"]:
-                    preview_path = os.path.splitext(file_path)[0] + f".preview{i}{ext}"
-                    if os.path.isfile(preview_path):
-                        preview_target_path = os.path.splitext(target_path)[0] + f".preview{i}{ext}"
-                        
-                        if dry_run:
-                            logger.info(f"Dry run: Would {operation_type} {preview_path} to {preview_target_path}")
-                        else:
-                            if move_files:
-                                logger.info(f"Moving {preview_path} to {preview_target_path}")
-                                shutil.move(preview_path, preview_target_path)
-                            elif create_symlinks:
-                                logger.info(f"Creating symlink from {preview_path} to {preview_target_path}")
-                                os.symlink(os.path.abspath(preview_path), preview_target_path)
-                            else:
-                                logger.info(f"Copying {preview_path} to {preview_target_path}")
-                                shutil.copy2(preview_path, preview_target_path)
-            
-            # Also check for the legacy non-indexed format (preview.jpg)
-            preview_path = os.path.splitext(file_path)[0] + ".preview.jpg"
-            if os.path.isfile(preview_path):
-                preview_target_path = os.path.splitext(target_path)[0] + ".preview.jpg"
-                
-                if dry_run:
-                    logger.info(f"Dry run: Would {operation_type} {preview_path} to {preview_target_path}")
-                else:
-                    if move_files:
-                        logger.info(f"Moving {preview_path} to {preview_target_path}")
-                        shutil.move(preview_path, preview_target_path)
-                    elif create_symlinks:
-                        logger.info(f"Creating symlink from {preview_path} to {preview_target_path}")
-                        os.symlink(os.path.abspath(preview_path), preview_target_path)
-                    else:
-                        logger.info(f"Copying {preview_path} to {preview_target_path}")
-                        shutil.copy2(preview_path, preview_target_path)
+                # Perform operation for related file
+                self.file_handler.perform_operation(
+                    related_path, 
+                    related_target_path, 
+                    operation_type, 
+                    self.org_config.dry_run
+                )
             
             return target_path
         
@@ -244,7 +122,12 @@ class FileOrganizer:
             logger.error(f"Error organizing {file_path}: {e}")
             return None
     
-    def organize_files(self, file_paths: List[str], metadata_dict: Dict[str, Dict[str, Any]], force_organize: bool = False) -> List[Tuple[str, Optional[str]]]:
+    def organize_files(
+        self, 
+        file_paths: List[str], 
+        metadata_dict: Dict[str, Dict[str, Any]], 
+        force_organize: bool = False
+    ) -> List[Tuple[str, Optional[str]]]:
         """
         Organize multiple model files.
         
@@ -257,7 +140,7 @@ class FileOrganizer:
             List of (file_path, target_path) tuples
         """
         # Check if organization is enabled (either in config or forced)
-        if not (self.organization_config.get("enabled", False) or force_organize):
+        if not (self.org_config.enabled or force_organize):
             logger.debug("Organization is disabled")
             return [(file_path, None) for file_path in file_paths]
         
@@ -279,92 +162,3 @@ class FileOrganizer:
             results.append((file_path, target_path))
         
         return results
-    
-    def _format_path(self, template: str, metadata: Dict[str, Any]) -> str:
-        """
-        Format path using metadata.
-        
-        Args:
-            template: Path template
-            metadata: Model metadata
-            
-        Returns:
-            Formatted path
-        """
-        # Get model information
-        model_info = metadata.get("model", {})
-        
-        # Get model name
-        model_name = metadata.get("name", "Unknown")
-        
-        # Get model type
-        model_type = model_info.get("type", "Unknown")
-        
-        # Get model creator
-        creator = model_info.get("creator", {}).get("username", "Unknown")
-        
-        # Get base model
-        base_model = metadata.get("baseModel", "Unknown")
-        
-        # Get NSFW status
-        nsfw = "nsfw" if model_info.get("nsfw", False) else "sfw"
-        
-        # Get creation date
-        created_at = metadata.get("createdAt", "")
-        year = created_at[:4] if created_at else "Unknown"
-        month = created_at[5:7] if created_at else "Unknown"
-        
-        # Format path
-        path = template
-        path = path.replace("{model_name}", self._sanitize_path(model_name))
-        path = path.replace("{model_type}", self._sanitize_path(model_type))
-        path = path.replace("{type}", self._sanitize_path(model_type))
-        path = path.replace("{creator}", self._sanitize_path(creator))
-        path = path.replace("{base_model}", self._sanitize_path(base_model))
-        path = path.replace("{nsfw}", nsfw)
-        path = path.replace("{year}", year)
-        path = path.replace("{month}", month)
-        
-        return path
-    
-    def _sanitize_path(self, path: str) -> str:
-        """
-        Sanitize path.
-        
-        Args:
-            path: Path to sanitize
-            
-        Returns:
-            Sanitized path
-        """
-        # Replace invalid characters
-        invalid_chars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*']
-        for char in invalid_chars:
-            path = path.replace(char, '_')
-        
-        # Remove leading and trailing dots and spaces
-        path = path.strip('. ')
-        
-        return path
-    
-    def _handle_collision(self, path: str) -> str:
-        """
-        Handle path collision.
-        
-        Args:
-            path: Path that already exists
-            
-        Returns:
-            New path
-        """
-        # Get path components
-        dir_path, filename = os.path.split(path)
-        name, ext = os.path.splitext(filename)
-        
-        # Try adding numbers until we find a path that doesn't exist
-        counter = 1
-        while os.path.exists(path):
-            path = os.path.join(dir_path, f"{name}_{counter}{ext}")
-            counter += 1
-        
-        return path

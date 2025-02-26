@@ -35,6 +35,11 @@ class HTMLGenerator:
         self.config = config
         self.model_processor = model_processor
         
+        # For backward compatibility with the refactored code
+        self.image_manager = None
+        if model_processor and hasattr(model_processor, 'image_manager'):
+            self.image_manager = model_processor.image_manager
+        
         # Get output configuration
         self.output_config = config.get("output", {})
         
@@ -262,8 +267,13 @@ class HTMLGenerator:
         # Get image paths
         image_paths = []
         
-        # If we have a ModelProcessor, use it to download images
-        if self.model_processor:
+        # If we have an ImageManager, use it to download images
+        if self.image_manager:
+            # Use the ImageManager to download images
+            logger.debug(f"Using ImageManager to download images for {file_path}")
+            image_paths = self.image_manager.download_images(file_path, metadata, max_count)
+        # For backward compatibility, try using ModelProcessor if available
+        elif self.model_processor and hasattr(self.model_processor, 'download_images'):
             # Use the ModelProcessor to download images
             logger.debug(f"Using ModelProcessor to download images for {file_path}")
             image_paths = self.model_processor.download_images(file_path, metadata, max_count)

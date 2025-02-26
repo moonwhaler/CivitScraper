@@ -12,7 +12,7 @@ from ..api.client import CivitAIClient
 from ..scanner.discovery import find_model_files, filter_files
 from ..scanner.processor import ModelProcessor
 from ..html.generator import HTMLGenerator
-from ..organization.organizer import FileOrganizer
+from ..organization import FileOrganizer
 
 logger = logging.getLogger(__name__)
 
