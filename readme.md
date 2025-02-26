@@ -617,3 +617,27 @@ civitscraper --debug
 ```
 
 Log files are stored in the configured log directory (default: `logs`).
+
+## License
+
+CivitScraper is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](https://www.gnu.org/licenses/agpl-3.0.en.html). This is a strong copyleft license that requires anyone who distributes the code or a derivative work to make the source available under the same terms.
+
+### What this means:
+- You can use, copy, modify, and distribute this software.
+- If you modify the software and distribute it (including running it on a server that others can interact with), you must make your modifications available under the AGPL-3.0.
+- You must include the original copyright notice and license.
+
+### Dependencies
+
+CivitScraper uses the following open-source libraries, each with their own licenses:
+
+- [requests](https://github.com/psf/requests): Apache License 2.0
+- [pyyaml](https://github.com/yaml/pyyaml): MIT License
+- [jinja2](https://github.com/pallets/jinja): BSD License
+- [blake3](https://github.com/oconnor663/blake3-py): Apache License 2.0 or MIT License
+- [setuptools](https://github.com/pypa/setuptools): MIT License
+- [wheel](https://github.com/pypa/wheel): MIT License
+
+These dependencies all have permissive licenses that are compatible with the AGPL-3.0 license of CivitScraper.
+
+For the full license text, see the [GNU Affero General Public License v3.0](https://www.gnu.org/licenses/agpl-3.0.en.html).
