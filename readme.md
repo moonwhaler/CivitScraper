@@ -442,6 +442,8 @@ CivitScraper can generate HTML preview pages for models. The HTML pages include:
 - Preview images
 - Generation parameters (if available)
 
+![Example of a generated HTML file](civiscraper_html_example.png)
+
 The HTML pages are saved in the configured location:
 
 ```yaml
