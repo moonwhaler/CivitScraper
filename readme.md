@@ -76,6 +76,36 @@ cd civitscraper
 pip install -e .
 ```
 
+### Using Virtual Environment (venv)
+
+For isolated dependencies and cleaner package management, you can install CivitScraper in a Python virtual environment:
+
+```bash
+# Create a virtual environment
+python -m venv civitscraper-env
+
+# Activate the virtual environment
+
+# On Windows:
+civitscraper-env\Scripts\activate
+
+# On macOS/Linux:
+source civitscraper-env/bin/activate
+
+# Install CivitScraper in the virtual environment
+git clone https://github.com/moonwhaler/civitscraper.git
+cd civitscraper
+pip install -e .
+
+# Now you can use CivitScraper
+civitscraper --help
+
+# When finished, deactivate the virtual environment
+deactivate
+```
+
+This approach keeps CivitScraper's dependencies isolated from your system Python installation.
+
 ## Configuration
 
 CivitScraper uses a YAML configuration file to control its behavior. The default configuration file is located at `config/default.yaml`.
