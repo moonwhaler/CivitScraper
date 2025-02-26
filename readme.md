@@ -69,32 +69,25 @@ CivitScraper works by:
 - Internet connection for API access
 
 ### Installation Steps
-
-```bash
-git clone https://github.com/moonwhaler/civitscraper.git
-cd civitscraper
-pip install -e .
-```
-
-### Using Virtual Environment (venv)
+#### Using Virtual Environment (venv)
 
 For isolated dependencies and cleaner package management, you can install CivitScraper in a Python virtual environment:
 
 ```bash
+# Install CivitScraper in the virtual environment
+git clone https://github.com/moonwhaler/civitscraper.git
+cd civitscraper
+
 # Create a virtual environment
-python -m venv civitscraper-env
+python -m venv venv
 
 # Activate the virtual environment
 
 # On Windows:
-civitscraper-env\Scripts\activate
-
+venv\Scripts\activate
 # On macOS/Linux:
-source civitscraper-env/bin/activate
+source venv/bin/activate
 
-# Install CivitScraper in the virtual environment
-git clone https://github.com/moonwhaler/civitscraper.git
-cd civitscraper
 pip install -e .
 
 # Now you can use CivitScraper
