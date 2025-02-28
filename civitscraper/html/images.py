@@ -14,9 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class ImageHandler:
-    """
-    Handler for images used in HTML generation.
-    """
+    """Handler for images used in HTML generation."""
 
     def __init__(self, config: Dict[str, Any], model_processor=None):
         """
@@ -71,7 +69,7 @@ class ImageHandler:
         else:
             # Fallback to checking for existing images
             logger.debug(
-                f"No ModelProcessor available, checking for existing images for {file_path}"
+                "No ModelProcessor available, checking for existing images for " f"{file_path}"
             )
             image_paths = self._get_existing_images(file_path, metadata)
 
@@ -101,7 +99,8 @@ class ImageHandler:
 
         # Log the number of images after limiting
         logger.debug(
-            f"ImageHandler number of images after limiting to max_count {self.max_count}: {len(images)}"
+            f"ImageHandler number of images after limiting to max_count {self.max_count}: "
+            f"{len(images)}"
         )
 
         # Get HTML path for calculating relative paths
@@ -132,8 +131,9 @@ class ImageHandler:
                 if image_data:
                     image_paths.append(image_data)
             else:
-                # If the indexed image file doesn't exist, check if a version with a different extension exists
-                # This handles the case where a video file was renamed from .jpeg to .mp4 by the ModelProcessor
+                # If the indexed image file doesn't exist, check if a version with a different
+                # extension exists. This handles the case where a video file was renamed from
+                # .jpeg to .mp4 by the ModelProcessor
 
                 # Get the base path without extension
                 base_path = os.path.splitext(image_path)[0]
@@ -160,13 +160,14 @@ class ImageHandler:
                     # In dry run mode, we would normally download the image
                     if self.dry_run:
                         logger.info(
-                            f"Dry run: Would download image {i+1}/{len(images)} from {image.get('url')} to {image_path}"
+                            f"Dry run: Would download image {i+1}/{len(images)} from "
+                            f"{image.get('url')} to {image_path}"
                         )
 
         return image_paths
 
     def _process_image(
-        self, image_path: str, html_dir: str, image: Dict[str, Any], is_video: bool = None
+        self, image_path: str, html_dir: str, image: Dict[str, Any], is_video: Optional[bool] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Process image and extract metadata.

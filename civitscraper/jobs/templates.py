@@ -5,7 +5,7 @@ This module defines the job templates for common tasks.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +111,14 @@ def get_job_template(template_name: str) -> Optional[Dict[str, Any]]:
     Returns:
         Template or None if not found
     """
-    return DEFAULT_JOB_TEMPLATES.get(template_name)
+    template = DEFAULT_JOB_TEMPLATES.get(template_name)
+    if template is not None and isinstance(template, dict):
+        # Ensure we're returning a properly typed dictionary
+        result: Dict[str, Any] = {}
+        for k, v in template.items():
+            result[k] = v
+        return result
+    return None
 
 
 def get_all_job_templates() -> Dict[str, Dict[str, Any]]:
@@ -121,7 +128,16 @@ def get_all_job_templates() -> Dict[str, Dict[str, Any]]:
     Returns:
         Dictionary of template name -> template
     """
-    return DEFAULT_JOB_TEMPLATES.copy()
+    # Create a deep copy to ensure proper typing
+    templates: Dict[str, Dict[str, Any]] = {}
+    for name, template in DEFAULT_JOB_TEMPLATES.items():
+        if isinstance(template, dict):
+            # Ensure we're creating a properly typed dictionary
+            result: Dict[str, Any] = {}
+            for k, v in template.items():
+                result[k] = v
+            templates[name] = result
+    return templates
 
 
 def create_job_from_template(template_name: str, **kwargs) -> Optional[Dict[str, Any]]:
@@ -142,7 +158,7 @@ def create_job_from_template(template_name: str, **kwargs) -> Optional[Dict[str,
         return None
 
     # Create job
-    job = template.copy()
+    job: Dict[str, Any] = template.copy()
 
     # Apply overrides
     for key, value in kwargs.items():

@@ -8,11 +8,11 @@ import json
 import logging
 import os
 import time
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, Optional, Tuple
 
 import requests
 
-from ..utils.cache import CacheManager, DiskCache
+from ..utils.cache import CacheManager
 from .circuit_breaker import CircuitBreaker
 from .exceptions import (
     CircuitBreakerOpenError,
@@ -27,9 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 class RequestHandler:
-    """
-    Handler for API requests with rate limiting, circuit breaking, and caching.
-    """
+    """Handler for API requests with rate limiting, circuit breaking, and caching."""
 
     def __init__(
         self,
@@ -130,7 +128,10 @@ class RequestHandler:
         Returns:
             Cache key
         """
-        return f"{method}:{url}:{json.dumps(params or {})}:{json.dumps(data or {})}"
+        empty_dict: Dict[str, Any] = {}
+        params_json = json.dumps(params or empty_dict)
+        data_json = json.dumps(data or empty_dict)
+        return f"{method}: {url}: {params_json}: {data_json}"
 
     def request(
         self,
@@ -173,7 +174,7 @@ class RequestHandler:
             cached_response = self.cache_manager.get(cache_key)
             if cached_response:
                 logger.debug(f"Cache hit for {url}")
-                return cached_response
+                return str(cached_response)
 
         # Acquire rate limit token
         self.rate_limiter.acquire()
@@ -218,7 +219,8 @@ class RequestHandler:
                     # Use exponential backoff
                     retry_delay = self.base_retry_delay * (2**retries)
                     logger.warning(
-                        f"Server error {response.status_code}, retrying after {retry_delay:.2f} seconds"
+                        f"Server error {response.status_code}, "
+                        f"retrying after {retry_delay: .2f} seconds"
                     )
 
                     # Wait and retry
@@ -249,13 +251,14 @@ class RequestHandler:
 
                 # Use exponential backoff
                 retry_delay = self.base_retry_delay * (2**retries)
-                logger.warning(f"Request failed: {e}, retrying after {retry_delay:.2f} seconds")
+                logger.warning(f"Request failed: {e}, retrying after {retry_delay: .2f} seconds")
 
                 # Wait and retry
                 time.sleep(retry_delay)
                 retries += 1
 
-        # This should never be reached, but just in case
+        # This should never be reached due to the exception handling above,
+        # but we need to raise an exception to satisfy mypy
         raise NetworkError("Maximum retries exceeded")
 
     def get(
@@ -314,7 +317,7 @@ class RequestHandler:
 
     def download(
         self, url: str, output_path: str, dry_run: bool = False
-    ) -> tuple[bool, Optional[str]]:
+    ) -> Tuple[bool, Optional[str]]:
         """
         Download file from URL.
 
@@ -341,8 +344,9 @@ class RequestHandler:
             response = self.session.get(url, timeout=self.timeout, stream=True)
             response.raise_for_status()
 
-            # Get content type
-            content_type = response.headers.get("Content-Type")
+            # Get content type (ensure it's a string)
+            content_type_raw = response.headers.get("Content-Type")
+            content_type = str(content_type_raw) if content_type_raw is not None else None
             logger.debug(f"Content-Type for {url}: {content_type}")
 
             # Create directory if it doesn't exist

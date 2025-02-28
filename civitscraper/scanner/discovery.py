@@ -7,8 +7,7 @@ This module handles discovering model files in the configured directories.
 import glob
 import logging
 import os
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -151,8 +150,8 @@ def get_metadata_path(file_path: str, config: Dict[str, Any]) -> str:
     # Get model name
     model_name = os.path.splitext(os.path.basename(file_path))[0]
 
-    # Get model type
-    model_type = get_model_type(file_path, config)
+    # Get model type (explicitly cast to str to satisfy mypy)
+    model_type: str = get_model_type(file_path, config)
 
     # Format path
     path = path_template.replace("{model_dir}", model_dir)
@@ -163,8 +162,9 @@ def get_metadata_path(file_path: str, config: Dict[str, Any]) -> str:
     filename = filename_template.replace("{model_name}", model_name)
     filename = filename.replace("{model_type}", model_type)
 
-    # Combine path and filename
-    return os.path.join(path, filename)
+    # Combine path and filename and ensure it's a string
+    result = os.path.join(path, filename)
+    return str(result)
 
 
 def get_model_type(file_path: str, config: Dict[str, Any]) -> str:
@@ -180,12 +180,17 @@ def get_model_type(file_path: str, config: Dict[str, Any]) -> str:
     """
     # Get input paths
     input_paths = config.get("input_paths", {})
+    if not input_paths or not isinstance(input_paths, dict):
+        return "Unknown"
 
     # Check each path
     for path_id, path_config in input_paths.items():
+        if not isinstance(path_config, dict):
+            continue
+
         # Get directory
         directory = path_config.get("path")
-        if not directory:
+        if not directory or not isinstance(directory, str):
             continue
 
         # Normalize directory path
@@ -194,8 +199,13 @@ def get_model_type(file_path: str, config: Dict[str, Any]) -> str:
         # Check if file is in directory
         if os.path.normpath(file_path).startswith(directory):
             # Get model type
-            return path_config.get("type", "Unknown")
+            model_type = path_config.get("type")
+            if model_type is not None and isinstance(model_type, str):
+                return str(model_type)
+            else:
+                return "Unknown"
 
+    # If no match found, return a default string
     return "Unknown"
 
 
@@ -237,8 +247,9 @@ def get_html_path(file_path: str, config: Dict[str, Any]) -> str:
     filename = filename_template.replace("{model_name}", model_name)
     filename = filename.replace("{model_type}", model_type)
 
-    # Combine path and filename
-    return os.path.join(path, filename)
+    # Combine path and filename and ensure it's a string
+    result = os.path.join(path, filename)
+    return str(result)
 
 
 def get_image_path(
@@ -309,8 +320,9 @@ def get_image_path(
             # Insert the index number before the extension
             filename = filename[:ext_pos] + index_number + filename[ext_pos:]
 
-    # Combine path and filename
-    return os.path.join(path, filename)
+    # Combine path and filename and ensure it's a string
+    result = os.path.join(path, filename)
+    return str(result)
 
 
 def filter_files(files: List[str], skip_existing: bool = True) -> List[str]:

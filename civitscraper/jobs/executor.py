@@ -6,7 +6,7 @@ This module handles executing jobs defined in the configuration.
 
 import logging
 import os
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List
 
 from ..api.client import CivitAIClient
 from ..html.generator import HTMLGenerator
@@ -18,9 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class JobExecutor:
-    """
-    Executor for jobs.
-    """
+    """Executor for jobs."""
 
     def __init__(self, config: Dict[str, Any], api_client: CivitAIClient):
         """
@@ -151,13 +149,13 @@ class JobExecutor:
                 ]
                 if not path_ids:
                     logger.error(
-                        f"No paths specified for job: {job_name} and no LORA paths found in configuration"
+                        f"No paths specified for job: {job_name} "
+                        f"and no LORA paths found in configuration"
                     )
                     return False
                 logger.info(f"No paths specified, using all LORA paths: {path_ids}")
 
             # Get scan options
-            recursive = job_config.get("recursive", True)
             skip_existing = job_config.get("skip_existing", True)
             verify_hashes = job_config.get("verify_hashes", True)
             organize = job_config.get("organize", False)
@@ -167,9 +165,9 @@ class JobExecutor:
             path_files = find_model_files(self.config, path_ids)
 
             # Flatten files
-            files = []
-            for path_id, path_files in path_files.items():
-                files.extend(path_files)
+            files: List[str] = []
+            for path_id, path_files_list in path_files.items():
+                files.extend(path_files_list)
 
             # Filter files
             logger.info(f"Found {len(files)} files, filtering...")
@@ -297,16 +295,15 @@ class JobExecutor:
                 return False
 
             # Get scan options
-            recursive = job_config.get("recursive", True)
 
             # Find model files
             logger.info(f"Finding model files for paths: {path_ids}")
             path_files = find_model_files(self.config, path_ids)
 
             # Flatten files
-            files = []
-            for path_id, path_files in path_files.items():
-                files.extend(path_files)
+            files: List[str] = []
+            for path_id, path_files_list in path_files.items():
+                files.extend(path_files_list)
 
             # Filter to LORA files
             lora_files = []

@@ -9,7 +9,7 @@ This module handles loading configuration from various sources:
 
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import yaml
 
@@ -43,6 +43,14 @@ def load_yaml_config(path: str) -> Dict[str, Any]:
         with open(path, "r") as f:
             config = yaml.safe_load(f)
         logger.info(f"Loaded configuration from {path}")
+        # Ensure we always return a dictionary
+        if config is None:
+            return {}
+        if not isinstance(config, dict):
+            logger.warning(
+                f"Configuration from {path} is not a dictionary, converting to empty dict"
+            )
+            return {}
         return config
     except FileNotFoundError:
         logger.error(f"Configuration file not found: {path}")
@@ -143,7 +151,7 @@ def resolve_inheritance(config: Dict[str, Any]) -> Dict[str, Any]:
                 for part in parent_path:
                     if part not in parent:
                         logger.warning(
-                            f"Parent template {parent_name} not found for {template_name}"
+                            f"Parent template {parent_name} " f"not found for {template_name}"
                         )
                         break
                     parent = parent[part]
@@ -156,9 +164,7 @@ def resolve_inheritance(config: Dict[str, Any]) -> Dict[str, Any]:
 
                     config["job_templates"][template_name] = merge_configs(parent, template)
 
-                    logger.debug(
-                        f"Template configuration after merge: {config['job_templates'][template_name]}"
-                    )
+                    logger.debug("Template organization configuration before merge")
 
                     # Check if the template has an output section with max_count
                     max_count = (
@@ -169,7 +175,7 @@ def resolve_inheritance(config: Dict[str, Any]) -> Dict[str, Any]:
                     )
                     if max_count:
                         logger.debug(
-                            f"Template {template_name} has max_count: {max_count} after inheritance resolution"
+                            f"Template {template_name} has max_count: {max_count} after inheritance"
                         )
 
             # Handle nested inheritance in organization section
@@ -196,7 +202,8 @@ def resolve_inheritance(config: Dict[str, Any]) -> Dict[str, Any]:
                 for part in parent_path:
                     if part not in parent:
                         logger.warning(
-                            f"Parent section {inherit_value} not found for {template_name}.organization"
+                            f"Parent section {inherit_value} "
+                            f"not found for {template_name}.organization"
                         )
                         break
                     parent = parent[part]
@@ -204,17 +211,20 @@ def resolve_inheritance(config: Dict[str, Any]) -> Dict[str, Any]:
                 # Merge parent and child
                 if isinstance(parent, dict):
                     logger.debug(
-                        f"Merging parent {inherit_value} into template {template_name}.organization"
+                        f"Merging parent {inherit_value} into template "
+                        f"{template_name}.organization"
                     )
                     logger.debug(f"Parent configuration: {parent}")
                     logger.debug(
-                        f"Template organization configuration before merge: {template['organization']}"
+                        "Template organization configuration before merge: "
+                        f"{template['organization']}"
                     )
 
                     template["organization"] = merge_configs(parent, template["organization"])
 
                     logger.debug(
-                        f"Template organization configuration after merge: {template['organization']}"
+                        f"Template organization configuration after merge: "
+                        f"{template['organization']}"
                     )
 
     # Resolve job inheritance
@@ -255,7 +265,8 @@ def resolve_inheritance(config: Dict[str, Any]) -> Dict[str, Any]:
                     )
                     if job_max_count:
                         logger.debug(
-                            f"Job {job_name} has max_count: {job_max_count} after inheritance resolution"
+                            f"Job {job_name} has max_count: {job_max_count} "
+                            f"after inheritance resolution"
                         )
                 else:
                     logger.warning(f"Template {template_name} not found for job {job_name}")

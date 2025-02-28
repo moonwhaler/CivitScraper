@@ -141,7 +141,7 @@ class FileOrganizer:
             return [(file_path, None) for file_path in file_paths]
 
         # Organize files
-        results = []
+        results: List[Tuple[str, Optional[str]]] = []
 
         for file_path in file_paths:
             # Get metadata

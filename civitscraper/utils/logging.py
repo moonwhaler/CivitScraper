@@ -8,7 +8,7 @@ import logging
 import logging.handlers
 import os
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 def setup_logging(config: Dict[str, Any]) -> logging.Logger:
@@ -94,9 +94,7 @@ def setup_logging(config: Dict[str, Any]) -> logging.Logger:
 
 
 class ProgressLogger:
-    """
-    Logger for tracking progress of operations.
-    """
+    """Logger for tracking progress of operations."""
 
     def __init__(
         self,
@@ -158,9 +156,7 @@ class ProgressLogger:
 
 
 class BatchProgressTracker:
-    """
-    Tracker for batch processing progress.
-    """
+    """Tracker for batch processing progress."""
 
     def __init__(
         self,
@@ -240,7 +236,7 @@ class BatchProgressTracker:
             f"{self.description} complete - "
             f"{self.current_item}/{self.total_items} items processed "
             f"({self.success_count} success, {self.failure_count} failure) "
-            f"in {elapsed} ({items_per_second:.2f} items/s)"
+            f"in {elapsed} ({items_per_second: .2f} items/s)"
         )
 
 

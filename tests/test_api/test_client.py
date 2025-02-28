@@ -5,6 +5,7 @@ This module contains tests for the CivitAI API client functionality.
 """
 
 import json
+from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -65,7 +66,7 @@ def test_get_model_by_id_success(mock_request, api_client):
 
     # Verify the request was made correctly
     mock_request.assert_called_once_with(
-        method="GET", endpoint=f"models/123", params=None, data=None, force_refresh=False
+        method="GET", endpoint="models/123", params=None, data=None, force_refresh=False
     )
 
 
@@ -123,7 +124,7 @@ def test_get_model_by_hash_success(mock_request, api_client):
         api_client: The API client instance
     """
     # Mock response
-    response_data = {"items": [{"id": 123, "name": "Test Model"}]}
+    response_data: Dict[str, List[Dict[str, Any]]] = {"items": [{"id": 123, "name": "Test Model"}]}
     mock_request.return_value = json.dumps(response_data)
 
     # Call the method
@@ -153,7 +154,7 @@ def test_get_model_by_hash_not_found(mock_request, api_client):
         api_client: The API client instance
     """
     # Mock response
-    response_data = {"items": []}
+    response_data: Dict[str, List] = {"items": []}
     mock_request.return_value = json.dumps(response_data)
 
     # Call the method

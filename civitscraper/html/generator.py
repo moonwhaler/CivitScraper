@@ -9,10 +9,8 @@ import os
 from typing import Any, Dict, List, Optional
 
 from .context import ContextBuilder
-from .images import ImageHandler
 from .paths import PathManager
 from .renderer import TemplateRenderer
-from .sanitizer import DataSanitizer
 
 logger = logging.getLogger(__name__)
 

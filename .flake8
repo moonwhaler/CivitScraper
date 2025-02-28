@@ -1,7 +1,7 @@
 [flake8]
 max-line-length = 100
 exclude = .git,__pycache__,build,dist,venv,.venv,env,.env
-extend-ignore = E203,W503
+extend-ignore = E203,W503,E231
 per-file-ignores =
     # Allow tests to import from parent directory
     tests/*: F401, F403, F405

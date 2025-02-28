@@ -6,10 +6,10 @@ This module handles parsing API responses into model objects.
 
 import json
 import logging
-from typing import Any, Dict, Generic, List, Optional, Type, TypeVar, Union
+from typing import Any, Dict, Type, TypeVar
 
 from .exceptions import ParseError
-from .models import Image, ImageSearchResult, Model, ModelVersion, SearchResult
+from .models import ImageSearchResult, Model, ModelVersion, SearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +17,7 @@ T = TypeVar("T")
 
 
 class ResponseParser:
-    """
-    Parser for CivitAI API responses.
-    """
+    """Parser for CivitAI API responses."""
 
     def __init__(self):
         """Initialize response parser."""
@@ -39,7 +37,8 @@ class ResponseParser:
             ParseError: If parsing fails
         """
         try:
-            return json.loads(response_text)
+            result: Dict[str, Any] = json.loads(response_text)
+            return result
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON response: {e}")
             raise ParseError(str(e))

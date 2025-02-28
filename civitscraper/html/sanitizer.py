@@ -14,9 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class DataSanitizer:
-    """
-    Sanitizer for data used in HTML generation.
-    """
+    """Sanitizer for data used in HTML generation."""
 
     def sanitize_json_data(self, data: List[Dict[str, Any]]) -> str:
         """

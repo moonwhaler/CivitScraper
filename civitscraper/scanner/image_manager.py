@@ -207,7 +207,7 @@ class ImageManager:
             return None
 
         # Check if the content type indicates a video
-        is_video = content_type and content_type.startswith("video/")
+        is_video = bool(content_type and content_type.startswith("video/"))
 
         # If it's a video but has a wrong extension, save it with .mp4 extension
         if is_video and not image_path.lower().endswith(".mp4"):
@@ -222,7 +222,8 @@ class ImageManager:
             try:
                 os.rename(image_path, new_path)
                 logger.info(
-                    f"Renamed video file from {image_path} to {new_path} based on Content-Type: {content_type}"
+                    f"Renamed video file from {image_path} to {new_path} "
+                    f"based on Content-Type: {content_type}"
                 )
                 # Update the image_path for further processing
                 image_path = new_path

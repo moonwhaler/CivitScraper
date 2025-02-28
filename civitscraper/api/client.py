@@ -10,20 +10,12 @@ This module handles communication with the CivitAI API, including:
 
 import logging
 import os
-from typing import Any, Dict, Generic, List, Optional, Type, TypeVar, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, TypeVar, Union
 
 from ..utils.cache import CacheManager
 from .circuit_breaker import CircuitBreaker
-from .exceptions import (
-    CircuitBreakerOpenError,
-    CivitAIError,
-    ClientError,
-    NetworkError,
-    ParseError,
-    RateLimitError,
-    ServerError,
-)
-from .models import Image, ImageSearchResult, Model, ModelVersion, SearchResult
+from .exceptions import CivitAIError, NetworkError
+from .models import ImageSearchResult, Model, ModelVersion, SearchResult
 from .rate_limiter import RateLimiter
 from .request import RequestHandler
 from .response import ResponseParser
@@ -34,9 +26,7 @@ T = TypeVar("T")
 
 
 class CivitAIClient:
-    """
-    Client for the CivitAI API.
-    """
+    """Client for the CivitAI API."""
 
     def __init__(self, config: Dict[str, Any]):
         """
@@ -72,9 +62,7 @@ class CivitAIClient:
         self.base_retry_delay = config["api"].get("batch", {}).get("retry_delay", 2000) / 1000.0
 
         # Set up cache
-        cache_dir = config.get("scanner", {}).get("cache_dir", ".civitscraper_cache")
-        cache_validity = config.get("scanner", {}).get("cache_validity", 86400)
-        self.cache_manager = CacheManager(config)
+        self.cache_manager: CacheManager[Any] = CacheManager(config)
 
         # Set up headers
         headers = {
@@ -127,7 +115,8 @@ class CivitAIClient:
             API response as dictionary or parsed object
 
         Raises:
-            CivitAIError: If request fails
+            CivitAIError: If API request fails
+            NetworkError: If network or other error occurs
         """
         try:
             # Make request
@@ -142,15 +131,11 @@ class CivitAIClient:
             # Parse response
             if response_type:
                 return self.response_parser.parse_response(response_text, response_type)
-            else:
-                return self.response_parser.parse_json(response_text)
+            return self.response_parser.parse_json(response_text)
 
         except CivitAIError:
-            # Re-raise CivitAIError exceptions
             raise
-
         except Exception as e:
-            # Wrap other exceptions
             logger.error(f"Error making request: {e}")
             raise NetworkError(str(e))
 
@@ -178,9 +163,12 @@ class CivitAIClient:
         Returns:
             Model object
         """
-        return self._make_request(
+        result = self._make_request(
             "GET", f"models/{model_id}", force_refresh=force_refresh, response_type=Model
         )
+        if isinstance(result, Model):
+            return result
+        raise TypeError(f"Expected Model, got {type(result)}")
 
     def get_model_version(self, version_id: int, force_refresh: bool = False) -> Dict[str, Any]:
         """
@@ -208,12 +196,15 @@ class CivitAIClient:
         Returns:
             ModelVersion object
         """
-        return self._make_request(
+        result = self._make_request(
             "GET",
             f"model-versions/{version_id}",
             force_refresh=force_refresh,
             response_type=ModelVersion,
         )
+        if isinstance(result, ModelVersion):
+            return result
+        raise TypeError(f"Expected ModelVersion, got {type(result)}")
 
     def get_model_version_by_hash(
         self, hash_value: str, force_refresh: bool = False
@@ -245,12 +236,15 @@ class CivitAIClient:
         Returns:
             ModelVersion object
         """
-        return self._make_request(
+        result = self._make_request(
             "GET",
             f"model-versions/by-hash/{hash_value}",
             force_refresh=force_refresh,
             response_type=ModelVersion,
         )
+        if isinstance(result, ModelVersion):
+            return result
+        raise TypeError(f"Expected ModelVersion, got {type(result)}")
 
     def search_models(
         self,
@@ -283,7 +277,7 @@ class CivitAIClient:
         Returns:
             Search results
         """
-        params = {
+        params: Dict[str, Any] = {
             "limit": limit,
             "page": page,
         }
@@ -342,7 +336,7 @@ class CivitAIClient:
         Returns:
             SearchResult object
         """
-        params = {
+        params: Dict[str, Any] = {
             "limit": limit,
             "page": page,
         }
@@ -368,9 +362,12 @@ class CivitAIClient:
         if nsfw is not None:
             params["nsfw"] = str(nsfw).lower()
 
-        return self._make_request(
+        result = self._make_request(
             "GET", "models", params=params, force_refresh=force_refresh, response_type=SearchResult
         )
+        if isinstance(result, SearchResult):
+            return result
+        raise TypeError(f"Expected SearchResult, got {type(result)}")
 
     def get_images(
         self,
@@ -393,7 +390,7 @@ class CivitAIClient:
         Returns:
             Images data
         """
-        params = {
+        params: Dict[str, Any] = {
             "limit": limit,
             "page": page,
         }
@@ -427,7 +424,7 @@ class CivitAIClient:
         Returns:
             ImageSearchResult object
         """
-        params = {
+        params: Dict[str, Any] = {
             "limit": limit,
             "page": page,
         }
@@ -438,15 +435,18 @@ class CivitAIClient:
         if model_version_id:
             params["modelVersionId"] = model_version_id
 
-        return self._make_request(
+        result = self._make_request(
             "GET",
             "images",
             params=params,
             force_refresh=force_refresh,
             response_type=ImageSearchResult,
         )
+        if isinstance(result, ImageSearchResult):
+            return result
+        raise TypeError(f"Expected ImageSearchResult, got {type(result)}")
 
-    def download_image(self, url: str, output_path: str) -> tuple[bool, Optional[str]]:
+    def download_image(self, url: str, output_path: str) -> Tuple[bool, Optional[str]]:
         """
         Download image from URL.
 
@@ -461,6 +461,26 @@ class CivitAIClient:
         """
         return self.request_handler.download(url, output_path, dry_run=self.dry_run)
 
+    def _validate_model_response(self, response: Any) -> Optional[Dict[str, Any]]:
+        """
+        Validate model response and extract first item.
+
+        Args:
+            response: Response to validate
+
+        Returns:
+            First item from response if valid, None otherwise
+        """
+        if not isinstance(response, dict):
+            logger.warning(f"Unexpected response type: {type(response)}")
+            return None
+
+        items = response.get("items", [])
+        if not items or not isinstance(items[0], dict):
+            return None
+
+        return dict(items[0])
+
     def get_model_by_hash(
         self, hash_value: str, force_refresh: bool = False
     ) -> Optional[Dict[str, Any]]:
@@ -474,14 +494,15 @@ class CivitAIClient:
         Returns:
             Model data or None if not found
         """
-        params = {"hashes[]": hash_value}
+        params: Dict[str, Any] = {"hashes[]": hash_value}
 
-        response = self._make_request("GET", "models", params=params, force_refresh=force_refresh)
-        items = response.get("items", [])
-
-        if items:
-            return items[0]
-        else:
+        try:
+            response = self._make_request(
+                "GET", "models", params=params, force_refresh=force_refresh
+            )
+            return self._validate_model_response(response)
+        except (CivitAIError, NetworkError) as e:
+            logger.error(f"Error getting model by hash: {e}")
             return None
 
     def download_model(self, version_id: int, output_path: str) -> bool:
@@ -506,7 +527,10 @@ class CivitAIClient:
                 return False
 
             # Download model
-            return self.request_handler.download(download_url, output_path, dry_run=self.dry_run)
+            success, _ = self.request_handler.download(
+                download_url, output_path, dry_run=self.dry_run
+            )
+            return success
 
         except Exception as e:
             logger.error(f"Error downloading model: {e}")

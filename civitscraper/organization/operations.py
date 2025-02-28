@@ -13,9 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class FileOperationHandler:
-    """
-    Handler for file operations (copy, move, symlink).
-    """
+    """Handler for file operations (copy, move, symlink)."""
 
     def __init__(self, config: Dict[str, Any]):
         """
@@ -107,6 +105,7 @@ class FileOperationHandler:
 
         except Exception as e:
             logger.error(
-                f"Error performing {operation_type} operation from {source_path} to {target_path}: {e}"
+                f"Error performing {operation_type} operation from {source_path} to "
+                f"{target_path}: {e}"
             )
             return False

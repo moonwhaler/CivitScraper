@@ -7,7 +7,6 @@ This module provides a more comprehensive caching system than the simple one in 
 import hashlib
 import json
 import logging
-import os
 import threading
 import time
 from pathlib import Path
@@ -19,9 +18,7 @@ T = TypeVar("T")
 
 
 class LRUCache(Generic[T]):
-    """
-    LRU (Least Recently Used) cache implementation.
-    """
+    """LRU (Least Recently Used) cache implementation."""
 
     def __init__(self, capacity: int):
         """
@@ -110,10 +107,8 @@ class LRUCache(Generic[T]):
             return len(self.cache)
 
 
-class DiskCache:
-    """
-    Disk-based cache implementation.
-    """
+class DiskCache(Generic[T]):
+    """Disk-based cache implementation."""
 
     def __init__(self, cache_dir: str, validity: int = 86400):
         """
@@ -125,7 +120,7 @@ class DiskCache:
         """
         self.cache_dir = Path(cache_dir)
         self.validity = validity
-        self.memory_cache = LRUCache[Any](1000)  # In-memory cache for frequently accessed items
+        self.memory_cache = LRUCache[T](1000)  # In-memory cache for frequently accessed items
 
         # Create cache directory if it doesn't exist
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -179,7 +174,7 @@ class DiskCache:
                 # Add to memory cache
                 self.memory_cache.put(key, value)
 
-                return value
+                return value if value is not None else default
         except (json.JSONDecodeError, IOError) as e:
             logger.error(f"Error reading cache file: {e}")
             return default
@@ -272,10 +267,8 @@ class DiskCache:
             return 0
 
 
-class CacheManager:
-    """
-    Cache manager for CivitScraper.
-    """
+class CacheManager(Generic[T]):
+    """Cache manager for CivitScraper."""
 
     def __init__(self, config: Dict[str, Any]):
         """
@@ -293,11 +286,11 @@ class CacheManager:
         cache_validity = config.get("scanner", {}).get("cache_validity", 86400)
 
         # Create disk cache
-        self.disk_cache = DiskCache(cache_dir, cache_validity)
+        self.disk_cache = DiskCache[T](cache_dir, cache_validity)
 
         # Create memory cache
         memory_cache_size = config.get("api", {}).get("batch", {}).get("cache_size", 100)
-        self.memory_cache = LRUCache[Any](memory_cache_size)
+        self.memory_cache = LRUCache[T](memory_cache_size)
 
     def get(self, key: str, default: Optional[T] = None) -> Optional[T]:
         """
@@ -319,10 +312,10 @@ class CacheManager:
         value = self.disk_cache.get(key, default)
 
         # Add to memory cache if found
-        if value is not default:
+        if value is not default and value is not None:
             self.memory_cache.put(key, value)
 
-        return value
+        return value if value is not None else default
 
     def set(self, key: str, value: Any):
         """
@@ -382,7 +375,7 @@ class CacheManager:
         return self.disk_cache.get_item_count()
 
 
-def memoize(func: Callable) -> Callable:
+def memoize(func: Callable[..., T]) -> Callable[..., T]:
     """
     Memoize decorator for caching function results.
 
@@ -392,18 +385,18 @@ def memoize(func: Callable) -> Callable:
     Returns:
         Memoized function
     """
-    cache = {}
+    cache: Dict[str, Any] = {}
 
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> T:
         # Create cache key
         key = str(args) + str(kwargs)
 
         # Check cache
         if key in cache:
-            return cache[key]
+            return cache[key]  # type: ignore
 
         # Call function
-        result = func(*args, **kwargs)
+        result: T = func(*args, **kwargs)
 
         # Cache result
         cache[key] = result

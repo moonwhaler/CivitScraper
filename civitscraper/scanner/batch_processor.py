@@ -5,7 +5,7 @@ This module handles batch processing of model files.
 """
 
 import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..utils.logging import BatchProgressTracker
 

@@ -7,7 +7,7 @@ This module handles preparing context data for templates.
 import json
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .images import ImageHandler
 from .paths import PathManager
@@ -17,9 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class ContextBuilder:
-    """
-    Builder for template context.
-    """
+    """Builder for template context."""
 
     def __init__(self, config: Dict[str, Any], model_processor=None):
         """
@@ -90,7 +88,7 @@ class ContextBuilder:
         return context
 
     def build_gallery_context(
-        self, file_paths: List[str], title: str, output_path: str = None
+        self, file_paths: List[str], title: str, output_path: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Build context for gallery template.
@@ -103,10 +101,10 @@ class ContextBuilder:
         Returns:
             Template context
         """
-        # Prepare context
-        context = {
+        # Prepare context with explicit type annotations
+        context: Dict[str, Any] = {
             "title": title,
-            "models": [],
+            "models": [],  # Initialize as an empty list
             "output_path": output_path,
         }
 
@@ -157,7 +155,14 @@ class ContextBuilder:
                 logger.debug(f"Preview is video: {is_video}")
 
             # Add model to context
-            context["models"].append(
+            # Ensure models is a list
+            models_list = context.get("models", [])
+            if not isinstance(models_list, list):
+                models_list = []
+                context["models"] = models_list
+
+            # Now we can safely append
+            models_list.append(
                 {
                     "name": metadata.get("name", "Unknown"),
                     "type": metadata.get("model", {}).get("type", "Unknown"),

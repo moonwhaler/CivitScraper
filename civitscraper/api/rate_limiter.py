@@ -7,15 +7,12 @@ This module provides a token bucket rate limiter for API requests.
 import logging
 import threading
 import time
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
 class RateLimiter:
-    """
-    Token bucket rate limiter for API requests.
-    """
+    """Token bucket rate limiter for API requests."""
 
     def __init__(self, rate_limit: int, per_second: bool = False):
         """
@@ -27,20 +24,21 @@ class RateLimiter:
         """
         self.rate_limit = rate_limit
         self.per_second = per_second
-        self.tokens = rate_limit
+        self.tokens = float(rate_limit)
         self.last_refill = time.time()
         self.lock = threading.Lock()
 
         # Calculate token refill rate
         if per_second:
-            self.refill_rate = rate_limit  # tokens per second
+            self.refill_rate = float(rate_limit)  # tokens per second
             self.refill_interval = 1.0  # seconds
         else:
-            self.refill_rate = rate_limit / 60.0  # tokens per second
+            self.refill_rate = float(rate_limit) / 60.0  # tokens per second
             self.refill_interval = 60.0  # seconds
 
         logger.debug(
-            f"Initialized rate limiter with {rate_limit} requests per {'second' if per_second else 'minute'}"
+            f"Initialized rate limiter with {rate_limit} requests per "
+            f"{'second' if per_second else 'minute'}"
         )
 
     def _refill(self):
@@ -50,7 +48,7 @@ class RateLimiter:
 
         # Calculate tokens to add
         new_tokens = elapsed * self.refill_rate
-        self.tokens = min(self.rate_limit, self.tokens + new_tokens)
+        self.tokens = min(float(self.rate_limit), self.tokens + new_tokens)
         self.last_refill = now
 
     def acquire(self, tokens: int = 1, block: bool = True) -> bool:
@@ -77,7 +75,7 @@ class RateLimiter:
             # Calculate wait time
             wait_time = (tokens - self.tokens) / self.refill_rate
 
-            logger.debug(f"Rate limit reached, waiting {wait_time:.2f} seconds for tokens")
+            logger.debug(f"Rate limit reached, waiting {wait_time: .2f} seconds for tokens")
 
             # Wait for tokens to become available
             time.sleep(wait_time)

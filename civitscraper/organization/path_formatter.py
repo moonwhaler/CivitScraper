@@ -12,9 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class PathFormatter:
-    """
-    Formatter for file paths based on metadata.
-    """
+    """Formatter for file paths based on metadata."""
 
     def __init__(self):
         """Initialize path formatter."""
@@ -53,7 +51,8 @@ class PathFormatter:
             # Use default template
             template = self.templates["by_type"]
             logger.info(
-                f"Using default template 'by_type' because template '{template_name}' was not specified or not found"
+                f"Using default template 'by_type' because template '{template_name}' "
+                "was not specified or not found"
             )
             return template
 

@@ -6,7 +6,7 @@ This module handles Jinja template loading and rendering.
 
 import logging
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -14,11 +14,9 @@ logger = logging.getLogger(__name__)
 
 
 class TemplateRenderer:
-    """
-    Renderer for Jinja templates.
-    """
+    """Renderer for Jinja templates."""
 
-    def __init__(self, template_dir: str = None):
+    def __init__(self, template_dir: Optional[str] = None):
         """
         Initialize template renderer.
 
@@ -56,7 +54,7 @@ class TemplateRenderer:
             # Render template
             html = self.model_template.render(**context)
             logger.debug(f"Rendered model template with {len(context)} context variables")
-            return html
+            return str(html)
         except Exception as e:
             logger.error(f"Error rendering model template: {e}")
             raise
@@ -75,7 +73,7 @@ class TemplateRenderer:
             # Render template
             html = self.gallery_template.render(**context)
             logger.debug(f"Rendered gallery template with {len(context)} context variables")
-            return html
+            return str(html)
         except Exception as e:
             logger.error(f"Error rendering gallery template: {e}")
             raise

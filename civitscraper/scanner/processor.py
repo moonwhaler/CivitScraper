@@ -1,19 +1,19 @@
 """
 Model processor for CivitScraper.
 
-This module handles processing model files, fetching metadata from the CivitAI API, and saving the metadata.
+This module handles processing model files, fetching metadata from the CivitAI API,
+and saving the metadata.
 """
 
 import concurrent.futures
 import logging
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..api.client import CivitAIClient
 from ..utils.logging import ProgressLogger
 from .batch_processor import BatchProcessor
-from .file_processor import FileProcessingResult, ModelFileProcessor
+from .file_processor import ModelFileProcessor
 from .html_manager import HTMLManager
 from .image_manager import ImageManager
 from .metadata_manager import MetadataManager
@@ -86,6 +86,10 @@ class ModelProcessor:
                 return None
 
             # Get metadata from API
+            if result.file_hash is None:
+                self.failures.append((file_path, "No file hash available"))
+                return None
+
             metadata = self.metadata_manager.fetch_and_save(
                 file_path, result.file_hash, force_refresh=force_refresh, dry_run=self.dry_run
             )

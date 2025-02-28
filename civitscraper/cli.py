@@ -6,9 +6,7 @@ This module provides the command-line interface for the application.
 
 import argparse
 import logging
-import os
 import sys
-from typing import Any, Dict, List, Optional, Tuple
 
 from .api.client import CivitAIClient
 from .config.loader import load_and_validate_config
@@ -54,9 +52,7 @@ def parse_args():
 
 
 def main():
-    """
-    Main entry point for the application.
-    """
+    """Run the main application."""
     # Parse command-line arguments
     args = parse_args()
 

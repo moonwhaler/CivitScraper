@@ -13,9 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class CircuitBreaker:
-    """
-    Circuit breaker for API endpoints to prevent abuse during outages.
-    """
+    """Circuit breaker for API endpoints to prevent abuse during outages."""
 
     def __init__(self, failure_threshold: int, reset_timeout: int):
         """
@@ -32,7 +30,8 @@ class CircuitBreaker:
         self.lock = threading.Lock()
 
         logger.debug(
-            f"Initialized circuit breaker with failure threshold {failure_threshold} and reset timeout {reset_timeout}s"
+            f"Initialized circuit breaker with failure threshold {failure_threshold} "
+            f"and reset timeout {reset_timeout}s"
         )
 
     def is_open(self, endpoint: str) -> bool:
