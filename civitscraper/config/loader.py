@@ -126,197 +126,6 @@ def merge_configs(base_config: Dict[str, Any], override_config: Dict[str, Any]) 
     return result
 
 
-def resolve_inheritance(config: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Resolve inheritance in job templates and jobs.
-
-    Args:
-        config: Configuration with inheritance references
-
-    Returns:
-        Configuration with resolved inheritance
-    """
-    # Resolve job template inheritance
-    if "job_templates" in config:
-        for template_name, template in config["job_templates"].items():
-            logger.debug(f"Processing template: {template_name}")
-            if "inherit" in template:
-                parent_name = template.pop("inherit")
-                parent_path = parent_name.split(".")
-
-                logger.debug(f"Template {template_name} inherits from {parent_name}")
-
-                # Find parent template
-                parent = config
-                for part in parent_path:
-                    if part not in parent:
-                        logger.warning(
-                            f"Parent template {parent_name} " f"not found for {template_name}"
-                        )
-                        break
-                    parent = parent[part]
-
-                # Merge parent and child
-                if isinstance(parent, dict):
-                    logger.debug(f"Merging parent {parent_name} into template {template_name}")
-                    logger.debug(f"Parent configuration: {parent}")
-                    logger.debug(f"Template configuration before merge: {template}")
-
-                    config["job_templates"][template_name] = merge_configs(parent, template)
-
-                    logger.debug("Template organization configuration before merge")
-
-                    # Check if the template has an output section with max_count
-                    max_count = (
-                        config["job_templates"][template_name]
-                        .get("output", {})
-                        .get("images", {})
-                        .get("max_count")
-                    )
-                    if max_count:
-                        logger.debug(
-                            f"Template {template_name} has max_count: {max_count} after inheritance"
-                        )
-
-            # Handle nested inheritance in organization section
-            if (
-                "organization" in template
-                and isinstance(template["organization"], dict)
-                and "inherit" in template["organization"]
-            ):
-                inherit_value = template["organization"].pop("inherit")
-
-                # Handle the case where inherit is a dictionary with a single key
-                if isinstance(inherit_value, dict):
-                    # Get the first (and only) value from the dictionary
-                    for key, value in inherit_value.items():
-                        inherit_value = value
-                        break
-
-                parent_path = inherit_value.split(".")
-
-                logger.debug(f"Template {template_name} organization inherits from {inherit_value}")
-
-                # Find parent section
-                parent = config
-                for part in parent_path:
-                    if part not in parent:
-                        logger.warning(
-                            f"Parent section {inherit_value} "
-                            f"not found for {template_name}.organization"
-                        )
-                        break
-                    parent = parent[part]
-
-                # Merge parent and child
-                if isinstance(parent, dict):
-                    logger.debug(
-                        f"Merging parent {inherit_value} into template "
-                        f"{template_name}.organization"
-                    )
-                    logger.debug(f"Parent configuration: {parent}")
-                    logger.debug(
-                        "Template organization configuration before merge: "
-                        f"{template['organization']}"
-                    )
-
-                    template["organization"] = merge_configs(parent, template["organization"])
-
-                    logger.debug(
-                        f"Template organization configuration after merge: "
-                        f"{template['organization']}"
-                    )
-
-    # Resolve job inheritance
-    if "jobs" in config:
-        for job_name, job in config["jobs"].items():
-            logger.debug(f"Processing job: {job_name}")
-            if "template" in job:
-                template_name = job.pop("template")
-
-                logger.debug(f"Job {job_name} uses template: {template_name}")
-
-                # Find template
-                if "job_templates" in config and template_name in config["job_templates"]:
-                    template = config["job_templates"][template_name]
-
-                    logger.debug(f"Template configuration: {template}")
-                    logger.debug(f"Job configuration before merge: {job}")
-
-                    # Check if the template has an output section with max_count
-                    template_max_count = (
-                        template.get("output", {}).get("images", {}).get("max_count")
-                    )
-                    if template_max_count:
-                        logger.debug(
-                            f"Template {template_name} has max_count: {template_max_count}"
-                        )
-
-                    config["jobs"][job_name] = merge_configs(template, job)
-
-                    logger.debug(f"Job configuration after merge: {config['jobs'][job_name]}")
-
-                    # Check if the job has an output section with max_count after merge
-                    job_max_count = (
-                        config["jobs"][job_name]
-                        .get("output", {})
-                        .get("images", {})
-                        .get("max_count")
-                    )
-                    if job_max_count:
-                        logger.debug(
-                            f"Job {job_name} has max_count: {job_max_count} "
-                            f"after inheritance resolution"
-                        )
-                else:
-                    logger.warning(f"Template {template_name} not found for job {job_name}")
-
-            # Handle nested inheritance in organization section
-            if (
-                "organization" in job
-                and isinstance(job["organization"], dict)
-                and "inherit" in job["organization"]
-            ):
-                inherit_value = job["organization"].pop("inherit")
-
-                # Handle the case where inherit is a dictionary with a single key
-                if isinstance(inherit_value, dict):
-                    # Get the first (and only) value from the dictionary
-                    for key, value in inherit_value.items():
-                        inherit_value = value
-                        break
-
-                parent_path = inherit_value.split(".")
-
-                logger.debug(f"Job {job_name} organization inherits from {inherit_value}")
-
-                # Find parent section
-                parent = config
-                for part in parent_path:
-                    if part not in parent:
-                        logger.warning(
-                            f"Parent section {inherit_value} not found for {job_name}.organization"
-                        )
-                        break
-                    parent = parent[part]
-
-                # Merge parent and child
-                if isinstance(parent, dict):
-                    logger.debug(f"Merging parent {inherit_value} into job {job_name}.organization")
-                    logger.debug(f"Parent configuration: {parent}")
-                    logger.debug(
-                        f"Job organization configuration before merge: {job['organization']}"
-                    )
-
-                    job["organization"] = merge_configs(parent, job["organization"])
-
-                    logger.debug(
-                        f"Job organization configuration after merge: {job['organization']}"
-                    )
-
-    return config
-
-
 def validate_config(config: Dict[str, Any]) -> bool:
     """
     Validate configuration structure and required fields.
@@ -360,7 +169,7 @@ def validate_config(config: Dict[str, Any]) -> bool:
 
 def load_and_validate_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     """
-    Load, resolve inheritance, and validate configuration.
+    Load and validate configuration.
 
     Args:
         config_path: Optional path to configuration file
@@ -372,7 +181,6 @@ def load_and_validate_config(config_path: Optional[str] = None) -> Dict[str, Any
         ValueError: If configuration is invalid
     """
     config = load_config(config_path)
-    config = resolve_inheritance(config)
 
     # Apply default values
     default_config = {}

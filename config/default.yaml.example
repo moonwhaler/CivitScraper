@@ -2,39 +2,6 @@
 # This is the main configuration file that controls how CivitScraper operates.
 
 # =============================================================================
-# Global Defaults
-# These settings apply to all operations unless overridden in specific sections
-# =============================================================================
-defaults:
-  scan:
-    recursive: true      # Search in subdirectories
-    skip_existing: true  # Skip files that already have metadata
-    verify_hashes: true  # Verify file hashes against CivitAI data
-
-  output:
-    metadata:
-      format: "json"
-      path: "{model_dir}"     # Where to save metadata
-      filename: "{model_name}.json"  # Metadata filename
-      html:
-        enabled: true         # Generate HTML preview pages
-        filename: "{model_name}.html"  # HTML filename
-    images:
-      save: true             # Download preview images
-      path: "{model_dir}"    # Where to save images
-      max_count: 4           # Maximum number of images to download
-      filenames:
-        preview: "{model_name}.preview{ext}"  # Preview image filename pattern
-
-  organization:
-    enabled: false            # Enable model organization
-    dry_run: false          # [true/false] Simulate file operations without making changes
-    template: "by_type_and_basemodel"      # Organization template to use (see below for options)
-    custom_template: ""      # Custom organization path template (leave empty to use predefined template)
-    output_dir: "{model_dir}/organized"  # Where to put organized files
-    operation_mode: "move"   # [copy/move/symlink] How to organize files
-
-# =============================================================================
 # API Configuration
 # Settings for connecting to the CivitAI API
 # =============================================================================
@@ -84,75 +51,6 @@ input_paths:
     patterns: ["*.pt", "*.safetensors"]  # File patterns to match
 
 # =============================================================================
-# Job Templates
-# Predefined configurations for common tasks
-# Use these as building blocks for your jobs
-# =============================================================================
-job_templates:
-  # Basic scan without organization
-  # Use this for quickly scanning models without reorganizing them
-  base_scan:
-    type: scan-paths
-    inherit: defaults.scan          # Inherits scanning settings from defaults
-    output:
-      metadata:
-        format: "json"
-        path: "{model_dir}"
-        filename: "{model_name}.json"
-        html:
-          enabled: true
-          filename: "{model_name}.html"
-      images:
-        save: true
-        path: "{model_dir}"
-        max_count: 4
-        filenames:
-          preview: "{model_name}.preview{ext}"
-    organize: false                 # Don't organize files
-
-  # Full processing with organization
-  # Use this for complete model processing including organization
-  full_process:
-    type: scan-paths              # Required type field
-    inherit: job_templates.base_scan  # Builds upon base_scan template
-    output:
-      metadata:
-        format: "json"
-        path: "{model_dir}"
-        filename: "{model_name}.json"
-        html:
-          enabled: true
-          filename: "{model_name}.html"
-      images:
-        save: true
-        path: "{model_dir}"
-        max_count: 4
-        filenames:
-          preview: "{model_name}.preview{ext}"
-    organize: false                 # Enable organization
-    organization:
-      inherit:
-        defaults.organization  # Use default organization settings
-
-  # Metadata-only template
-  # Use this when you only want to update metadata without downloading images
-  metadata_only:
-    type: scan-paths              # Required type field
-    inherit: job_templates.base_scan
-    output:
-      inherit: defaults.output
-      images:
-        save: false             # Disable image downloads
-
-  # Trigger word synchronization template
-  sync_triggers:
-    type: sync-lora-triggers
-    description: "Synchronize LoRA trigger words"
-    inherit: defaults.scan  # Inherit basic scanning settings
-    loras_file: "loras.json"  # Default path to loras.json
-    paths: []  # Empty array as default, should be overridden when creating a job
-
-# =============================================================================
 # Default Job
 # The job to run when no job is specified
 # =============================================================================
@@ -161,13 +59,106 @@ default_job: "fetch-all"
 # =============================================================================
 # Jobs
 # Define specific tasks to run
-# Each job uses a template and can override specific settings
+# Each job is self-contained with all necessary settings
 # =============================================================================
 jobs:
-  # Process all model types
+  # Process all model types with full settings
   fetch-all:
-    template: full_process         # Use full processing template
-    paths: ["lora"]  # Process all path types
+    type: scan-paths
+    recursive: true      # Search in subdirectories
+    skip_existing: true  # Skip files that already have metadata
+    verify_hashes: true  # Verify file hashes against CivitAI data
+    paths: ["lora"]      # Process these path types
+    output:
+      metadata:
+        format: "json"
+        path: "{model_dir}"     # Where to save metadata
+        filename: "{model_name}.json"  # Metadata filename
+        html:
+          enabled: true         # Generate HTML preview pages
+          filename: "{model_name}.html"  # HTML filename
+      images:
+        save: true             # Download preview images
+        path: "{model_dir}"    # Where to save images
+        max_count: 4           # Maximum number of images to download
+        filenames:
+          preview: "{model_name}.preview{ext}"  # Preview image filename pattern
+    organization:
+      enabled: false            # Enable model organization
+      dry_run: false            # [true/false] Simulate file operations without making changes
+      template: "by_type_and_basemodel"  # Organization template to use
+      custom_template: ""       # Custom organization path template (leave empty to use predefined template)
+      output_dir: "{model_dir}/organized"  # Where to put organized files
+      operation_mode: "move"    # [copy/move/symlink] How to organize files
+
+  # Metadata-only job (no images)
+  metadata-only:
+    type: scan-paths
+    recursive: true
+    skip_existing: true
+    verify_hashes: true
+    paths: ["lora"]
+    output:
+      metadata:
+        format: "json"
+        path: "{model_dir}"
+        filename: "{model_name}.json"
+        html:
+          enabled: true
+          filename: "{model_name}.html"
+      images:
+        save: false             # Don't download images
+
+  # Organize existing files
+  organize-files:
+    type: scan-paths
+    recursive: true
+    skip_existing: false
+    verify_hashes: false
+    paths: ["lora"]
+    output:
+      metadata:
+        format: "json"
+        path: "{model_dir}"
+        filename: "{model_name}.json"
+        html:
+          enabled: false
+      images:
+        save: false
+    organization:
+      enabled: true
+      dry_run: false
+      template: "by_type_and_basemodel"
+      output_dir: "{model_dir}/organized"
+      operation_mode: "move"
+
+  # Generate gallery from existing files
+  generate-gallery:
+    type: scan-paths
+    recursive: true
+    skip_existing: false
+    verify_hashes: false
+    paths: ["lora", "checkpoints"]
+    generate_gallery: true
+    gallery_path: "gallery.html"
+    gallery_title: "Model Gallery"
+    output:
+      metadata:
+        format: "json"
+        path: "{model_dir}"
+        filename: "{model_name}.json"
+        html:
+          enabled: false
+      images:
+        save: false
+
+  # Synchronize LoRA trigger words
+  sync-triggers:
+    type: sync-lora-triggers
+    description: "Synchronize LoRA trigger words"
+    recursive: true
+    loras_file: "loras.json"
+    paths: ["lora"]
 
 # =============================================================================
 # Scanner Settings
@@ -188,7 +179,7 @@ logging:
   # Console output settings
   console:
     enabled: true                  # [true/false] Log to console
-    level: INFO                # Console log level
+    level: INFO                    # Console log level
     simple: false                  # Use detailed format for debugging
 
   # File logging settings
@@ -196,5 +187,5 @@ logging:
     enabled: true                  # [true/false] Log to file
     level: DEBUG                   # File log level
     directory: logs                # Log file directory
-    max_size: 10                  # [MB] Max log file size
-    backup_count: 5               # Number of backup files to keep
+    max_size: 10                   # [MB] Max log file size
+    backup_count: 5                # Number of backup files to keep

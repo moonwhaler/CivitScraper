@@ -6,10 +6,9 @@ CivitScraper is your AI model collection's digital curator, transforming raw fil
 - [Overview](#overview)
 - [Installation](#installation)
 - [Configuration](#configuration)
-  - [Global Defaults](#global-defaults)
+  - [Global Settings](#global-settings)
   - [API Configuration](#api-configuration)
   - [Input Paths](#input-paths)
-  - [Job Templates](#job-templates)
   - [Jobs](#jobs)
   - [Organization Settings](#organization-settings)
   - [Scanner Settings](#scanner-settings)
@@ -26,7 +25,6 @@ CivitScraper is your AI model collection's digital curator, transforming raw fil
   - [File Organization](#file-organization)
 - [Job System](#job-system)
   - [Understanding Jobs](#understanding-jobs)
-  - [Job Templates](#job-templates-1)
   - [Creating Custom Jobs](#creating-custom-jobs)
 - [Advanced Usage](#advanced-usage)
   - [Batch Processing](#batch-processing)
@@ -103,39 +101,23 @@ This approach keeps CivitScraper's dependencies isolated from your system Python
 
 CivitScraper uses a YAML configuration file to control its behavior. The default configuration file is located at `config/default.yaml`.
 
-### Global Defaults
+### Global Settings
 
-The `defaults` section defines default settings that apply to all operations unless overridden in specific sections:
+The configuration includes global settings for various aspects of the application:
 
 ```yaml
-defaults:
-  scan:
-    recursive: true      # Search in subdirectories
-    skip_existing: true  # Skip files that already have metadata
-    verify_hashes: true  # Verify file hashes against CivitAI data
+# Scanner settings
+scanner:
+  cache_dir: ".civitscraper_cache"  # Where to store cache files
+  cache_validity: 86400            # [seconds] Cache lifetime (24 hours)
+  force_refresh: false             # Ignore cache and force refresh
 
-  output:
-    metadata:
-      format: "json"
-      path: "{model_dir}"     # Where to save metadata
-      filename: "{model_name}.json"  # Metadata filename
-      html:
-        enabled: true         # Generate HTML preview pages
-        filename: "{model_name}.html"  # HTML filename
-    images:
-      save: true             # Download preview images
-      path: "{model_dir}"    # Where to save images
-      max_count: 4           # Maximum number of images to download
-      filenames:
-        preview: "{model_name}.preview{ext}"  # Preview image filename pattern
-
-  organization:
-    enabled: false            # Enable model organization
-    dry_run: false          # Simulate file operations without making changes
-    template: "by_type_and_basemodel"      # Organization template to use
-    custom_template: ""      # Custom organization path template
-    output_dir: "{model_dir}/organized"  # Where to put organized files
-    operation_mode: "move"   # [copy/move/symlink] How to organize files
+# Logging settings
+logging:
+  level: DEBUG                     # Main log level
+  console:
+    enabled: true                  # Log to console
+    level: INFO                    # Console log level
 ```
 
 ### API Configuration
@@ -189,85 +171,69 @@ input_paths:
     patterns: ["*.pt", "*.safetensors"]  # File patterns to match
 ```
 
-### Job Templates
-
-The `job_templates` section defines reusable configurations for common tasks:
-
-```yaml
-job_templates:
-  # Basic scan without organization
-  base_scan:
-    type: scan-paths
-    inherit: defaults.scan          # Inherits scanning settings from defaults
-    output:
-      metadata:
-        format: "json"
-        path: "{model_dir}"
-        filename: "{model_name}.json"
-        html:
-          enabled: true
-          filename: "{model_name}.html"
-      images:
-        save: true
-        path: "{model_dir}"
-        max_count: 4
-        filenames:
-          preview: "{model_name}.preview{ext}"
-    organize: false                 # Don't organize files
-
-  # Full processing with organization
-  full_process:
-    type: scan-paths
-    inherit: job_templates.base_scan  # Builds upon base_scan template
-    output:
-      metadata:
-        format: "json"
-        path: "{model_dir}"
-        filename: "{model_name}.json"
-        html:
-          enabled: true
-          filename: "{model_name}.html"
-      images:
-        save: true
-        path: "{model_dir}"
-        max_count: 4
-        filenames:
-          preview: "{model_name}.preview{ext}"
-    organize: false
-    organization:
-      inherit: defaults.organization  # Use default organization settings
-
-  # Metadata-only template
-  metadata_only:
-    type: scan-paths
-    inherit: job_templates.base_scan
-    output:
-      inherit: defaults.output
-      images:
-        save: false             # Disable image downloads
-
-  # Trigger word synchronization template
-  sync_triggers:
-    type: sync-lora-triggers
-    description: "Synchronize LoRA trigger words"
-    inherit: defaults.scan
-    loras_file: "loras.json"
-    paths: []
-```
-
 ### Jobs
 
-The `jobs` section defines specific tasks to run:
+The `jobs` section defines specific tasks to run. Each job is self-contained with all necessary settings:
 
 ```yaml
 # Default job to run when no job is specified
 default_job: "fetch-all"
 
 jobs:
-  # Process all model types
+  # Process all model types with full settings
   fetch-all:
-    template: full_process         # Use full processing template
-    paths: ["lora"]                # Process all path types
+    type: scan-paths
+    recursive: true      # Search in subdirectories
+    skip_existing: true  # Skip files that already have metadata
+    verify_hashes: true  # Verify file hashes against CivitAI data
+    paths: ["lora"]      # Process these path types
+    output:
+      metadata:
+        format: "json"
+        path: "{model_dir}"     # Where to save metadata
+        filename: "{model_name}.json"  # Metadata filename
+        html:
+          enabled: true         # Generate HTML preview pages
+          filename: "{model_name}.html"  # HTML filename
+      images:
+        save: true             # Download preview images
+        path: "{model_dir}"    # Where to save images
+        max_count: 4           # Maximum number of images to download
+        filenames:
+          preview: "{model_name}.preview{ext}"  # Preview image filename pattern
+    organization:
+      enabled: false            # Enable model organization
+      dry_run: false            # Simulate file operations without making changes
+      template: "by_type_and_basemodel"  # Organization template to use
+      custom_template: ""       # Custom organization path template
+      output_dir: "{model_dir}/organized"  # Where to put organized files
+      operation_mode: "move"    # [copy/move/symlink] How to organize files
+
+  # Metadata-only job (no images)
+  metadata-only:
+    type: scan-paths
+    recursive: true
+    skip_existing: true
+    verify_hashes: true
+    paths: ["lora"]
+    output:
+      metadata:
+        format: "json"
+        path: "{model_dir}"
+        filename: "{model_name}.json"
+        html:
+          enabled: true
+          filename: "{model_name}.html"
+      images:
+        save: false             # Don't download images
+
+  # Synchronize LoRA trigger words
+  sync-triggers:
+    type: sync-lora-triggers
+    description: "Synchronize LoRA trigger words"
+    recursive: true
+    loras_file: "loras.json"
+    paths: ["lora"]
 ```
 
 ### Organization Settings
@@ -382,11 +348,10 @@ The scanner can be configured to:
 - Force refresh metadata
 
 ```yaml
-defaults:
-  scan:
-    recursive: true      # Search in subdirectories
-    skip_existing: true  # Skip files that already have metadata
-    verify_hashes: true  # Verify file hashes against CivitAI data
+# In a job configuration:
+recursive: true      # Search in subdirectories
+skip_existing: true  # Skip files that already have metadata
+verify_hashes: true  # Verify file hashes against CivitAI data
 ```
 
 ### Metadata Retrieval
@@ -406,6 +371,7 @@ CivitScraper retrieves metadata from the CivitAI API based on file hashes. The m
 The metadata is saved as JSON files in the configured location:
 
 ```yaml
+# In a job configuration:
 output:
   metadata:
     format: "json"
@@ -418,6 +384,7 @@ output:
 CivitScraper can download preview images for models from the CivitAI API. The images are saved in the configured location:
 
 ```yaml
+# In a job configuration:
 output:
   images:
     save: true             # Download preview images
@@ -447,6 +414,7 @@ CivitScraper can generate HTML preview pages for models. The HTML pages include:
 The HTML pages are saved in the configured location:
 
 ```yaml
+# In a job configuration:
 output:
   metadata:
     html:
@@ -461,8 +429,9 @@ CivitScraper can organize model files based on metadata. The organization is con
 > **⚠️ WARNING**: The file organization feature will change file locations (in "move" mode) or create new files (in "copy" mode). The author takes no responsibility for any unexpected outcomes when using this feature. Always back up your files before using the organization functionality - and test it before production run!
 
 ```yaml
+# In a job configuration:
 organization:
-  enabled: false            # Enable model organization
+  enabled: true             # Enable model organization
   dry_run: false            # Simulate file operations without making changes
   template: "by_type_and_basemodel"  # Organization template to use
   custom_template: ""       # Custom organization path template
@@ -479,42 +448,109 @@ The organization can be performed using different operation modes:
 
 ### Understanding Jobs
 
-Jobs are specific tasks that CivitScraper can execute. Each job has a type and can inherit settings from job templates or default settings.
+Jobs are specific tasks that CivitScraper can execute. Each job has a type and contains all the settings needed for that specific task.
 
 The main job types are:
 - `scan-paths`: Scan directories for model files and process them
 - `sync-lora-triggers`: Synchronize LORA trigger words with a Krita AI Diffusion (loras.json) file
 
-### Job Templates
+Each job is self-contained with all necessary settings. Here are examples of different job types:
 
-Job templates are reusable configurations for common tasks. They can inherit settings from other templates or default settings.
+#### Scan-Paths Job
 
 ```yaml
-job_templates:
-  base_scan:
-    type: scan-paths
-    inherit: defaults.scan
-    # ...
+fetch-all:
+  type: scan-paths
+  recursive: true      # Search in subdirectories
+  skip_existing: true  # Skip files that already have metadata
+  verify_hashes: true  # Verify file hashes against CivitAI data
+  paths: ["lora"]      # Process these path types
+  output:
+    metadata:
+      format: "json"
+      path: "{model_dir}"
+      filename: "{model_name}.json"
+      html:
+        enabled: true
+        filename: "{model_name}.html"
+    images:
+      save: true
+      path: "{model_dir}"
+      max_count: 4
+      filenames:
+        preview: "{model_name}.preview{ext}"
+```
 
-  full_process:
-    type: scan-paths
-    inherit: job_templates.base_scan
-    # ...
+#### Sync-Lora-Triggers Job
+
+```yaml
+sync-triggers:
+  type: sync-lora-triggers
+  description: "Synchronize LoRA trigger words"
+  recursive: true
+  loras_file: "loras.json"
+  paths: ["lora"]
 ```
 
 ### Creating Custom Jobs
 
-You can create custom jobs by defining them in the `jobs` section of the configuration file:
+You can create custom jobs by defining them in the `jobs` section of the configuration file. Each job should be self-contained with all necessary settings:
 
 ```yaml
 jobs:
   my_custom_job:
-    template: full_process         # Use a template
+    type: scan-paths
+    recursive: true
+    skip_existing: true
+    verify_hashes: true
     paths: ["lora", "checkpoints"]  # Process specific paths
-    # Override template settings
     output:
+      metadata:
+        format: "json"
+        path: "{model_dir}"
+        filename: "{model_name}.json"
+        html:
+          enabled: true
+          filename: "{model_name}.html"
       images:
-        max_count: 2               # Override max_count
+        save: true
+        path: "{model_dir}"
+        max_count: 2               # Set max_count to 2
+```
+
+You can create multiple jobs with different configurations to handle different tasks:
+
+```yaml
+jobs:
+  # Process LORA models
+  process-loras:
+    type: scan-paths
+    recursive: true
+    skip_existing: true
+    verify_hashes: true
+    paths: ["lora"]
+    # ... other settings ...
+
+  # Process checkpoints
+  process-checkpoints:
+    type: scan-paths
+    recursive: true
+    skip_existing: true
+    verify_hashes: true
+    paths: ["checkpoints"]
+    # ... other settings ...
+
+  # Generate gallery
+  generate-gallery:
+    type: scan-paths
+    recursive: true
+    skip_existing: false
+    verify_hashes: false
+    paths: ["lora", "checkpoints"]
+    generate_gallery: true
+    gallery_path: "gallery.html"
+    gallery_title: "Model Gallery"
+    # ... other settings ...
 ```
 
 ## Advanced Usage

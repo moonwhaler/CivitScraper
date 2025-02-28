@@ -58,14 +58,9 @@ class ImageManager:
 
         # Determine max_count - use provided value or get from config
         if max_count is None:
-            # Check if we're running the "fetch-all" job which uses the "full_process" template
-            # We can determine this by checking if the output configuration has max_count=2
-            if image_config.get("max_count") == 2:
-                max_count = 2
-                logger.debug(f"Using hard-coded max_count: {max_count} for file: {file_path}")
-            else:
-                max_count = image_config.get("max_count", 4)
-                logger.debug(f"Using configured max_count: {max_count} for file: {file_path}")
+            # Get max_count from config, default to 4 if not specified
+            max_count = image_config.get("max_count", 4)
+            logger.debug(f"Using configured max_count: {max_count} for file: {file_path}")
 
         # Get model directory
         model_dir = os.path.dirname(file_path)

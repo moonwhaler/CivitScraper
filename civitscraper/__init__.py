@@ -15,7 +15,7 @@ from .api.client import CivitAIClient
 from .config.loader import load_and_validate_config
 from .html.generator import HTMLGenerator
 from .jobs.executor import JobExecutor
-from .jobs.templates import create_job_from_template, get_all_job_templates, get_job_template
+# Removed templates module imports as part of job inheritance refactoring
 from .organization.organizer import FileOrganizer
 from .scanner.discovery import filter_files, find_model_files
 from .scanner.processor import ModelProcessor
@@ -30,8 +30,5 @@ __all__ = [
     "HTMLGenerator",
     "FileOrganizer",
     "JobExecutor",
-    "get_job_template",
-    "get_all_job_templates",
-    "create_job_from_template",
     "setup_logging",
 ]

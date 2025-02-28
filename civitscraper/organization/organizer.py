@@ -35,7 +35,7 @@ class FileOrganizer:
         self.file_handler = FileOperationHandler(config)
 
     def organize_file(
-        self, file_path: str, metadata: Dict[str, Any], force_organize: bool = False
+        self, file_path: str, metadata: Dict[str, Any]
     ) -> Optional[str]:
         """
         Organize a model file.
@@ -43,13 +43,12 @@ class FileOrganizer:
         Args:
             file_path: Path to model file
             metadata: Model metadata
-            force_organize: If True, organize even if disabled in config
 
         Returns:
             Path to organized file or None if organization failed
         """
-        # Check if organization is enabled (either in config or forced)
-        if not (self.org_config.enabled or force_organize):
+        # Check if organization is enabled
+        if not self.org_config.enabled:
             logger.debug("Organization is disabled")
             return None
 
@@ -122,7 +121,6 @@ class FileOrganizer:
         self,
         file_paths: List[str],
         metadata_dict: Dict[str, Dict[str, Any]],
-        force_organize: bool = False,
     ) -> List[Tuple[str, Optional[str]]]:
         """
         Organize multiple model files.
@@ -130,13 +128,12 @@ class FileOrganizer:
         Args:
             file_paths: List of file paths
             metadata_dict: Dictionary of file path -> metadata
-            force_organize: If True, organize even if disabled in config
 
         Returns:
             List of (file_path, target_path) tuples
         """
-        # Check if organization is enabled (either in config or forced)
-        if not (self.org_config.enabled or force_organize):
+        # Check if organization is enabled
+        if not self.org_config.enabled:
             logger.debug("Organization is disabled")
             return [(file_path, None) for file_path in file_paths]
 
@@ -152,7 +149,7 @@ class FileOrganizer:
                 continue
 
             # Organize file
-            target_path = self.organize_file(file_path, metadata, force_organize)
+            target_path = self.organize_file(file_path, metadata)
 
             # Add to results
             results.append((file_path, target_path))

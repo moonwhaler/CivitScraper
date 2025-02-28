@@ -9,6 +9,7 @@ import os
 from typing import Any, Dict, List
 
 from ..api.client import CivitAIClient
+from ..config.loader import merge_configs
 from ..html.generator import HTMLGenerator
 from ..organization import FileOrganizer
 from ..scanner.discovery import filter_files, find_model_files
@@ -57,34 +58,7 @@ class JobExecutor:
             return False
 
         # Log the job configuration for debugging
-        logger.debug(f"Job configuration for {job_name} before execution: {job_config}")
-
-        # Check if the job uses a template
-        template_name = job_config.get("template")
-        if template_name:
-            # Log the template name
-            logger.debug(f"Job {job_name} uses template: {template_name}")
-
-            # Get the template configuration
-            template_config = self.config.get("job_templates", {}).get(template_name)
-            if template_config:
-                # Log the template configuration
-                logger.debug(f"Template {template_name} configuration: {template_config}")
-
-                # Check if the template has an output section with max_count
-                template_max_count = (
-                    template_config.get("output", {}).get("images", {}).get("max_count")
-                )
-                if template_max_count:
-                    logger.debug(f"Template {template_name} has max_count: {template_max_count}")
-
-                    # Check if the job has an output section
-                    if "output" not in job_config:
-                        # Add the output section from the template to the job configuration
-                        logger.debug(
-                            f"Adding output section from template {template_name} to job {job_name}"
-                        )
-                        job_config["output"] = template_config.get("output", {})
+        logger.debug(f"Job configuration for {job_name}: {job_config}")
 
         # Get job type
         job_type = job_config.get("type")
@@ -158,7 +132,6 @@ class JobExecutor:
             # Get scan options
             skip_existing = job_config.get("skip_existing", True)
             verify_hashes = job_config.get("verify_hashes", True)
-            organize = job_config.get("organize", False)
 
             # Find model files
             logger.info(f"Finding model files for paths: {path_ids}")
@@ -177,48 +150,27 @@ class JobExecutor:
             # Process files
             logger.info(f"Processing {len(filtered_files)} files")
 
-            # Always create a job-specific processor to ensure we use the correct configuration
-            # Create a copy of the global configuration
+            # Use the job configuration directly
             job_specific_config = self.config.copy()
-
-            # Get the job configuration directly from the job_config parameter
-            # This should be the fully resolved configuration after inheritance
-
-            # Log the configuration for debugging
-            logger.debug(f"Job configuration for {job_name}: {job_config}")
-
-            # Log the max_count values for debugging
-            global_max_count = (
-                job_specific_config.get("output", {}).get("images", {}).get("max_count", "not set")
-            )
-            job_max_count = (
-                job_config.get("output", {}).get("images", {}).get("max_count", "not set")
-            )
-            logger.debug(f"Global max_count: {global_max_count}, Job max_count: {job_max_count}")
-
-            # If the job has an output section, use it
-            if "output" in job_config:
-                logger.debug(f"Using job-specific output configuration for job: {job_name}")
-                # Override the output configuration with the job-specific one
-                job_specific_config["output"] = job_config["output"]
-
-                # Log the max_count value after update
-                updated_max_count = (
-                    job_specific_config.get("output", {})
-                    .get("images", {})
-                    .get("max_count", "not set")
-                )
-                logger.debug(f"Updated max_count: {updated_max_count}")
-            else:
-                logger.debug(f"No output section found in job configuration for {job_name}")
-
+            
+            # Apply job-specific configuration
+            for key, value in job_config.items():
+                if key in job_specific_config and isinstance(job_specific_config[key], dict) and isinstance(value, dict):
+                    # For dictionary values, merge them
+                    job_specific_config[key] = merge_configs(job_specific_config[key], value)
+                else:
+                    # For other values, override them
+                    job_specific_config[key] = value
+            
             # Create a temporary processor with the job-specific configuration
             temp_processor = ModelProcessor(
                 job_specific_config, self.api_client, self.html_generator
             )
 
             # Get force_refresh setting from job-specific scanner configuration
-            force_refresh = job_specific_config.get("scanner", {}).get("force_refresh", False)
+            force_refresh = job_config.get("force_refresh", False)
+            if not force_refresh:
+                force_refresh = job_specific_config.get("scanner", {}).get("force_refresh", False)
 
             # Use the temporary processor
             results = temp_processor.process_files_in_batches(
@@ -233,25 +185,16 @@ class JobExecutor:
                 if metadata:
                     metadata_dict[file_path] = metadata
 
-            # Organize files
-            if organize:
+            # Organize files if enabled in organization config
+            organization_config = job_config.get("organization", {})
+            if organization_config.get("enabled", False):
                 logger.info(f"Organizing {len(metadata_dict)} files")
-
-                # Check if we need to use the default organization settings
-                if not job_config.get("organization"):
-                    # If organization is empty in job config, use the defaults
-                    if "defaults" in self.config and "organization" in self.config["defaults"]:
-                        logger.debug(
-                            "Using default organization settings because job organization is empty"
-                        )
-                        job_specific_config["organization"] = self.config["defaults"][
-                            "organization"
-                        ]
+                logger.debug(f"Using organization settings from job: {organization_config}")
 
                 # Create a job-specific organizer with the updated configuration
                 job_organizer = FileOrganizer(job_specific_config)
                 job_organizer.organize_files(
-                    list(metadata_dict.keys()), metadata_dict, force_organize=True
+                    list(metadata_dict.keys()), metadata_dict
                 )
 
             # Generate gallery
