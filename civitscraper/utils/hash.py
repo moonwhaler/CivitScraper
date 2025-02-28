@@ -7,7 +7,7 @@ This module provides functions for computing file hashes using various algorithm
 import hashlib
 import logging
 import os
-from typing import Callable, Dict, List, Optional, cast
+from typing import Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -17,14 +17,15 @@ logger = logging.getLogger(__name__)
 
 def sha256_hash(data: bytes) -> str:
     """Compute SHA-256 hash of data."""
-    return hashlib.sha256(data).hexdigest().upper()
+    return str(hashlib.sha256(data).hexdigest().upper())
 
 
 def blake3_hash(data: bytes) -> str:
     """Compute BLAKE3 hash of data."""
     try:
         import blake3
-        return blake3.blake3(data).hexdigest().upper()
+
+        return str(blake3.blake3(data).hexdigest().upper())
     except ImportError:
         logger.warning("blake3 module not installed, falling back to SHA-256")
         return sha256_hash(data)
@@ -33,6 +34,7 @@ def blake3_hash(data: bytes) -> str:
 def crc32_hash(data: bytes) -> str:
     """Compute CRC32 hash of data."""
     import zlib
+
     crc = zlib.crc32(data) & 0xFFFFFFFF
     return f"{crc: 08X}"
 
@@ -47,7 +49,6 @@ def auto_v2_hash(data: bytes) -> str:
     return sha256_hash(data)
 
 
-# type: ignore[no-any-return]
 def create_hash_function(name: str) -> Callable[[bytes], str]:
     """Create a hash function that always returns a string."""
     name = name.lower()
@@ -67,8 +68,7 @@ def create_hash_function(name: str) -> Callable[[bytes], str]:
 
 # Map of hash algorithms to hash functions
 HASH_FUNCTIONS: Dict[str, Callable[[bytes], str]] = {
-    name: create_hash_function(name)
-    for name in ["sha256", "blake3", "crc32", "autov1", "autov2"]
+    name: create_hash_function(name) for name in ["sha256", "blake3", "crc32", "autov1", "autov2"]
 }
 
 
@@ -137,7 +137,7 @@ def compute_file_hash(
                     if not data:
                         break
                     hash_instance.update(data)
-                
+
                 # hexdigest() always returns str
                 result: str = hash_instance.hexdigest()
                 return result.upper()
