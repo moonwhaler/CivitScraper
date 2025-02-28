@@ -130,7 +130,7 @@ job_templates:
         filenames:
           preview: "{model_name}.preview{ext}"
     organize: false                 # Enable organization
-    organization: 
+    organization:
       inherit:
         defaults.organization  # Use default organization settings
 

@@ -5,7 +5,7 @@ This module defines the job templates for common tasks.
 """
 
 import logging
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,6 @@ DEFAULT_JOB_TEMPLATES = {
             },
         },
     },
-    
     # Full processing with organization
     "full_process": {
         "type": "scan-paths",
@@ -65,7 +64,6 @@ DEFAULT_JOB_TEMPLATES = {
             },
         },
     },
-    
     # Metadata-only template
     "metadata_only": {
         "type": "scan-paths",
@@ -84,7 +82,6 @@ DEFAULT_JOB_TEMPLATES = {
             },
         },
     },
-    
     # Trigger word synchronization template
     "sync_triggers": {
         "type": "sync-lora-triggers",
@@ -93,7 +90,6 @@ DEFAULT_JOB_TEMPLATES = {
         "loras_file": "loras.json",
         "paths": [],  # Empty array as default, should be overridden when creating a job
     },
-    
     # Gallery generation template
     "generate_gallery": {
         "type": "scan-paths",
@@ -108,10 +104,10 @@ DEFAULT_JOB_TEMPLATES = {
 def get_job_template(template_name: str) -> Optional[Dict[str, Any]]:
     """
     Get a job template.
-    
+
     Args:
         template_name: Template name
-        
+
     Returns:
         Template or None if not found
     """
@@ -121,7 +117,7 @@ def get_job_template(template_name: str) -> Optional[Dict[str, Any]]:
 def get_all_job_templates() -> Dict[str, Dict[str, Any]]:
     """
     Get all job templates.
-    
+
     Returns:
         Dictionary of template name -> template
     """
@@ -131,11 +127,11 @@ def get_all_job_templates() -> Dict[str, Dict[str, Any]]:
 def create_job_from_template(template_name: str, **kwargs) -> Optional[Dict[str, Any]]:
     """
     Create a job from a template.
-    
+
     Args:
         template_name: Template name
         **kwargs: Template overrides
-        
+
     Returns:
         Job or None if template not found
     """
@@ -144,10 +140,10 @@ def create_job_from_template(template_name: str, **kwargs) -> Optional[Dict[str,
     if not template:
         logger.error(f"Template not found: {template_name}")
         return None
-    
+
     # Create job
     job = template.copy()
-    
+
     # Apply overrides
     for key, value in kwargs.items():
         if isinstance(value, dict) and key in job and isinstance(job[key], dict):
@@ -156,5 +152,5 @@ def create_job_from_template(template_name: str, **kwargs) -> Optional[Dict[str,
         else:
             # Override value
             job[key] = value
-    
+
     return job

@@ -4,9 +4,9 @@ Rate limiter for CivitAI API client.
 This module provides a token bucket rate limiter for API requests.
 """
 
-import time
-import threading
 import logging
+import threading
+import time
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -16,11 +16,11 @@ class RateLimiter:
     """
     Token bucket rate limiter for API requests.
     """
-    
+
     def __init__(self, rate_limit: int, per_second: bool = False):
         """
         Initialize rate limiter.
-        
+
         Args:
             rate_limit: Maximum number of requests per minute (or per second if per_second is True)
             per_second: If True, rate_limit is per second, otherwise per minute
@@ -30,7 +30,7 @@ class RateLimiter:
         self.tokens = rate_limit
         self.last_refill = time.time()
         self.lock = threading.Lock()
-        
+
         # Calculate token refill rate
         if per_second:
             self.refill_rate = rate_limit  # tokens per second
@@ -38,57 +38,59 @@ class RateLimiter:
         else:
             self.refill_rate = rate_limit / 60.0  # tokens per second
             self.refill_interval = 60.0  # seconds
-        
-        logger.debug(f"Initialized rate limiter with {rate_limit} requests per {'second' if per_second else 'minute'}")
-    
+
+        logger.debug(
+            f"Initialized rate limiter with {rate_limit} requests per {'second' if per_second else 'minute'}"
+        )
+
     def _refill(self):
         """Refill tokens based on elapsed time."""
         now = time.time()
         elapsed = now - self.last_refill
-        
+
         # Calculate tokens to add
         new_tokens = elapsed * self.refill_rate
         self.tokens = min(self.rate_limit, self.tokens + new_tokens)
         self.last_refill = now
-    
+
     def acquire(self, tokens: int = 1, block: bool = True) -> bool:
         """
         Acquire tokens from the bucket.
-        
+
         Args:
             tokens: Number of tokens to acquire
             block: If True, block until tokens are available
-            
+
         Returns:
             True if tokens were acquired, False otherwise
         """
         with self.lock:
             self._refill()
-            
+
             if self.tokens >= tokens:
                 self.tokens -= tokens
                 return True
-            
+
             if not block:
                 return False
-            
+
             # Calculate wait time
             wait_time = (tokens - self.tokens) / self.refill_rate
-            
+
             logger.debug(f"Rate limit reached, waiting {wait_time:.2f} seconds for tokens")
-            
+
             # Wait for tokens to become available
             time.sleep(wait_time)
-            
+
             # Refill and acquire
             self._refill()
             self.tokens -= tokens
             return True
-    
+
     def get_tokens(self) -> float:
         """
         Get current number of tokens.
-        
+
         Returns:
             Current number of tokens
         """

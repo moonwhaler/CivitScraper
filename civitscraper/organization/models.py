@@ -11,6 +11,7 @@ from typing import Optional
 @dataclass
 class OrganizationResult:
     """Result of a file organization operation."""
+
     source_path: str
     target_path: Optional[str] = None
     success: bool = False

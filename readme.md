@@ -234,7 +234,7 @@ job_templates:
         filenames:
           preview: "{model_name}.preview{ext}"
     organize: false
-    organization: 
+    organization:
       inherit: defaults.organization  # Use default organization settings
 
   # Metadata-only template
@@ -640,6 +640,52 @@ civitscraper --debug
 ```
 
 Log files are stored in the configured log directory (default: `logs`).
+
+## Development
+
+### Testing
+
+CivitScraper uses pytest for testing. To run the tests:
+
+```bash
+# Install development dependencies
+pip install -r requirements-dev.txt
+
+# Run tests
+pytest
+```
+
+For more detailed test output with coverage information:
+
+```bash
+pytest --cov=civitscraper --cov-report=term --cov-report=html
+```
+
+This will generate a coverage report in the terminal and an HTML report in the `htmlcov` directory.
+
+### Pre-commit Hooks
+
+CivitScraper uses pre-commit hooks to ensure code quality. To set up pre-commit:
+
+```bash
+# Install pre-commit
+pip install pre-commit
+
+# Install the git hooks
+pre-commit install
+```
+
+The pre-commit hooks will run automatically when you commit changes. They include:
+- Code formatting with black and isort
+- Linting with flake8
+- Type checking with mypy
+- Running tests with pytest
+
+You can also run the hooks manually:
+
+```bash
+pre-commit run --all-files
+```
 
 ## License
 

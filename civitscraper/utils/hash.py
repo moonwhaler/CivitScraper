@@ -5,9 +5,9 @@ This module provides functions for computing file hashes using various algorithm
 """
 
 import hashlib
-import os
 import logging
-from typing import Optional, Callable, Dict, Any
+import os
+from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -18,10 +18,10 @@ HashFunction = Callable[[bytes], str]
 def sha256_hash(data: bytes) -> str:
     """
     Compute SHA-256 hash of data.
-    
+
     Args:
         data: Data to hash
-        
+
     Returns:
         Hexadecimal hash string
     """
@@ -31,15 +31,16 @@ def sha256_hash(data: bytes) -> str:
 def blake3_hash(data: bytes) -> str:
     """
     Compute BLAKE3 hash of data.
-    
+
     Args:
         data: Data to hash
-        
+
     Returns:
         Hexadecimal hash string
     """
     try:
         import blake3
+
         return blake3.blake3(data).hexdigest().upper()
     except ImportError:
         logger.warning("blake3 module not installed, falling back to SHA-256")
@@ -49,14 +50,15 @@ def blake3_hash(data: bytes) -> str:
 def crc32_hash(data: bytes) -> str:
     """
     Compute CRC32 hash of data.
-    
+
     Args:
         data: Data to hash
-        
+
     Returns:
         Hexadecimal hash string
     """
     import zlib
+
     crc = zlib.crc32(data) & 0xFFFFFFFF
     return f"{crc:08X}"
 
@@ -64,28 +66,28 @@ def crc32_hash(data: bytes) -> str:
 def auto_v1_hash(data: bytes) -> str:
     """
     Compute AutoV1 hash of data.
-    
+
     This is a legacy hash format used by some Stable Diffusion tools.
-    
+
     Args:
         data: Data to hash
-        
+
     Returns:
         Hexadecimal hash string
     """
     # AutoV1 hash is SHA-256 of the first 1 MB of the file
-    return sha256_hash(data[:1024 * 1024])
+    return sha256_hash(data[: 1024 * 1024])
 
 
 def auto_v2_hash(data: bytes) -> str:
     """
     Compute AutoV2 hash of data.
-    
+
     This is a newer hash format used by some Stable Diffusion tools.
-    
+
     Args:
         data: Data to hash
-        
+
     Returns:
         Hexadecimal hash string
     """
@@ -104,15 +106,17 @@ HASH_FUNCTIONS: Dict[str, HashFunction] = {
 }
 
 
-def compute_file_hash(file_path: str, algorithm: str = "sha256", chunk_size: int = 8192) -> Optional[str]:
+def compute_file_hash(
+    file_path: str, algorithm: str = "sha256", chunk_size: int = 8192
+) -> Optional[str]:
     """
     Compute hash of a file.
-    
+
     Args:
         file_path: Path to the file
         algorithm: Hash algorithm to use
         chunk_size: Chunk size for reading file
-        
+
     Returns:
         Hexadecimal hash string or None if file not found
     """
@@ -121,22 +125,22 @@ def compute_file_hash(file_path: str, algorithm: str = "sha256", chunk_size: int
     if not hash_func:
         logger.error(f"Unknown hash algorithm: {algorithm}")
         return None
-    
+
     try:
         # Check if file exists
         if not os.path.isfile(file_path):
             logger.error(f"File not found: {file_path}")
             return None
-        
+
         # Get file size
         file_size = os.path.getsize(file_path)
-        
+
         # For small files, read the entire file at once
         if file_size < 10 * 1024 * 1024:  # 10 MB
             with open(file_path, "rb") as f:
                 data = f.read()
             return hash_func(data)
-        
+
         # For large files, read in chunks
         with open(file_path, "rb") as f:
             if algorithm.lower() in ["autov1", "autov2"]:
@@ -156,38 +160,44 @@ def compute_file_hash(file_path: str, algorithm: str = "sha256", chunk_size: int
                     return hasher.hexdigest().upper()
             else:
                 # For other algorithms, use the hash function directly
-                hasher = hashlib.new(algorithm) if algorithm.lower() in hashlib.algorithms_available else hashlib.sha256()
+                hasher = (
+                    hashlib.new(algorithm)
+                    if algorithm.lower() in hashlib.algorithms_available
+                    else hashlib.sha256()
+                )
                 while True:
                     data = f.read(chunk_size)
                     if not data:
                         break
                     hasher.update(data)
                 return hasher.hexdigest().upper()
-    
+
     except Exception as e:
         logger.error(f"Error computing hash for {file_path}: {e}")
         return None
 
 
-def compute_file_hashes(file_path: str, algorithms: Optional[list] = None, chunk_size: int = 8192) -> Dict[str, str]:
+def compute_file_hashes(
+    file_path: str, algorithms: Optional[list] = None, chunk_size: int = 8192
+) -> Dict[str, str]:
     """
     Compute multiple hashes of a file.
-    
+
     Args:
         file_path: Path to the file
         algorithms: List of hash algorithms to use
         chunk_size: Chunk size for reading file
-        
+
     Returns:
         Dictionary of algorithm -> hash
     """
     if algorithms is None:
         algorithms = ["sha256", "blake3", "crc32", "autov1", "autov2"]
-    
+
     result = {}
     for algorithm in algorithms:
         hash_value = compute_file_hash(file_path, algorithm, chunk_size)
         if hash_value:
             result[algorithm] = hash_value
-    
+
     return result

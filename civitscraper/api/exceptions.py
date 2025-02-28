@@ -4,18 +4,20 @@ Exceptions for CivitAI API client.
 This module defines exceptions specific to the CivitAI API client.
 """
 
+
 class CivitAIError(Exception):
     """Base exception for CivitAI API errors."""
+
     pass
 
 
 class RateLimitError(CivitAIError):
     """Exception raised when rate limit is exceeded."""
-    
+
     def __init__(self, retry_after: int = 1):
         """
         Initialize rate limit error.
-        
+
         Args:
             retry_after: Seconds to wait before retrying
         """
@@ -25,11 +27,11 @@ class RateLimitError(CivitAIError):
 
 class CircuitBreakerOpenError(CivitAIError):
     """Exception raised when circuit breaker is open."""
-    
+
     def __init__(self, endpoint: str):
         """
         Initialize circuit breaker open error.
-        
+
         Args:
             endpoint: API endpoint
         """
@@ -39,11 +41,11 @@ class CircuitBreakerOpenError(CivitAIError):
 
 class ClientError(CivitAIError):
     """Exception raised for client errors (4xx)."""
-    
+
     def __init__(self, status_code: int, message: str):
         """
         Initialize client error.
-        
+
         Args:
             status_code: HTTP status code
             message: Error message
@@ -54,11 +56,11 @@ class ClientError(CivitAIError):
 
 class ServerError(CivitAIError):
     """Exception raised for server errors (5xx)."""
-    
+
     def __init__(self, status_code: int, message: str):
         """
         Initialize server error.
-        
+
         Args:
             status_code: HTTP status code
             message: Error message
@@ -69,11 +71,11 @@ class ServerError(CivitAIError):
 
 class ParseError(CivitAIError):
     """Exception raised when parsing API response fails."""
-    
+
     def __init__(self, message: str):
         """
         Initialize parse error.
-        
+
         Args:
             message: Error message
         """
@@ -82,11 +84,11 @@ class ParseError(CivitAIError):
 
 class NetworkError(CivitAIError):
     """Exception raised for network errors."""
-    
+
     def __init__(self, message: str):
         """
         Initialize network error.
-        
+
         Args:
             message: Error message
         """

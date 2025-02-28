@@ -5,14 +5,14 @@ This module defines dataclasses for the various API responses from CivitAI.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
 class Creator:
     """Creator information."""
-    
+
     username: str
     image: Optional[str] = None
 
@@ -20,7 +20,7 @@ class Creator:
 @dataclass
 class Stats:
     """Model statistics."""
-    
+
     download_count: int
     favorite_count: int
     comment_count: int
@@ -31,7 +31,7 @@ class Stats:
 @dataclass
 class FileMetadata:
     """Model file metadata."""
-    
+
     fp: Optional[str] = None
     size: Optional[str] = None
     format: Optional[str] = None
@@ -40,7 +40,7 @@ class FileMetadata:
 @dataclass
 class ModelFile:
     """Model file information."""
-    
+
     name: str
     id: str
     size_kb: int
@@ -55,7 +55,7 @@ class ModelFile:
 @dataclass
 class ImageMeta:
     """Image generation metadata."""
-    
+
     prompt: Optional[str] = None
     negative_prompt: Optional[str] = None
     sampler: Optional[str] = None
@@ -63,15 +63,15 @@ class ImageMeta:
     steps: Optional[int] = None
     seed: Optional[int] = None
     model: Optional[str] = None
-    
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ImageMeta':
+    def from_dict(cls, data: Dict[str, Any]) -> "ImageMeta":
         """
         Create ImageMeta from dictionary.
-        
+
         Args:
             data: Dictionary containing image metadata
-            
+
         Returns:
             ImageMeta instance
         """
@@ -89,7 +89,7 @@ class ImageMeta:
 @dataclass
 class Image:
     """Model image information."""
-    
+
     id: str
     url: str
     nsfw: bool
@@ -97,22 +97,22 @@ class Image:
     height: int
     hash: Optional[str] = None
     meta: Optional[ImageMeta] = None
-    
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Image':
+    def from_dict(cls, data: Dict[str, Any]) -> "Image":
         """
         Create Image from dictionary.
-        
+
         Args:
             data: Dictionary containing image data
-            
+
         Returns:
             Image instance
         """
         meta = None
         if data.get("meta"):
             meta = ImageMeta.from_dict(data["meta"])
-        
+
         return cls(
             id=data["id"],
             url=data["url"],
@@ -127,7 +127,7 @@ class Image:
 @dataclass
 class ModelVersion:
     """Model version information."""
-    
+
     id: int
     name: str
     created_at: datetime
@@ -137,21 +137,21 @@ class ModelVersion:
     files: List[ModelFile] = field(default_factory=list)
     images: List[Image] = field(default_factory=list)
     stats: Optional[Stats] = None
-    
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ModelVersion':
+    def from_dict(cls, data: Dict[str, Any]) -> "ModelVersion":
         """
         Create ModelVersion from dictionary.
-        
+
         Args:
             data: Dictionary containing model version data
-            
+
         Returns:
             ModelVersion instance
         """
         # Parse created_at
         created_at = datetime.fromisoformat(data["createdAt"].replace("Z", "+00:00"))
-        
+
         # Parse files
         files = []
         for file_data in data.get("files", []):
@@ -162,28 +162,30 @@ class ModelVersion:
                     size=file_data["metadata"].get("size"),
                     format=file_data["metadata"].get("format"),
                 )
-            
+
             scanned_at = None
             if file_data.get("scannedAt"):
                 scanned_at = datetime.fromisoformat(file_data["scannedAt"].replace("Z", "+00:00"))
-            
-            files.append(ModelFile(
-                name=file_data.get("name", ""),
-                id=file_data.get("id", ""),
-                size_kb=file_data.get("sizeKb", 0),
-                type=file_data.get("type", ""),
-                metadata=metadata,
-                pickle_scan_result=file_data.get("pickleScanResult"),
-                virus_scan_result=file_data.get("virusScanResult"),
-                scanned_at=scanned_at,
-                primary=file_data.get("primary", False),
-            ))
-        
+
+            files.append(
+                ModelFile(
+                    name=file_data.get("name", ""),
+                    id=file_data.get("id", ""),
+                    size_kb=file_data.get("sizeKb", 0),
+                    type=file_data.get("type", ""),
+                    metadata=metadata,
+                    pickle_scan_result=file_data.get("pickleScanResult"),
+                    virus_scan_result=file_data.get("virusScanResult"),
+                    scanned_at=scanned_at,
+                    primary=file_data.get("primary", False),
+                )
+            )
+
         # Parse images
         images = []
         for image_data in data.get("images", []):
             images.append(Image.from_dict(image_data))
-        
+
         # Parse stats
         stats = None
         if data.get("stats"):
@@ -194,7 +196,7 @@ class ModelVersion:
                 rating_count=data["stats"].get("ratingCount", 0),
                 rating=data["stats"].get("rating", 0.0),
             )
-        
+
         return cls(
             id=data["id"],
             name=data["name"],
@@ -211,7 +213,7 @@ class ModelVersion:
 @dataclass
 class Model:
     """Model information."""
-    
+
     id: int
     name: str
     type: str
@@ -222,15 +224,15 @@ class Model:
     stats: Optional[Stats] = None
     model_versions: List[ModelVersion] = field(default_factory=list)
     mode: Optional[str] = None
-    
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Model':
+    def from_dict(cls, data: Dict[str, Any]) -> "Model":
         """
         Create Model from dictionary.
-        
+
         Args:
             data: Dictionary containing model data
-            
+
         Returns:
             Model instance
         """
@@ -241,7 +243,7 @@ class Model:
                 username=data["creator"]["username"],
                 image=data["creator"].get("image"),
             )
-        
+
         # Parse stats
         stats = None
         if data.get("stats"):
@@ -252,12 +254,12 @@ class Model:
                 rating_count=data["stats"].get("ratingCount", 0),
                 rating=data["stats"].get("rating", 0.0),
             )
-        
+
         # Parse model versions
         model_versions = []
         for version_data in data.get("modelVersions", []):
             model_versions.append(ModelVersion.from_dict(version_data))
-        
+
         return cls(
             id=data["id"],
             name=data["name"],
@@ -275,25 +277,25 @@ class Model:
 @dataclass
 class SearchResult:
     """Search result."""
-    
+
     items: List[Model]
     metadata: Dict[str, Any]
-    
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'SearchResult':
+    def from_dict(cls, data: Dict[str, Any]) -> "SearchResult":
         """
         Create SearchResult from dictionary.
-        
+
         Args:
             data: Dictionary containing search result data
-            
+
         Returns:
             SearchResult instance
         """
         items = []
         for item_data in data.get("items", []):
             items.append(Model.from_dict(item_data))
-        
+
         return cls(
             items=items,
             metadata=data.get("metadata", {}),
@@ -303,25 +305,25 @@ class SearchResult:
 @dataclass
 class ImageSearchResult:
     """Image search result."""
-    
+
     items: List[Image]
     metadata: Dict[str, Any]
-    
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ImageSearchResult':
+    def from_dict(cls, data: Dict[str, Any]) -> "ImageSearchResult":
         """
         Create ImageSearchResult from dictionary.
-        
+
         Args:
             data: Dictionary containing image search result data
-            
+
         Returns:
             ImageSearchResult instance
         """
         items = []
         for item_data in data.get("items", []):
             items.append(Image.from_dict(item_data))
-        
+
         return cls(
             items=items,
             metadata=data.get("metadata", {}),
