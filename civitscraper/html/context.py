@@ -129,9 +129,6 @@ class ContextBuilder:
             # Get HTML path
             html_path = self.path_manager.get_html_path(file_path)
 
-            # Get preview image path
-            preview_image_path = self.path_manager.get_image_path(file_path, "preview0")
-
             # Calculate relative paths
             # If output_path is not provided, use the file_path's directory as reference
             output_dir = os.path.dirname(output_path) if output_path else os.path.dirname(file_path)
@@ -142,15 +139,22 @@ class ContextBuilder:
             logger.debug(f"HTML path: {html_path}")
             logger.debug(f"HTML relative path: {html_rel_path}")
 
+            # Get base preview path without extension
+            base_preview_path = os.path.splitext(self.path_manager.get_image_path(file_path, "preview0"))[0]
+            
+            # Try to find the preview image with any extension
             preview_rel_path = None
-            if os.path.isfile(preview_image_path):
-                preview_rel_path = os.path.relpath(preview_image_path, output_dir)
-                logger.debug(f"Preview image path: {preview_image_path}")
-                logger.debug(f"Preview relative path: {preview_rel_path}")
+            for ext in ['.jpeg', '.jpg', '.png']:
+                preview_path = base_preview_path + ext
+                if os.path.isfile(preview_path):
+                    preview_rel_path = os.path.relpath(preview_path, output_dir)
+                    logger.debug(f"Found preview image: {preview_path}")
+                    logger.debug(f"Preview relative path: {preview_rel_path}")
+                    break
 
             # Check if the preview is a video
             is_video = False
-            if preview_rel_path and preview_image_path.lower().endswith(".mp4"):
+            if preview_rel_path and preview_rel_path.lower().endswith(".mp4"):
                 is_video = True
                 logger.debug(f"Preview is video: {is_video}")
 
@@ -161,18 +165,35 @@ class ContextBuilder:
                 models_list = []
                 context["models"] = models_list
 
-            # Now we can safely append
+            # Get model stats
+            stats = metadata.get("stats", {})
+            download_count = stats.get("downloadCount", 0)
+            rating = stats.get("rating", 0)
+            rating_count = stats.get("ratingCount", 0)
+
+            # Get model name - prefer model.name over version name if available
+            model_name = metadata.get("model", {}).get("name") or metadata.get("name", "Unknown")
+
+            # Now we can safely append with complete metadata
             models_list.append(
                 {
-                    "name": metadata.get("name", "Unknown"),
+                    "name": model_name,
                     "type": metadata.get("model", {}).get("type", "Unknown"),
-                    "creator": metadata.get("model", {})
-                    .get("creator", {})
-                    .get("username", "Unknown"),
+                    "base_model": metadata.get("baseModel", "Unknown"),
                     "description": metadata.get("description", ""),
                     "html_path": html_rel_path,
                     "preview_image_path": preview_rel_path,
                     "is_video": is_video,
+                    "stats": {
+                        "downloads": download_count,
+                        "rating": rating,
+                        "rating_count": rating_count
+                    },
+                    "created_at": metadata.get("createdAt"),
+                    "updated_at": metadata.get("updatedAt"),
+                    "version": metadata.get("name"),  # Version name
+                    "model_id": metadata.get("modelId"),
+                    "version_id": metadata.get("id")
                 }
             )
 

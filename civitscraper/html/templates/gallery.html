@@ -29,10 +29,28 @@
                     <h3 class="model-name">{{ model.name }}</h3>
                     <div class="model-meta">
                         <span class="model-type">{{ model.type }}</span>
-                        {% if model.creator %}
-                        <span class="model-creator">by {{ model.creator }}</span>
+                        <span class="model-base">{{ model.base_model }}</span>
+                    </div>
+                    <div class="model-stats">
+                        {% if model.stats.downloads > 0 %}
+                        <span class="stat-item downloads" title="Downloads">
+                            <span class="stat-icon">⬇️</span>
+                            <span class="stat-value">{{ model.stats.downloads }}</span>
+                        </span>
+                        {% endif %}
+                        {% if model.stats.rating > 0 %}
+                        <span class="stat-item rating" title="Rating">
+                            <span class="stat-icon">⭐</span>
+                            <span class="stat-value">{{ model.stats.rating|round(1) }}</span>
+                            {% if model.stats.rating_count > 0 %}
+                            <span class="stat-count">({{ model.stats.rating_count }})</span>
+                            {% endif %}
+                        </span>
                         {% endif %}
                     </div>
+                    {% if model.version %}
+                    <div class="model-version">v{{ model.version }}</div>
+                    {% endif %}
                 </div>
             </a>
         </div>
@@ -137,7 +155,44 @@
         border-radius: 4px;
     }
 
-    .model-creator {
+    .model-base {
+        color: var(--text-color);
+        background-color: rgba(46, 204, 113, 0.1);
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+
+    .model-stats {
+        display: flex;
+        gap: 15px;
+        margin-top: 8px;
+        font-size: 0.85rem;
+    }
+
+    .stat-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        color: var(--metadata-label-color);
+    }
+
+    .stat-icon {
+        font-size: 0.9rem;
+    }
+
+    .stat-value {
+        font-weight: 500;
+        color: var(--text-color);
+    }
+
+    .stat-count {
+        color: var(--metadata-label-color);
+        font-size: 0.8rem;
+    }
+
+    .model-version {
+        margin-top: 8px;
+        font-size: 0.8rem;
         color: var(--metadata-label-color);
     }
 
