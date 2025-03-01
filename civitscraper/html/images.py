@@ -33,8 +33,8 @@ class ImageHandler:
         if model_processor and hasattr(model_processor, "image_manager"):
             self.image_manager = model_processor.image_manager
 
-        # Get max_count from configuration
-        self.max_count = self.config.get("output", {}).get("images", {}).get("max_count", 4)
+        # Get max_count from configuration, default to None for no limit
+        self.max_count = self.config.get("output", {}).get("images", {}).get("max_count", None)
 
         # Get dry run flag
         self.dry_run = config.get("dry_run", False)
@@ -51,7 +51,10 @@ class ImageHandler:
             List of image data dictionaries
         """
         # Log the max_count value for debugging
-        logger.debug(f"ImageHandler using max_count: {self.max_count} for file: {file_path}")
+        if self.max_count is not None:
+            logger.debug(f"ImageHandler using max_count limit: {self.max_count} for file: {file_path}")
+        else:
+            logger.debug(f"ImageHandler processing all images for file: {file_path}")
 
         # Get image paths
         image_paths = []
@@ -91,17 +94,15 @@ class ImageHandler:
         # Get model images
         images = metadata.get("images", [])
 
-        # Log the number of images before limiting
-        logger.debug(f"ImageHandler number of images before limiting: {len(images)}")
+        # Log the number of images found
+        logger.debug(f"ImageHandler found {len(images)} images")
 
-        # Limit number of images
-        images = images[: self.max_count]
-
-        # Log the number of images after limiting
-        logger.debug(
-            f"ImageHandler number of images after limiting to max_count {self.max_count}: "
-            f"{len(images)}"
-        )
+        # Limit number of images only if max_count is set
+        if self.max_count is not None:
+            images = images[: self.max_count]
+            logger.debug(
+                f"ImageHandler limited to {len(images)} images due to max_count setting"
+            )
 
         # Get HTML path for calculating relative paths
         html_path = self.path_manager.get_html_path(file_path)

@@ -58,9 +58,12 @@ class ImageManager:
 
         # Determine max_count - use provided value or get from config
         if max_count is None:
-            # Get max_count from config, default to 4 if not specified
-            max_count = image_config.get("max_count", 4)
-            logger.debug(f"Using configured max_count: {max_count} for file: {file_path}")
+            # Get max_count from config, default to None for no limit
+            max_count = image_config.get("max_count", None)
+            if max_count is not None:
+                logger.debug(f"Using configured max_count limit: {max_count} for file: {file_path}")
+            else:
+                logger.debug(f"No image limit configured for file: {file_path}")
 
         # Get model directory
         model_dir = os.path.dirname(file_path)
@@ -77,14 +80,13 @@ class ImageManager:
         # Get images
         images = metadata.get("images", [])
 
-        # Log the number of images before limiting
-        logger.debug(f"Number of images before limiting: {len(images)}")
+        # Log the number of images found
+        logger.debug(f"Found {len(images)} images")
 
-        # Limit number of images
-        images = images[:max_count]
-
-        # Log the number of images after limiting
-        logger.debug(f"Number of images after limiting to max_count {max_count}: {len(images)}")
+        # Limit number of images only if max_count is set
+        if max_count is not None:
+            images = images[:max_count]
+            logger.debug(f"Limited to {len(images)} images due to max_count setting")
 
         # Download images
         downloaded_images = []
