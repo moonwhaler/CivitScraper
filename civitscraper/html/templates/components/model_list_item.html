@@ -1,0 +1,57 @@
+<div class="model-list-item" 
+    data-name="{{ model.name|lower }}" 
+    data-type="{{ model.type|lower }}" 
+    data-base-model="{{ model.base_model|lower }}" 
+    data-description="{{ model.description|lower }}"
+    data-created-at="{{ model.created_at|default('') }}"
+    data-updated-at="{{ model.updated_at|default('') }}"
+    data-downloads="{{ model.stats.downloads|default(0) }}"
+    data-rating="{{ model.stats.rating|default(0) }}">
+    <a href="{{ model.html_path }}" class="model-link">
+        <div class="model-list-preview">
+            {% if model.preview_image_path %}
+            {% if model.is_video %}
+            <video src="{{ model.preview_image_path }}" preload="metadata" class="preview-video"></video>
+            <div class="video-indicator mini">VIDEO</div>
+            {% else %}
+            <img src="{{ model.preview_image_path }}" alt="{{ model.name }}" loading="lazy">
+            {% endif %}
+            {% else %}
+            <div class="no-image-text">No Preview</div>
+            {% endif %}
+        </div>
+        <div class="model-list-info">
+            <h3 class="model-name">{{ model.name }}</h3>
+            <div class="model-meta">
+                <span class="model-type">{{ model.type }}</span>
+                <span class="model-base">{{ model.base_model }}</span>
+                {% if model.version %}
+                <span class="model-version">v{{ model.version }}</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="model-list-stats">
+            {% if model.stats.downloads > 0 %}
+            <span class="stat-item downloads" title="Downloads">
+                <span class="stat-icon">⬇️</span>
+                <span class="stat-value">{{ model.stats.downloads }}</span>
+            </span>
+            {% endif %}
+            {% if model.stats.rating > 0 %}
+            <span class="stat-item rating" title="Rating">
+                <span class="stat-icon">⭐</span>
+                <span class="stat-value">{{ model.stats.rating|round(1) }}</span>
+                {% if model.stats.rating_count > 0 %}
+                <span class="stat-count">({{ model.stats.rating_count }})</span>
+                {% endif %}
+            </span>
+            {% endif %}
+            {% if model.created_at %}
+            <span class="stat-item date" title="Created">
+                <span class="stat-icon">📅</span>
+                <span class="stat-value date-value">{{ model.created_at }}</span>
+            </span>
+            {% endif %}
+        </div>
+    </a>
+</div>

@@ -1,0 +1,434 @@
+/* Gallery-specific styles */
+
+/* Gallery container and controls */
+.gallery-container {
+    margin-top: 20px;
+}
+
+.gallery-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 20px;
+    background-color: var(--card-background);
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    align-items: center;
+}
+
+/* Search controls */
+.search-container {
+    position: relative;
+    flex: 1;
+    min-width: 200px;
+}
+
+#gallery-search {
+    width: 100%;
+    padding: 8px 35px 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0.2);
+    color: var(--text-color);
+    font-size: 0.9rem;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+#gallery-search:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.3);
+}
+
+#clear-search {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--metadata-label-color);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+#clear-search:hover {
+    opacity: 1;
+}
+
+/* View toggle controls */
+.view-toggle {
+    display: flex;
+    gap: 5px;
+    position: relative;
+    z-index: 10; /* Ensure buttons are always clickable */
+}
+
+.view-button {
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--metadata-label-color);
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.view-button.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.view-button:hover:not(.active) {
+    background-color: rgba(52, 152, 219, 0.1);
+    color: var(--primary-color);
+}
+
+/* Sort controls */
+.sort-controls {
+    display: flex;
+    gap: 5px;
+}
+
+#sort-by {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0.2);
+    color: var(--text-color);
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+#sort-by:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+#sort-direction {
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--metadata-label-color);
+    transition: transform 0.3s, background-color 0.2s;
+}
+
+#sort-direction:hover {
+    background-color: rgba(52, 152, 219, 0.1);
+    color: var(--primary-color);
+}
+
+#sort-direction[data-direction="asc"] svg {
+    transform: rotate(180deg);
+}
+
+/* No results message */
+.no-results {
+    text-align: center;
+    padding: 30px;
+    background-color: var(--card-background);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    color: var(--metadata-label-color);
+}
+
+/* Grid View */
+.models-grid {
+    display: none;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.models-grid.view-active {
+    display: grid;
+}
+
+.model-card {
+    background-color: var(--card-background);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid var(--border-color);
+}
+
+.model-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.model-link {
+    display: block;
+    color: var(--text-color);
+    text-decoration: none;
+}
+
+.model-preview {
+    height: 150px;
+    overflow: hidden;
+    position: relative;
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+.model-preview img, .model-preview video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.model-card:hover .model-preview img,
+.model-card:hover .model-preview video {
+    transform: scale(1.05);
+}
+
+.no-image {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--card-background);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.no-image-text {
+    color: var(--metadata-label-color);
+    font-size: 0.9rem;
+}
+
+.model-info {
+    padding: 15px;
+}
+
+.model-name {
+    margin: 0 0 8px 0;
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.model-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 0.85rem;
+}
+
+.model-type {
+    color: var(--primary-color);
+    background-color: rgba(52, 152, 219, 0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.model-base {
+    color: var(--text-color);
+    background-color: rgba(46, 204, 113, 0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.model-stats {
+    display: flex;
+    gap: 15px;
+    margin-top: 8px;
+    font-size: 0.85rem;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--metadata-label-color);
+}
+
+.stat-icon {
+    font-size: 0.9rem;
+}
+
+.stat-value {
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.stat-count {
+    color: var(--metadata-label-color);
+    font-size: 0.8rem;
+}
+
+.model-version {
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: var(--metadata-label-color);
+}
+
+.empty-gallery {
+    text-align: center;
+    padding: 50px 0;
+    color: var(--metadata-label-color);
+}
+
+/* List View */
+.models-list {
+    display: none;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.models-list.view-active {
+    display: flex;
+}
+
+.model-list-item {
+    background-color: var(--card-background);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid var(--border-color);
+}
+
+.model-list-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.model-list-item .model-link {
+    display: grid;
+    grid-template-columns: 120px 1fr auto;
+    align-items: center;
+    gap: 15px;
+    padding-right: 15px;
+}
+
+.model-list-preview {
+    width: 120px;
+    height: 80px;
+    overflow: hidden;
+    position: relative;
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+.model-list-preview img, 
+.model-list-preview video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.model-list-item:hover .model-list-preview img,
+.model-list-item:hover .model-list-preview video {
+    transform: scale(1.05);
+}
+
+.model-list-info {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.model-list-info .model-name {
+    margin: 0;
+}
+
+.model-list-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-left: auto;
+    align-self: center;
+}
+
+.video-indicator.mini {
+    font-size: 0.6rem;
+    padding: 2px 4px;
+}
+
+/* Highlighted search terms */
+.highlight {
+    background-color: rgba(52, 152, 219, 0.3);
+    border-radius: 2px;
+    padding: 0 2px;
+}
+
+/* Match count badge */
+.match-count {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: bold;
+}
+
+/* Date formatting */
+.date-value {
+    font-size: 0.75rem;
+}
+
+/* Responsive styles for gallery */
+@media (max-width: 768px) {
+    .gallery-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px; /* Ensure consistent spacing between stacked elements */
+    }
+    
+    /* Prevent search container from overlapping other elements */
+    .search-container {
+        position: relative;
+        z-index: 5; /* Lower z-index than view-toggle */
+    }
+    
+    .models-grid {
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    }
+
+    .model-preview {
+        height: 120px;
+    }
+    
+    .model-list-item .model-link {
+        grid-template-columns: 80px 1fr;
+        padding: 10px;
+    }
+    
+    .model-list-preview {
+        width: 80px;
+        height: 60px;
+    }
+    
+    .model-list-stats {
+        grid-column: 1 / 3;
+        grid-row: 2;
+        flex-direction: row;
+        justify-content: flex-start;
+        margin-top: 10px;
+        margin-left: 0;
+    }
+}

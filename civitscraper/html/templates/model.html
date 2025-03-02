@@ -2,6 +2,13 @@
 
 {% block title %}{{ model_name }} - CivitAI Model{% endblock %}
 
+{% block page_styles %}
+<!-- model.css -->
+<style>
+    {{ read_file('css/model.css') }}
+</style>
+{% endblock %}
+
 {% block header %}{{ model_name }}{% endblock %}
 
 {% block header_actions %}
@@ -16,53 +23,8 @@
 {% endblock %}
 
 {% block content %}
-<div class="model-info-bar">
-    <div class="model-info-item">
-        <span class="model-info-label">Type</span>
-        <span class="model-info-value">{{ model_type }}</span>
-    </div>
-
-    {% if metadata.baseModel %}
-    <div class="model-info-item">
-        <span class="model-info-label">Base Model</span>
-        <span class="model-info-value">{{ metadata.baseModel }}</span>
-    </div>
-    {% endif %}
-
-    {% if stats and stats.rating %}
-    <div class="model-info-item">
-        <span class="model-info-label">Rating</span>
-        <span class="model-info-value">
-            <span class="rating">
-                {% for i in range(5) %}
-                    {% if i < (stats.rating|int) %}
-                        ★
-                    {% elif i < stats.rating and i >= (stats.rating|int) %}
-                        ★
-                    {% else %}
-                        ☆
-                    {% endif %}
-                {% endfor %}
-                <span class="rating-count">({{ stats.ratingCount|default(0) }})</span>
-            </span>
-        </span>
-    </div>
-    {% endif %}
-
-    {% if stats and stats.downloadCount %}
-    <div class="model-info-item">
-        <span class="model-info-label">Downloads</span>
-        <span class="model-info-value">{{ stats.downloadCount }}</span>
-    </div>
-    {% endif %}
-
-    {% if metadata.createdAt %}
-    <div class="model-info-item">
-        <span class="model-info-label">Created</span>
-        <span class="model-info-value">{{ metadata.createdAt|replace('T', ' ')|replace('Z', '')|replace('.000', '') }}</span>
-    </div>
-    {% endif %}
-</div>
+<!-- Model info component -->
+{% include "components/model_info.html" %}
 
 <div class="card">
     <h2 class="section-title">Model Details</h2>
@@ -151,33 +113,228 @@
     </div>
 </div>
 
-<div id="image-viewer" class="image-viewer">
-    <div class="viewer-content">
-        <div id="viewer-media-container">
-            <img id="viewer-image" src="" alt="Full size image" style="display: none;">
-            <video id="viewer-video" controls style="display: none;"></video>
-        </div>
-        <div class="image-info">
-            <div class="prompt-section">
-                <h3>Positive Prompt</h3>
-                <div id="positive-prompt" class="prompt"></div>
-                <button class="copy-button" data-target="positive-prompt">📋 Copy</button>
-            </div>
-            <div class="prompt-section">
-                <h3>Negative Prompt</h3>
-                <div id="negative-prompt" class="prompt"></div>
-                <button class="copy-button" data-target="negative-prompt">📋 Copy</button>
-            </div>
-            <div class="additional-info">
-                <h3>Additional Information</h3>
-                <div id="additional-info" class="info-content"></div>
-            </div>
-        </div>
-    </div>
-    <button id="close-viewer" class="close-button">×</button>
-    <button id="prev-image" class="nav-button prev">❮</button>
-    <button id="next-image" class="nav-button next">❯</button>
-</div>
+<!-- Image viewer component -->
+{% include "components/image_viewer.html" %}
+
+<!-- Inline script for image viewer functionality -->
+<script>
+// Immediately executing function for image viewer functionality
+(function() {
+  console.log("Image viewer script running");
+  
+  const galleryItems = document.querySelectorAll('.gallery-item');
+  if (galleryItems.length === 0) {
+    console.warn('No gallery items found, skipping image viewer initialization');
+    return;
+  }
+  
+  console.log(`Found ${galleryItems.length} gallery items`);
+  
+  const imageViewer = document.getElementById('image-viewer');
+  const viewerImage = document.getElementById('viewer-image');
+  const viewerVideo = document.getElementById('viewer-video');
+  const positivePrompt = document.getElementById('positive-prompt');
+  const negativePrompt = document.getElementById('negative-prompt');
+  const additionalInfo = document.getElementById('additional-info');
+  const closeButton = document.getElementById('close-viewer');
+  const prevButton = document.getElementById('prev-image');
+  const nextButton = document.getElementById('next-image');
+  const copyButtons = document.querySelectorAll('.copy-button');
+  const imagesDataElem = document.getElementById('images-data');
+
+  console.log("Image viewer elements:", {
+    imageViewer, viewerImage, viewerVideo, positivePrompt, 
+    negativePrompt, additionalInfo, closeButton, prevButton, nextButton,
+    copyButtons: copyButtons.length, imagesDataElem
+  });
+
+  // Verify all required elements exist
+  if (!imageViewer || !viewerImage || !viewerVideo || !positivePrompt || 
+      !negativePrompt || !additionalInfo || !closeButton || 
+      !prevButton || !nextButton || !imagesDataElem) {
+    console.error('Missing required DOM elements for image viewer functionality');
+    return;
+  }
+
+  let currentIndex = 0;
+  
+  // Function to decode base64 encoded JSON data
+  function decodeBase64Json(base64String) {
+    try {
+      // Decode base64 string to JSON string
+      const jsonString = atob(base64String);
+      // Parse JSON string to object
+      return JSON.parse(jsonString);
+    } catch (e) {
+      console.error('Error decoding base64 JSON data:', e);
+      return [];
+    }
+  }
+
+  // Parse image data from base64 encoded JSON
+  let imageData;
+  try {
+    // Use the encoded data provided by the server
+    const encodedData = imagesDataElem.getAttribute('data-images');
+    if (!encodedData) {
+      console.error('No encoded image data found');
+      return;
+    }
+    
+    imageData = decodeBase64Json(encodedData);
+    console.log(`Successfully decoded image data for ${imageData.length} images`);
+    
+    if (!Array.isArray(imageData) || imageData.length === 0) {
+      console.warn('Image data is empty or invalid');
+      return;
+    }
+  } catch (e) {
+    console.error('Failed to decode image data:', e);
+    return;
+  }
+
+  // Function to open image viewer
+  function openImageViewer(index) {
+    try {
+      console.log(`Opening image viewer for index: ${index}`);
+
+      if (index < 0 || index >= imageData.length || index >= galleryItems.length) {
+        console.error(`Invalid index: ${index}`);
+        return;
+      }
+
+      const data = imageData[index];
+      const galleryItem = galleryItems[index];
+      
+      // Check if this is a video or image
+      const isVideo = data.is_video || false;
+
+      if (isVideo) {
+        // Handle video
+        const videoElement = galleryItem.querySelector('video');
+        if (!videoElement) {
+          console.error(`Video element not found in gallery item at index: ${index}`);
+          return;
+        }
+
+        // Show video, hide image
+        viewerVideo.src = videoElement.src;
+        viewerVideo.style.display = 'block';
+        viewerImage.style.display = 'none';
+      } else {
+        // Handle image
+        const imgElement = galleryItem.querySelector('img');
+        if (!imgElement) {
+          console.error(`Image element not found in gallery item at index: ${index}`);
+          return;
+        }
+
+        // Show image, hide video
+        viewerImage.src = imgElement.src;
+        viewerImage.style.display = 'block';
+        viewerVideo.style.display = 'none';
+      }
+
+      positivePrompt.textContent = data.prompt || 'No positive prompt available';
+      negativePrompt.textContent = data.negative_prompt || 'No negative prompt available';
+
+      // Format additional info
+      let infoHTML = '';
+      if (data.sampler) infoHTML += `<div><strong>Sampler:</strong> ${data.sampler}</div>`;
+      if (data.cfg_scale) infoHTML += `<div><strong>CFG Scale:</strong> ${data.cfg_scale}</div>`;
+      if (data.steps) infoHTML += `<div><strong>Steps:</strong> ${data.steps}</div>`;
+      if (data.seed) infoHTML += `<div><strong>Seed:</strong> ${data.seed}</div>`;
+      if (data.model) infoHTML += `<div><strong>Model:</strong> ${data.model}</div>`;
+
+      additionalInfo.innerHTML = infoHTML || 'No additional information available';
+
+      imageViewer.classList.add('active');
+      console.log('Image viewer activated');
+    } catch (e) {
+      console.error('Error in openImageViewer:', e);
+    }
+  }
+
+  // Attach click events to gallery items
+  galleryItems.forEach((item, index) => {
+    item.addEventListener('click', () => {
+      console.log(`Gallery item clicked: ${index}`);
+      currentIndex = index;
+      openImageViewer(currentIndex);
+    });
+  });
+
+  // Close image viewer
+  closeButton.addEventListener('click', () => {
+    imageViewer.classList.remove('active');
+    console.log('Image viewer closed');
+  });
+
+  // Navigation
+  prevButton.addEventListener('click', () => {
+    currentIndex = (currentIndex - 1 + imageData.length) % imageData.length;
+    openImageViewer(currentIndex);
+    console.log(`Navigated to previous image: ${currentIndex}`);
+  });
+
+  nextButton.addEventListener('click', () => {
+    currentIndex = (currentIndex + 1) % imageData.length;
+    openImageViewer(currentIndex);
+    console.log(`Navigated to next image: ${currentIndex}`);
+  });
+
+  // Keyboard navigation
+  document.addEventListener('keydown', (e) => {
+    if (!imageViewer.classList.contains('active')) return;
+
+    if (e.key === 'Escape') {
+      imageViewer.classList.remove('active');
+      console.log('Image viewer closed via Escape key');
+    } else if (e.key === 'ArrowLeft') {
+      currentIndex = (currentIndex - 1 + imageData.length) % imageData.length;
+      openImageViewer(currentIndex);
+      console.log(`Navigated to previous image via left arrow: ${currentIndex}`);
+    } else if (e.key === 'ArrowRight') {
+      currentIndex = (currentIndex + 1) % imageData.length;
+      openImageViewer(currentIndex);
+      console.log(`Navigated to next image via right arrow: ${currentIndex}`);
+    }
+  });
+
+  // Copy to clipboard functionality
+  copyButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const targetId = button.getAttribute('data-target');
+      if (!targetId) {
+        console.error('Copy button missing data-target attribute');
+        return;
+      }
+
+      const targetElement = document.getElementById(targetId);
+      if (!targetElement) {
+        console.error(`Target element not found: ${targetId}`);
+        return;
+      }
+
+      const text = targetElement.textContent;
+      
+      navigator.clipboard.writeText(text)
+        .then(() => {
+          button.textContent = '✓ Copied!';
+          setTimeout(() => {
+            button.textContent = '📋 Copy';
+          }, 2000);
+          console.log(`Copied text from ${targetId}`);
+        })
+        .catch(e => {
+          console.error('Error copying to clipboard:', e);
+        });
+    });
+  });
+
+  console.log("Image viewer initialization complete");
+})();
+</script>
 {% endif %}
 
 {% if metadata.files %}
@@ -206,253 +363,6 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}
-{{ super() }}
-<script>
-    // Gallery functionality with improved error handling and logging
-    document.addEventListener('DOMContentLoaded', function() {
-        try {
-            // Log initialization
-            console.log('Initializing gallery functionality');
-
-            const galleryItems = document.querySelectorAll('.gallery-item');
-            console.log(`Found ${galleryItems.length} gallery items`);
-
-            if (galleryItems.length === 0) {
-                console.warn('No gallery items found, aborting initialization');
-                return;
-            }
-
-            const imageViewer = document.getElementById('image-viewer');
-            const viewerImage = document.getElementById('viewer-image');
-            const positivePrompt = document.getElementById('positive-prompt');
-            const negativePrompt = document.getElementById('negative-prompt');
-            const additionalInfo = document.getElementById('additional-info');
-            const closeButton = document.getElementById('close-viewer');
-            const prevButton = document.getElementById('prev-image');
-            const nextButton = document.getElementById('next-image');
-            const copyButtons = document.querySelectorAll('.copy-button');
-
-            // Verify all required elements exist
-            if (!imageViewer || !viewerImage || !positivePrompt || !negativePrompt ||
-                !additionalInfo || !closeButton || !prevButton || !nextButton) {
-                console.error('Missing required DOM elements for gallery functionality');
-                return;
-            }
-
-            let currentIndex = 0;
-
-            // Function to decode base64 encoded JSON data
-            function decodeBase64Json(base64String) {
-                try {
-                    // Decode base64 string to JSON string
-                    const jsonString = atob(base64String);
-                    // Parse JSON string to object
-                    return JSON.parse(jsonString);
-                } catch (e) {
-                    console.error('Error decoding base64 JSON data:', e);
-                    return [];
-                }
-            }
-
-            // Parse image data from base64 encoded JSON
-            let imageData;
-            try {
-                // Use the encoded data provided by the server
-                imageData = decodeBase64Json('{{ images_encoded }}');
-                console.log(`Successfully decoded image data for ${imageData.length} images`);
-            } catch (e) {
-                console.error('Failed to decode image data:', e);
-                return;
-            }
-
-            // Ensure imageData is valid
-            if (!Array.isArray(imageData) || imageData.length === 0) {
-                console.warn('Image data is empty or invalid');
-                return;
-            }
-
-            const viewerVideo = document.getElementById('viewer-video');
-
-            // Open image viewer with improved error handling
-            function openImageViewer(index) {
-                try {
-                    console.log(`Opening image viewer for index: ${index}`);
-
-                    if (index < 0 || index >= imageData.length || index >= galleryItems.length) {
-                        console.error(`Invalid index: ${index}`);
-                        return;
-                    }
-
-                    const data = imageData[index];
-
-                    // Use direct array access and verify the element exists
-                    const galleryItem = galleryItems[index];
-                    if (!galleryItem) {
-                        console.error(`Gallery item not found at index: ${index}`);
-                        return;
-                    }
-
-                    // Check if this is a video or image
-                    const isVideo = data.is_video || false;
-
-                    if (isVideo) {
-                        // Handle video
-                        const videoElement = galleryItem.querySelector('video');
-                        if (!videoElement) {
-                            console.error(`Video element not found in gallery item at index: ${index}`);
-                            return;
-                        }
-
-                        // Show video, hide image
-                        viewerVideo.src = videoElement.src;
-                        viewerVideo.style.display = 'block';
-                        viewerImage.style.display = 'none';
-                    } else {
-                        // Handle image
-                        const imgElement = galleryItem.querySelector('img');
-                        if (!imgElement) {
-                            console.error(`Image element not found in gallery item at index: ${index}`);
-                            return;
-                        }
-
-                        // Show image, hide video
-                        viewerImage.src = imgElement.src;
-                        viewerImage.style.display = 'block';
-                        viewerVideo.style.display = 'none';
-                    }
-
-                    positivePrompt.textContent = data.prompt || 'No positive prompt available';
-                    negativePrompt.textContent = data.negative_prompt || 'No negative prompt available';
-
-                    // Format additional info
-                    let infoHTML = '';
-                    if (data.sampler) infoHTML += `<div><strong>Sampler:</strong> ${data.sampler}</div>`;
-                    if (data.cfg_scale) infoHTML += `<div><strong>CFG Scale:</strong> ${data.cfg_scale}</div>`;
-                    if (data.steps) infoHTML += `<div><strong>Steps:</strong> ${data.steps}</div>`;
-                    if (data.seed) infoHTML += `<div><strong>Seed:</strong> ${data.seed}</div>`;
-                    if (data.model) infoHTML += `<div><strong>Model:</strong> ${data.model}</div>`;
-
-                    additionalInfo.innerHTML = infoHTML || 'No additional information available';
-
-                    imageViewer.classList.add('active');
-                    console.log('Image viewer activated');
-                } catch (e) {
-                    console.error('Error in openImageViewer:', e);
-                }
-            }
-
-            // Attach click events with verification
-            galleryItems.forEach((item, index) => {
-                if (item) {
-                    item.addEventListener('click', () => {
-                        console.log(`Gallery item clicked: ${index}`);
-                        currentIndex = index;
-                        openImageViewer(currentIndex);
-                    });
-                    console.log(`Added click listener to gallery item ${index}`);
-                }
-            });
-
-            // Close image viewer with error handling
-            if (closeButton) {
-                closeButton.addEventListener('click', () => {
-                    try {
-                        imageViewer.classList.remove('active');
-                        console.log('Image viewer closed');
-                    } catch (e) {
-                        console.error('Error closing image viewer:', e);
-                    }
-                });
-            }
-
-            // Navigation with error handling
-            if (prevButton) {
-                prevButton.addEventListener('click', () => {
-                    try {
-                        currentIndex = (currentIndex - 1 + imageData.length) % imageData.length;
-                        openImageViewer(currentIndex);
-                        console.log(`Navigated to previous image: ${currentIndex}`);
-                    } catch (e) {
-                        console.error('Error navigating to previous image:', e);
-                    }
-                });
-            }
-
-            if (nextButton) {
-                nextButton.addEventListener('click', () => {
-                    try {
-                        currentIndex = (currentIndex + 1) % imageData.length;
-                        openImageViewer(currentIndex);
-                        console.log(`Navigated to next image: ${currentIndex}`);
-                    } catch (e) {
-                        console.error('Error navigating to next image:', e);
-                    }
-                });
-            }
-
-            // Keyboard navigation with error handling
-            document.addEventListener('keydown', (e) => {
-                try {
-                    if (!imageViewer.classList.contains('active')) return;
-
-                    if (e.key === 'Escape') {
-                        imageViewer.classList.remove('active');
-                        console.log('Image viewer closed via Escape key');
-                    } else if (e.key === 'ArrowLeft') {
-                        currentIndex = (currentIndex - 1 + imageData.length) % imageData.length;
-                        openImageViewer(currentIndex);
-                        console.log(`Navigated to previous image via left arrow: ${currentIndex}`);
-                    } else if (e.key === 'ArrowRight') {
-                        currentIndex = (currentIndex + 1) % imageData.length;
-                        openImageViewer(currentIndex);
-                        console.log(`Navigated to next image via right arrow: ${currentIndex}`);
-                    }
-                } catch (e) {
-                    console.error('Error in keyboard navigation:', e);
-                }
-            });
-
-            // Copy to clipboard with error handling
-            copyButtons.forEach(button => {
-                if (button) {
-                    button.addEventListener('click', () => {
-                        try {
-                            const targetId = button.getAttribute('data-target');
-                            if (!targetId) {
-                                console.error('Copy button missing data-target attribute');
-                                return;
-                            }
-
-                            const targetElement = document.getElementById(targetId);
-                            if (!targetElement) {
-                                console.error(`Target element not found: ${targetId}`);
-                                return;
-                            }
-
-                            const text = targetElement.textContent;
-
-                            navigator.clipboard.writeText(text).then(() => {
-                                button.textContent = '✓ Copied!';
-                                setTimeout(() => {
-                                    button.textContent = '📋 Copy';
-                                }, 2000);
-                                console.log(`Copied text from ${targetId}`);
-                            }).catch(e => {
-                                console.error('Error copying to clipboard:', e);
-                            });
-                        } catch (e) {
-                            console.error('Error in copy functionality:', e);
-                        }
-                    });
-                }
-            });
-
-            console.log('Gallery functionality initialized successfully');
-
-        } catch (e) {
-            console.error('Fatal error in gallery initialization:', e);
-        }
-    });
-</script>
+{% block page_scripts %}
+<!-- Any additional scripts can go here -->
 {% endblock %}

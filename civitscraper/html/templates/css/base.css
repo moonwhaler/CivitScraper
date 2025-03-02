@@ -1,0 +1,109 @@
+/* Base styles */
+:root {
+    --primary-color: #3498db;
+    --secondary-color: #2ecc71;
+    --background-color: #121212;
+    --text-color: #e0e0e0;
+    --card-background: #1e1e1e;
+    --border-color: #333;
+    --header-background: #121212;
+    --header-text: #fff;
+    --footer-background: #121212;
+    --footer-text: #888;
+    --tag-background: #333;
+    --tag-text: #e0e0e0;
+    --button-background: #3498db;
+    --button-text: #fff;
+    --button-hover: #2980b9;
+    --image-border: #333;
+    --prompt-background: #2a2a2a;
+    --prompt-border: #444;
+    --stat-background: #2a2a2a;
+    --stat-text: #e0e0e0;
+    --section-title-color: #3498db;
+    --link-color: #3498db;
+    --link-hover-color: #2980b9;
+    --rating-color: #f1c40f;
+    --metadata-label-color: #888;
+    --metadata-value-color: #e0e0e0;
+    --copy-icon-color: #888;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    line-height: 1.6;
+    color: var(--text-color);
+    background-color: var(--background-color);
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    background-color: var(--header-background);
+    color: var(--header-text);
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+header .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 1.8rem;
+    font-weight: 600;
+}
+
+footer {
+    background-color: var(--footer-background);
+    color: var(--footer-text);
+    padding: 1rem;
+    text-align: center;
+    margin-top: 2rem;
+    border-top: 1px solid var(--border-color);
+    font-size: 0.9rem;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    margin-top: 0;
+    color: var(--text-color);
+}
+
+a {
+    color: var(--link-color);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+a:hover {
+    color: var(--link-hover-color);
+    text-decoration: none;
+}
+
+.external-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.external-link svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Responsive design base */
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+}

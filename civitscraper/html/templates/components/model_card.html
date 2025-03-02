@@ -1,0 +1,53 @@
+<div class="model-card" 
+    data-name="{{ model.name|lower }}" 
+    data-type="{{ model.type|lower }}" 
+    data-base-model="{{ model.base_model|lower }}" 
+    data-description="{{ model.description|lower }}"
+    data-created-at="{{ model.created_at|default('') }}"
+    data-updated-at="{{ model.updated_at|default('') }}"
+    data-downloads="{{ model.stats.downloads|default(0) }}"
+    data-rating="{{ model.stats.rating|default(0) }}">
+    <a href="{{ model.html_path }}" class="model-link">
+        {% if model.preview_image_path %}
+        <div class="model-preview">
+            {% if model.is_video %}
+            <video src="{{ model.preview_image_path }}" preload="metadata" class="preview-video"></video>
+            <div class="video-indicator">VIDEO</div>
+            {% else %}
+            <img src="{{ model.preview_image_path }}" alt="{{ model.name }}" loading="lazy">
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="model-preview no-image">
+            <div class="no-image-text">No Preview</div>
+        </div>
+        {% endif %}
+        <div class="model-info">
+            <h3 class="model-name">{{ model.name }}</h3>
+            <div class="model-meta">
+                <span class="model-type">{{ model.type }}</span>
+                <span class="model-base">{{ model.base_model }}</span>
+            </div>
+            <div class="model-stats">
+                {% if model.stats.downloads > 0 %}
+                <span class="stat-item downloads" title="Downloads">
+                    <span class="stat-icon">⬇️</span>
+                    <span class="stat-value">{{ model.stats.downloads }}</span>
+                </span>
+                {% endif %}
+                {% if model.stats.rating > 0 %}
+                <span class="stat-item rating" title="Rating">
+                    <span class="stat-icon">⭐</span>
+                    <span class="stat-value">{{ model.stats.rating|round(1) }}</span>
+                    {% if model.stats.rating_count > 0 %}
+                    <span class="stat-count">({{ model.stats.rating_count }})</span>
+                    {% endif %}
+                </span>
+                {% endif %}
+            </div>
+            {% if model.version %}
+            <div class="model-version">v{{ model.version }}</div>
+            {% endif %}
+        </div>
+    </a>
+</div>

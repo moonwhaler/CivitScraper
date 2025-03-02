@@ -1,0 +1,248 @@
+/* Model page specific styles */
+
+/* Model header */
+.model-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.model-title {
+    font-size: 1.6rem;
+    margin: 0;
+}
+
+/* Image gallery styles */
+.gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.gallery-item {
+    position: relative;
+    overflow: hidden;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid var(--border-color);
+    aspect-ratio: 9 / 16;
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+.gallery-item img, .gallery-item video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.gallery-item:hover img, .gallery-item:hover video {
+    transform: scale(1.05);
+}
+
+.preview-video {
+    background-color: #000;
+}
+
+.video-indicator {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    z-index: 2;
+}
+
+.image-metadata {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    padding: 8px;
+    font-size: 0.8rem;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+}
+
+.gallery-item:hover .image-metadata {
+    transform: translateY(0);
+}
+
+.image-meta-item {
+    display: inline-block;
+    margin-right: 10px;
+}
+
+/* Image viewer styles */
+.image-viewer {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
+    z-index: 1000;
+    overflow-y: auto;
+}
+
+.image-viewer.active {
+    display: block;
+}
+
+.viewer-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.viewer-content img, .viewer-content video {
+    max-width: 100%;
+    max-height: 70vh;
+    margin-bottom: 20px;
+    border-radius: 4px;
+}
+
+.image-info {
+    background-color: var(--card-background);
+    border-radius: 8px;
+    padding: 20px;
+    width: 100%;
+    max-width: 800px;
+}
+
+.prompt-section {
+    margin-bottom: 20px;
+}
+
+.prompt {
+    background-color: var(--prompt-background);
+    border: 1px solid var(--prompt-border);
+    border-radius: 4px;
+    padding: 10px;
+    white-space: pre-wrap;
+    font-family: monospace;
+    margin-bottom: 10px;
+}
+
+.copy-button {
+    background-color: var(--button-background);
+    color: var(--button-text);
+    border: none;
+    border-radius: 4px;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.copy-button:hover {
+    background-color: var(--button-hover);
+}
+
+.close-button {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background-color: transparent;
+    color: white;
+    border: none;
+    font-size: 2rem;
+    cursor: pointer;
+    z-index: 1001;
+}
+
+.nav-button {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    font-size: 2rem;
+    padding: 10px;
+    cursor: pointer;
+    z-index: 1001;
+}
+
+.prev {
+    left: 20px;
+}
+
+.next {
+    right: 20px;
+}
+
+/* File item styles */
+.file-item {
+    background-color: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.file-name {
+    font-weight: 500;
+    margin-bottom: 5px;
+}
+
+.file-meta {
+    display: flex;
+    gap: 15px;
+    color: var(--metadata-label-color);
+    font-size: 0.85rem;
+}
+
+.file-size, .file-format, .file-size-info, .file-format-info {
+    display: inline-block;
+}
+
+/* Responsive design for model page */
+@media (max-width: 768px) {
+    .gallery {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+
+    .viewer-content {
+        padding: 10px;
+    }
+
+    .image-info {
+        padding: 10px;
+    }
+
+    .nav-button {
+        font-size: 1.5rem;
+        padding: 5px;
+    }
+
+    .close-button {
+        font-size: 1.5rem;
+    }
+
+    .file-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .file-meta {
+        margin-top: 5px;
+        flex-wrap: wrap;
+    }
+}

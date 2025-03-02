@@ -1,0 +1,181 @@
+/* Component styles */
+
+/* Card component */
+.card {
+    background-color: var(--card-background);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border-color);
+}
+
+.section-title {
+    color: var(--section-title-color);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-weight: 500;
+}
+
+/* Button component */
+.button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--button-background);
+    color: var(--button-text);
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    font-size: 0.9rem;
+    transition: background-color 0.2s ease;
+}
+
+.button:hover {
+    background-color: var(--button-hover);
+    text-decoration: none;
+}
+
+/* Tags component */
+.tag {
+    display: inline-block;
+    background-color: var(--tag-background);
+    color: var(--tag-text);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    margin-right: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Stats component */
+.stat {
+    display: inline-block;
+    color: var(--stat-text);
+    margin-right: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.stat-value {
+    font-size: 1.1rem;
+    font-weight: 500;
+    display: block;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    display: block;
+    color: var(--metadata-label-color);
+}
+
+/* Rating stars */
+.rating {
+    color: var(--rating-color);
+    display: inline-flex;
+    align-items: center;
+}
+
+.rating-count {
+    color: var(--metadata-label-color);
+    font-size: 0.9rem;
+    margin-left: 5px;
+}
+
+/* Metadata styles */
+.metadata-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
+    margin-top: 15px;
+}
+
+.metadata-item {
+    margin-bottom: 15px;
+}
+
+.metadata-label {
+    font-size: 0.8rem;
+    color: var(--metadata-label-color);
+    margin-bottom: 5px;
+}
+
+.metadata-value {
+    font-size: 0.95rem;
+    color: var(--metadata-value-color);
+}
+
+/* Copy functionality */
+.copy-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.copy-icon {
+    cursor: pointer;
+    color: var(--copy-icon-color);
+    margin-left: 8px;
+    transition: color 0.2s ease;
+}
+
+.copy-icon:hover {
+    color: var(--link-color);
+}
+
+/* Model info bar */
+.model-info-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    padding: 20px;
+    background: linear-gradient(to right, rgba(20, 20, 20, 0.8), rgba(30, 30, 30, 0.8));
+    border-radius: 10px;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.model-info-item {
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    border-radius: 8px;
+    background-color: rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.model-info-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.model-info-label {
+    color: var(--metadata-label-color);
+    font-size: 0.8rem;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.model-info-value {
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+/* Responsive adjustments for components */
+@media (max-width: 768px) {
+    .metadata-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .model-info-bar {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        padding: 15px;
+    }
+}

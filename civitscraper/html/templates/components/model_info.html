@@ -1,0 +1,47 @@
+<div class="model-info-bar">
+    <div class="model-info-item">
+        <span class="model-info-label">Type</span>
+        <span class="model-info-value">{{ model_type }}</span>
+    </div>
+
+    {% if metadata.baseModel %}
+    <div class="model-info-item">
+        <span class="model-info-label">Base Model</span>
+        <span class="model-info-value">{{ metadata.baseModel }}</span>
+    </div>
+    {% endif %}
+
+    {% if stats and stats.rating %}
+    <div class="model-info-item">
+        <span class="model-info-label">Rating</span>
+        <span class="model-info-value">
+            <span class="rating">
+                {% for i in range(5) %}
+                    {% if i < (stats.rating|int) %}
+                        ★
+                    {% elif i < stats.rating and i >= (stats.rating|int) %}
+                        ★
+                    {% else %}
+                        ☆
+                    {% endif %}
+                {% endfor %}
+                <span class="rating-count">({{ stats.ratingCount|default(0) }})</span>
+            </span>
+        </span>
+    </div>
+    {% endif %}
+
+    {% if stats and stats.downloadCount %}
+    <div class="model-info-item">
+        <span class="model-info-label">Downloads</span>
+        <span class="model-info-value">{{ stats.downloadCount }}</span>
+    </div>
+    {% endif %}
+
+    {% if metadata.createdAt %}
+    <div class="model-info-item">
+        <span class="model-info-label">Created</span>
+        <span class="model-info-value">{{ metadata.createdAt|replace('T', ' ')|replace('Z', '')|replace('.000', '') }}</span>
+    </div>
+    {% endif %}
+</div>

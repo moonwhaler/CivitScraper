@@ -1,0 +1,30 @@
+<div id="image-viewer" class="image-viewer">
+    <div class="viewer-content">
+        <div id="viewer-media-container">
+            <img id="viewer-image" src="" alt="Full size image" style="display: none;">
+            <video id="viewer-video" controls style="display: none;"></video>
+        </div>
+        <div class="image-info">
+            <div class="prompt-section">
+                <h3>Positive Prompt</h3>
+                <div id="positive-prompt" class="prompt"></div>
+                <button class="copy-button" data-target="positive-prompt">📋 Copy</button>
+            </div>
+            <div class="prompt-section">
+                <h3>Negative Prompt</h3>
+                <div id="negative-prompt" class="prompt"></div>
+                <button class="copy-button" data-target="negative-prompt">📋 Copy</button>
+            </div>
+            <div class="additional-info">
+                <h3>Additional Information</h3>
+                <div id="additional-info" class="info-content"></div>
+            </div>
+        </div>
+    </div>
+    <button id="close-viewer" class="close-button">×</button>
+    <button id="prev-image" class="nav-button prev">❮</button>
+    <button id="next-image" class="nav-button next">❯</button>
+</div>
+
+<!-- Hidden div containing the encoded image data -->
+<div id="images-data" style="display: none;" data-images="{{ images_encoded }}"></div>
