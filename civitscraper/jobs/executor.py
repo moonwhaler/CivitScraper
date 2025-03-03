@@ -200,10 +200,11 @@ class JobExecutor:
                 job_organizer.organize_files(list(metadata_dict.keys()), metadata_dict)
 
             # Generate gallery
-            if job_config.get("generate_gallery", False):
-                gallery_path = job_config.get("gallery_path", "gallery.html")
-                gallery_title = job_config.get("gallery_title", "Model Gallery")
-                include_existing = job_config.get("include_existing_in_gallery", True)
+            html_config = job_config.get("output", {}).get("metadata", {}).get("html", {})
+            if html_config.get("generate_gallery", False):
+                gallery_path = html_config.get("gallery_path", "gallery.html")
+                gallery_title = html_config.get("gallery_title", "Model Gallery")
+                include_existing = html_config.get("include_existing_in_gallery", True)
 
                 logger.info(f"Generating gallery at {gallery_path}")
                 logger.debug(f"Include existing model cards: {include_existing}")
