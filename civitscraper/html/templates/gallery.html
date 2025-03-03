@@ -644,7 +644,7 @@
     }
     
     // Load saved directory tree state
-    const savedDirectoryTreeVisible = getPreference('directoryTreeVisible', 'true') === 'true';
+    const savedDirectoryTreeVisible = getPreference('directoryTreeVisible', 'false') === 'true';
     if (savedDirectoryTreeVisible) {
       directoryTree.classList.add('visible');
     }
