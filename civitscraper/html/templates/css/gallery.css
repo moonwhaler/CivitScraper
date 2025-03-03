@@ -198,11 +198,20 @@
     align-items: center;
 }
 
+.controls-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex: 1; /* Allow it to grow */
+    max-width: 78%; /* Increase max width */
+}
+
 /* Search controls */
 .search-container {
     position: relative;
     flex: 1;
-    min-width: 200px;
+    max-width: none; /* Remove max width limitation */
+    min-width: 180px;
 }
 
 #gallery-search {
@@ -251,7 +260,6 @@
     display: flex;
     gap: 5px;
     position: relative;
-    z-index: 10; /* Ensure buttons are always clickable */
 }
 
 .view-button {
@@ -282,6 +290,8 @@
 .sort-controls {
     display: flex;
     gap: 5px;
+    margin-left: auto; /* Push to right */
+    flex-shrink: 0; /* Prevent shrinking */
 }
 
 #sort-by {
@@ -625,6 +635,11 @@
         flex-direction: column;
         align-items: stretch;
         gap: 15px; /* Ensure consistent spacing between stacked elements */
+    }
+    
+    .controls-left {
+        flex-direction: column;
+        align-items: stretch;
     }
     
     /* Prevent search container from overlapping other elements */
