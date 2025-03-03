@@ -61,9 +61,12 @@ class HTMLManager:
         # Use HTMLGenerator if available
         if self.html_generator:
             try:
-                # Get the max_count from our configuration
-                max_count = self.output_config.get("images", {}).get("max_count", 4)
-                logger.debug(f"Using max_count: {max_count} for HTML generation")
+                # Get the max_count from our configuration, default to None for no limit
+                max_count = self.output_config.get("images", {}).get("max_count")
+                if max_count is not None:
+                    logger.debug(f"Using max_count: {max_count} for HTML generation")
+                else:
+                    logger.debug("No max_count limit configured for HTML generation")
 
                 # Use the existing html_generator
                 temp_html_generator = self.html_generator

@@ -49,7 +49,7 @@ class FileOperationHandler:
 
         # Add preview images
         # Get max_count from configuration to know how many preview images to look for
-        max_count = self.config.get("output", {}).get("images", {}).get("max_count", 4)
+        max_count = self.config.get("output", {}).get("images", {}).get("max_count")
 
         # Check for indexed preview images (preview0.jpeg, preview1.jpeg, etc.)
         for i in range(max_count):

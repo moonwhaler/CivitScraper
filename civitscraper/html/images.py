@@ -93,16 +93,10 @@ class ImageHandler:
         """
         # Get model images
         images = metadata.get("images", [])
+        total_images = len(images)
 
         # Log the number of images found
-        logger.debug(f"ImageHandler found {len(images)} images")
-
-        # Limit number of images only if max_count is set
-        if self.max_count is not None:
-            images = images[: self.max_count]
-            logger.debug(
-                f"ImageHandler limited to {len(images)} images due to max_count setting"
-            )
+        logger.debug(f"ImageHandler found {total_images} images")
 
         # Get HTML path for calculating relative paths
         html_path = self.path_manager.get_html_path(file_path)
@@ -110,7 +104,16 @@ class ImageHandler:
 
         image_paths = []
 
-        for i, image in enumerate(images):
+        # Only process up to max_count images if set
+        max_images = self.max_count if self.max_count is not None else total_images
+        logger.debug(f"Processing up to {max_images} images based on configuration")
+
+        for i in range(max_images):
+            # Skip if we've reached the end of available images
+            if i >= total_images:
+                break
+
+            image = images[i]
             # Get image URL
             image_url = image.get("url")
             if not image_url:

@@ -105,14 +105,29 @@ class ImageManager:
             model_dir: Model directory
             model_name: Model name
         """
-        # Use a more comprehensive pattern to catch all preview files with any extension
-        preview_pattern = os.path.join(model_dir, f"{model_name}.preview*.*")
-        for old_image in glob.glob(preview_pattern):
-            try:
-                os.remove(old_image)
-                logger.debug(f"Removed old preview image: {old_image}")
-            except Exception as e:
-                logger.warning(f"Failed to remove old preview image {old_image}: {e}")
+        # Get max_count from config
+        max_count = self.output_config.get("images", {}).get("max_count")
+        
+        if max_count is not None:
+            # If max_count is set, only remove specific preview files up to max_count
+            for i in range(max_count):
+                for ext in ['.jpeg', '.jpg', '.png', '.webp', '.mp4']:
+                    preview_path = os.path.join(model_dir, f"{model_name}.preview{i}{ext}")
+                    if os.path.isfile(preview_path):
+                        try:
+                            os.remove(preview_path)
+                            logger.debug(f"Removed old preview image: {preview_path}")
+                        except Exception as e:
+                            logger.warning(f"Failed to remove old preview image {preview_path}: {e}")
+        else:
+            # If no max_count, clean up all preview files
+            preview_pattern = os.path.join(model_dir, f"{model_name}.preview*.*")
+            for old_image in glob.glob(preview_pattern):
+                try:
+                    os.remove(old_image)
+                    logger.debug(f"Removed old preview image: {old_image}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove old preview image {old_image}: {e}")
 
     def _download_single_image(
         self, file_path: str, image: Dict[str, Any], index: int
