@@ -8,6 +8,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
+from ..scanner.discovery import find_html_files
 from .context import ContextBuilder
 from .paths import PathManager
 from .renderer import TemplateRenderer
@@ -80,7 +81,7 @@ class HTMLGenerator:
         return html_path
 
     def generate_gallery(
-        self, file_paths: List[str], output_path: str, title: str = "Model Gallery"
+        self, file_paths: List[str], output_path: str, title: str = "Model Gallery", include_existing: bool = True
     ) -> str:
         """
         Generate gallery HTML for multiple models.
@@ -89,6 +90,7 @@ class HTMLGenerator:
             file_paths: List of model file paths
             output_path: Path to output HTML file
             title: Gallery title
+            include_existing: Whether to include existing model card HTML files
 
         Returns:
             Path to generated HTML file
@@ -101,8 +103,28 @@ class HTMLGenerator:
         # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
+        # Combine newly processed files with existing HTML files if requested
+        all_file_paths = list(file_paths)  # Create a copy of the list
+        
+        if include_existing and not file_paths:
+            # Only scan for existing HTML files if no new files were processed
+            # This prevents duplicate entries when both new and existing files are present
+            logger.info("No new models processed, scanning for existing model card HTML files")
+            
+            # Get path IDs from job configuration if available
+            path_ids = self.config.get("gallery_path_ids")  # Use the path_ids from job config
+            
+            # Find existing HTML files
+            html_files = find_html_files(self.config, path_ids)
+            
+            if html_files:
+                logger.info(f"Found {len(html_files)} existing model card HTML files")
+                all_file_paths.extend(html_files)
+            else:
+                logger.info("No existing model card HTML files found")
+        
         # Build context with output path for relative path calculation
-        context = self.context_builder.build_gallery_context(file_paths, title, output_path)
+        context = self.context_builder.build_gallery_context(all_file_paths, title, output_path)
 
         # Render template
         html = self.renderer.render_gallery(context)

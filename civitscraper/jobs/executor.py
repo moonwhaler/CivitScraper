@@ -12,7 +12,7 @@ from ..api.client import CivitAIClient
 from ..config.loader import merge_configs
 from ..html.generator import HTMLGenerator
 from ..organization import FileOrganizer
-from ..scanner.discovery import filter_files, find_model_files
+from ..scanner.discovery import filter_files, find_html_files, find_model_files
 from ..scanner.processor import ModelProcessor
 
 logger = logging.getLogger(__name__)
@@ -201,10 +201,24 @@ class JobExecutor:
             if job_config.get("generate_gallery", False):
                 gallery_path = job_config.get("gallery_path", "gallery.html")
                 gallery_title = job_config.get("gallery_title", "Model Gallery")
+                include_existing = job_config.get("include_existing_in_gallery", True)
 
                 logger.info(f"Generating gallery at {gallery_path}")
-                self.html_generator.generate_gallery(
-                    list(metadata_dict.keys()), gallery_path, gallery_title
+                logger.debug(f"Include existing model cards: {include_existing}")
+                
+                # Create a temporary HTML generator with the job-specific configuration
+                # and pass the path_ids to use for finding existing HTML files
+                temp_html_generator = HTMLGenerator(job_specific_config)
+                
+                # Store the path_ids in the config for use by find_html_files
+                if include_existing:
+                    job_specific_config["gallery_path_ids"] = path_ids
+                
+                temp_html_generator.generate_gallery(
+                    list(metadata_dict.keys()), 
+                    gallery_path, 
+                    gallery_title,
+                    include_existing=include_existing
                 )
 
             return True

@@ -325,6 +325,70 @@ def get_image_path(
     return str(result)
 
 
+def find_html_files(config: Dict[str, Any], path_ids: Optional[List[str]] = None) -> List[str]:
+    """
+    Find existing model card HTML files in configured directories.
+
+    Args:
+        config: Configuration
+        path_ids: List of path IDs to search, or None for all
+
+    Returns:
+        List of valid model card HTML file paths
+    """
+    # Get input paths
+    input_paths = config.get("input_paths", {})
+
+    # If no path IDs specified, use all
+    if path_ids is None:
+        path_ids = list(input_paths.keys())
+
+    # Find HTML files for each path
+    html_files = []
+
+    for path_id in path_ids:
+        # Check if path ID exists
+        if path_id not in input_paths:
+            logger.error(f"Path ID not found: {path_id}")
+            continue
+
+        # Get path configuration
+        path_config = input_paths[path_id]
+
+        # Get directory
+        directory = path_config.get("path")
+        if not directory:
+            logger.error(f"No path specified for path ID: {path_id}")
+            continue
+
+        # Get recursive flag
+        recursive = path_config.get("recursive", True)
+
+        # Find HTML files
+        logger.debug(f"Scanning directory for HTML files: {directory}")
+        files = find_files(directory, ["*.html"], recursive)
+        
+        # Filter to only include valid model card HTML files
+        for html_file in files:
+            # Check if this is a model card HTML file by looking for a corresponding metadata file
+            # First, try to derive the model file path from the HTML path
+            html_dir = os.path.dirname(html_file)
+            html_basename = os.path.basename(html_file)
+            model_name = os.path.splitext(html_basename)[0]
+            
+            # Look for a metadata file with the same base name
+            metadata_path = os.path.join(html_dir, f"{model_name}.json")
+            
+            if os.path.isfile(metadata_path):
+                html_files.append(html_file)
+                logger.debug(f"Found valid model card HTML file: {html_file}")
+            else:
+                logger.debug(f"Skipping HTML file without metadata: {html_file}")
+
+    logger.info(f"Found {len(html_files)} valid model card HTML files")
+    return html_files
+
+
 def filter_files(files: List[str], skip_existing: bool = True) -> List[str]:
     """
     Filter files based on criteria.
