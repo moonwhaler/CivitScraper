@@ -203,7 +203,7 @@
     align-items: center;
     gap: 15px;
     flex: 1; /* Allow it to grow */
-    max-width: 78%; /* Increase max width */
+    max-width: 65%; /* Increase max width */
 }
 
 /* Search controls */
