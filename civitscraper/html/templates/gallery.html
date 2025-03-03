@@ -14,7 +14,25 @@
 {% block content %}
 <div class="gallery-container">
     {% if models %}
-    <div class="gallery-controls">
+    <div class="directory-tree-toggle">
+        <button id="toggle-directory-tree" title="Toggle directory tree">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+        </button>
+    </div>
+    
+    <div class="gallery-content-wrapper">
+        <div id="directory-tree" class="directory-tree">
+            <div class="directory-tree-header">
+                <h3>Categories</h3>
+                <button id="close-directory-tree" title="Close directory tree">×</button>
+            </div>
+            <div class="directory-tree-content">
+                <!-- Directory tree will be generated here -->
+            </div>
+        </div>
+
+        <div class="gallery-main-content">
+            <div class="gallery-controls">
         <div class="search-container">
             <input type="text" id="gallery-search" placeholder="Search models...">
             <button id="clear-search" title="Clear search">×</button>
@@ -59,11 +77,13 @@
         {% endfor %}
     </div>
     
-    {% else %}
-    <div class="empty-gallery">
-        <p>No models found.</p>
+            {% else %}
+            <div class="empty-gallery">
+                <p>No models found.</p>
+            </div>
+            {% endif %}
+        </div>
     </div>
-    {% endif %}
 </div>
 
 <!-- Inline script for gallery functionality -->
@@ -84,6 +104,10 @@
   const noResultsEl = document.getElementById('no-results');
   const modelCards = document.querySelectorAll('.model-card');
   const modelListItems = document.querySelectorAll('.model-list-item');
+  const directoryTree = document.getElementById('directory-tree');
+  const toggleDirectoryTreeBtn = document.getElementById('toggle-directory-tree');
+  const closeDirectoryTreeBtn = document.getElementById('close-directory-tree');
+  const directoryTreeContent = document.querySelector('.directory-tree-content');
   
   console.log("Gallery elements found:", {
     gridViewBtn, listViewBtn, modelsGrid, modelsList,
@@ -414,6 +438,228 @@
   }
   
   formatDates();
+  
+  // 5. Directory Tree Functionality
+  if (directoryTree && directoryTreeContent) {
+    // Generate directory structure from model data
+    function generateDirectoryTree() {
+      // Create map to store directory structure
+      const modelTypes = new Map();
+      const baseModels = new Map();
+      
+      // Process all models to build directory structure
+      modelCards.forEach(card => {
+        const type = card.dataset.type || 'Unknown';
+        const baseModel = card.dataset.baseModel || 'Unknown';
+        
+        // Count models by type
+        if (!modelTypes.has(type)) {
+          modelTypes.set(type, 1);
+        } else {
+          modelTypes.set(type, modelTypes.get(type) + 1);
+        }
+        
+        // Count models by base model
+        if (!baseModels.has(baseModel)) {
+          baseModels.set(baseModel, 1);
+        } else {
+          baseModels.set(baseModel, baseModels.get(baseModel) + 1);
+        }
+      });
+      
+      // Create directory tree HTML
+      const treeHtml = `
+        <div class="directory-category">
+          <div class="directory-category-header active" data-category="all">
+            <span class="directory-icon">📂</span>
+            <span class="directory-label">All Models</span>
+            <span class="directory-count">${modelCards.length}</span>
+          </div>
+        </div>
+        
+        <div class="directory-category">
+          <div class="directory-category-header" data-category="type">
+            <span class="directory-icon">📂</span>
+            <span class="directory-label">By Type</span>
+            <span class="directory-toggle">+</span>
+          </div>
+          <div class="directory-items" style="display: none;">
+            ${Array.from(modelTypes).map(([type, count]) => `
+              <div class="directory-item" data-filter-type="type" data-filter-value="${type.toLowerCase()}">
+                <span class="directory-icon">🏷️</span>
+                <span class="directory-label">${type}</span>
+                <span class="directory-count">${count}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        
+        <div class="directory-category">
+          <div class="directory-category-header" data-category="base-model">
+            <span class="directory-icon">📂</span>
+            <span class="directory-label">By Base Model</span>
+            <span class="directory-toggle">+</span>
+          </div>
+          <div class="directory-items" style="display: none;">
+            ${Array.from(baseModels).map(([baseModel, count]) => `
+              <div class="directory-item" data-filter-type="base-model" data-filter-value="${baseModel.toLowerCase()}">
+                <span class="directory-icon">🧩</span>
+                <span class="directory-label">${baseModel}</span>
+                <span class="directory-count">${count}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+      
+      // Insert tree HTML
+      directoryTreeContent.innerHTML = treeHtml;
+      
+      // Add event listeners to category headers
+      document.querySelectorAll('.directory-category-header').forEach(header => {
+        header.addEventListener('click', function() {
+          const category = this.getAttribute('data-category');
+          
+          if (category === 'all') {
+            // Reset filters when "All Models" is clicked
+            resetFilters();
+            
+            // Set active state
+            document.querySelectorAll('.directory-category-header').forEach(h => h.classList.remove('active'));
+            this.classList.add('active');
+            document.querySelectorAll('.directory-item').forEach(item => item.classList.remove('active'));
+          } else {
+            // Toggle child items visibility
+            const itemsContainer = this.nextElementSibling;
+            const isExpanded = itemsContainer.style.display !== 'none';
+            
+            // Update toggle symbol
+            this.querySelector('.directory-toggle').textContent = isExpanded ? '+' : '-';
+            
+            // Toggle display
+            itemsContainer.style.display = isExpanded ? 'none' : 'block';
+          }
+        });
+      });
+      
+      // Add event listeners to directory items
+      document.querySelectorAll('.directory-item').forEach(item => {
+        item.addEventListener('click', function(e) {
+          e.stopPropagation(); // Prevent triggering parent category click
+          
+          const filterType = this.getAttribute('data-filter-type');
+          const filterValue = this.getAttribute('data-filter-value');
+          
+          // Remove active class from all items
+          document.querySelectorAll('.directory-category-header').forEach(h => h.classList.remove('active'));
+          document.querySelectorAll('.directory-item').forEach(i => i.classList.remove('active'));
+          
+          // Add active class to clicked item
+          this.classList.add('active');
+          
+          // Apply filter
+          filterModels(filterType, filterValue);
+        });
+      });
+    }
+    
+    // Filter models based on directory selection
+    function filterModels(filterType, filterValue) {
+      console.log(`Filtering by ${filterType}: ${filterValue}`);
+      
+      let matchCount = 0;
+      
+      // Clear search input since we're filtering by directory
+      searchInput.value = '';
+      
+      // Process all model cards
+      modelCards.forEach(card => {
+        let isMatch = false;
+        
+        if (filterType === 'type') {
+          isMatch = (card.dataset.type || '').toLowerCase() === filterValue;
+        } else if (filterType === 'base-model') {
+          isMatch = (card.dataset.baseModel || '').toLowerCase() === filterValue;
+        }
+        
+        card.style.display = isMatch ? '' : 'none';
+        
+        if (isMatch) {
+          matchCount++;
+        }
+      });
+      
+      // Process all model list items
+      modelListItems.forEach(item => {
+        let isMatch = false;
+        
+        if (filterType === 'type') {
+          isMatch = (item.dataset.type || '').toLowerCase() === filterValue;
+        } else if (filterType === 'base-model') {
+          isMatch = (item.dataset.baseModel || '').toLowerCase() === filterValue;
+        }
+        
+        item.style.display = isMatch ? '' : 'none';
+      });
+      
+      // Show/hide no results message
+      noResultsEl.style.display = matchCount === 0 ? 'block' : 'none';
+      
+      console.log(`Filter found ${matchCount} matches`);
+      return matchCount;
+    }
+    
+    // Reset all filters
+    function resetFilters() {
+      console.log("Resetting all filters");
+      
+      // Show all model cards
+      modelCards.forEach(card => {
+        card.style.display = '';
+      });
+      
+      // Show all model list items
+      modelListItems.forEach(item => {
+        item.style.display = '';
+      });
+      
+      // Clear search
+      searchInput.value = '';
+      
+      // Hide no results message
+      noResultsEl.style.display = 'none';
+    }
+    
+    // Toggle directory tree visibility
+    function toggleDirectoryTree() {
+      const isVisible = directoryTree.classList.contains('visible');
+      
+      if (isVisible) {
+        directoryTree.classList.remove('visible');
+      } else {
+        directoryTree.classList.add('visible');
+      }
+      
+      storePreference('directoryTreeVisible', !isVisible);
+    }
+    
+    // Load saved directory tree state
+    const savedDirectoryTreeVisible = getPreference('directoryTreeVisible', 'true') === 'true';
+    if (savedDirectoryTreeVisible) {
+      directoryTree.classList.add('visible');
+    }
+    
+    // Add event listeners for directory tree toggle
+    toggleDirectoryTreeBtn.addEventListener('click', toggleDirectoryTree);
+    closeDirectoryTreeBtn.addEventListener('click', toggleDirectoryTree);
+    
+    // Generate directory tree
+    generateDirectoryTree();
+    
+    console.log("Directory tree initialized");
+  } else {
+    console.error("Directory tree elements not found");
+  }
   
   console.log("Gallery script initialization complete");
 })();

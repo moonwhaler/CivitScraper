@@ -1,8 +1,185 @@
 /* Gallery-specific styles */
 
-/* Gallery container and controls */
+/* Gallery container and layout */
 .gallery-container {
     margin-top: 20px;
+    position: relative;
+}
+
+/* Directory tree toggle button */
+.directory-tree-toggle {
+    position: fixed;
+    left: 20px;
+    top: 80px;
+    z-index: 100;
+}
+
+#toggle-directory-tree {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transition: background-color 0.2s, transform 0.2s;
+}
+
+#toggle-directory-tree:hover {
+    background-color: var(--button-hover);
+    transform: scale(1.05);
+}
+
+/* Gallery content wrapper */
+.gallery-content-wrapper {
+    display: flex;
+    gap: 20px;
+}
+
+/* Directory tree sidebar */
+.directory-tree {
+    width: 0;
+    flex-shrink: 0;
+    background-color: var(--card-background);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    height: calc(100vh - 160px);
+    position: sticky;
+    top: 80px;
+    transition: width 0.3s ease, opacity 0.3s ease;
+    opacity: 0;
+    margin-left: 40px;
+}
+
+.directory-tree.visible {
+    width: 280px;
+    opacity: 1;
+}
+
+.directory-tree-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.directory-tree-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+#close-directory-tree {
+    background: none;
+    border: none;
+    color: var(--metadata-label-color);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+#close-directory-tree:hover {
+    background-color: rgba(0, 0, 0, 0.2);
+    color: var(--text-color);
+}
+
+.directory-tree-content {
+    padding: 15px;
+    overflow-y: auto;
+    height: calc(100% - 60px);
+}
+
+/* Directory categories and items */
+.directory-category {
+    margin-bottom: 10px;
+}
+
+.directory-category-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    margin-bottom: 5px;
+}
+
+.directory-category-header:hover {
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+.directory-category-header.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.directory-icon {
+    margin-right: 8px;
+    font-size: 0.9rem;
+}
+
+.directory-label {
+    flex: 1;
+    font-size: 0.95rem;
+}
+
+.directory-count {
+    background-color: rgba(0, 0, 0, 0.2);
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    min-width: 25px;
+    text-align: center;
+}
+
+.directory-toggle {
+    margin-left: 5px;
+    font-size: 1rem;
+    width: 15px;
+    text-align: center;
+}
+
+.directory-items {
+    margin-left: 20px;
+}
+
+.directory-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    margin-bottom: 3px;
+}
+
+.directory-item:hover {
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+.directory-item.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+/* Gallery main content */
+.gallery-main-content {
+    flex: 1;
+    min-width: 0; /* Prevent flex item from overflowing */
 }
 
 .gallery-controls {
@@ -392,6 +569,35 @@
 }
 
 /* Responsive styles for gallery */
+@media (max-width: 1200px) {
+    .directory-tree.visible {
+        width: 240px;
+    }
+}
+
+@media (max-width: 992px) {
+    .directory-tree {
+        position: fixed;
+        left: 0;
+        top: 0;
+        height: 100vh;
+        z-index: 1000;
+        margin-left: 0;
+        border-radius: 0;
+        width: 0;
+        border: none;
+        border-right: 1px solid var(--border-color);
+    }
+    
+    .directory-tree.visible {
+        width: 280px;
+    }
+    
+    .directory-tree-header {
+        padding-top: 20px;
+    }
+}
+
 @media (max-width: 768px) {
     .gallery-controls {
         flex-direction: column;
@@ -430,5 +636,10 @@
         justify-content: flex-start;
         margin-top: 10px;
         margin-left: 0;
+    }
+    
+    .directory-tree.visible {
+        width: 100%;
+        max-width: 280px;
     }
 }
