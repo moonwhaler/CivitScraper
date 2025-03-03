@@ -22,6 +22,31 @@ class CivitAIClient:
         self._images = ImagesEndpoint(self._base_client)
         logger.debug("Initialized CivitAI API client")
 
+    @property
+    def api_key(self) -> Optional[str]:
+        """Get API key."""
+        return self._base_client.api_key
+
+    @property
+    def base_url(self) -> Any:
+        """Get base URL."""
+        return self._base_client.base_url
+
+    @property
+    def timeout(self) -> Any:
+        """Get timeout."""
+        return self._base_client.timeout
+
+    @property
+    def max_retries(self) -> Any:
+        """Get max retries."""
+        return self._base_client.max_retries
+
+    @property
+    def user_agent(self) -> Any:
+        """Get user agent."""
+        return self._base_client.user_agent
+
     def get_model(
         self, model_id: int, force_refresh: bool = False, typed: bool = False
     ) -> Union[Dict[str, Any], Model]:
