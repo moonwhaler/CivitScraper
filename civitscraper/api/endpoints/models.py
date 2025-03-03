@@ -49,7 +49,7 @@ class ModelsEndpoint(BaseEndpoint):
         """
         params: Dict[str, Any] = {"hashes[]": hash_value}
 
-        response = self._make_request(
+        response: Union[Dict[str, Any], SearchResult] = self._make_request(
             "GET",
             "models",
             params=params,
@@ -58,10 +58,10 @@ class ModelsEndpoint(BaseEndpoint):
         )
 
         # Extract first item from response
-        if isinstance(response, SearchResult) and response.items:
-            return cast(Model, response.items[0])
+        if isinstance(response, SearchResult) and len(response.items) > 0:
+            return response.items[0]
         if isinstance(response, dict):
-            items = response.get("items", [])
+            items: List[Any] = response.get("items", [])
             if items:
                 return cast(Dict[str, Any], items[0])
         return None
