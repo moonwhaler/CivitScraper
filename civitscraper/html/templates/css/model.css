@@ -1,5 +1,54 @@
 /* Model page specific styles */
 
+/* Trigger words section */
+.trigger-words-container {
+    margin: 20px 0;
+}
+
+.trigger-words-label {
+    font-weight: 500;
+    color: var(--metadata-label-color);
+    margin-bottom: 12px;
+    font-size: 0.9rem;
+}
+
+.trigger-words-groups {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.trigger-word-group {
+    background: rgba(52, 152, 219, 0.1);
+    border: 1px solid rgba(52, 152, 219, 0.2);
+    border-radius: 4px;
+    padding: 6px 10px;
+    color: var(--text-color);
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.trigger-word-group:hover {
+    background: rgba(52, 152, 219, 0.15);
+    border-color: rgba(52, 152, 219, 0.3);
+}
+
+.trigger-word-group .copy-icon {
+    font-size: 0.8rem;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.trigger-word-group:hover .copy-icon {
+    opacity: 1;
+}
+
+
 /* Model header */
 .model-header {
     display: flex;

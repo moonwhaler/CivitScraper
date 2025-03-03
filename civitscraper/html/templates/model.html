@@ -2,10 +2,11 @@
 
 {% block title %}{{ model_name }} - CivitAI Model{% endblock %}
 
-{% block page_styles %}
+{% block css %}
+{{ super() }}
 <!-- model.css -->
 <style>
-    {{ read_file('css/model.css') }}
+{{ read_file('css/model.css') }}
 </style>
 {% endblock %}
 
@@ -58,13 +59,15 @@
     </div>
 
     {% if metadata.trainedWords %}
-    <div class="metadata-item" style="margin-top: 20px;">
-        <div class="metadata-label">Trained Words:</div>
-        <div class="metadata-value copy-container">
-            {{ metadata.trainedWords|join(', ') }}
-            <span class="copy-icon" data-copy="{{ metadata.trainedWords|join(', ') }}">
-                📋
-            </span>
+    <div class="trigger-words-container">
+        <div class="trigger-words-label">Trigger Words</div>
+        <div class="trigger-words-groups">
+            {% for wordGroup in metadata.trainedWords %}
+            <div class="trigger-word-group" title="Click to copy">
+                {{ wordGroup }}
+                <span class="copy-icon">📋</span>
+            </div>
+            {% endfor %}
         </div>
     </div>
     {% endif %}
@@ -356,5 +359,29 @@
 {% endblock %}
 
 {% block page_scripts %}
-<!-- Any additional scripts can go here -->
+<script>
+// Copy to clipboard functionality for trigger words
+document.querySelectorAll('.trigger-word-group').forEach(group => {
+    group.addEventListener('click', () => {
+        const text = group.textContent.trim().replace('📋', '').trim();
+        const icon = group.querySelector('.copy-icon');
+        
+        navigator.clipboard.writeText(text)
+            .then(() => {
+                // Visual feedback
+                const originalText = icon.textContent;
+                icon.textContent = '✓';
+                group.style.background = 'rgba(46, 204, 113, 0.15)';
+                group.style.borderColor = 'rgba(46, 204, 113, 0.3)';
+                
+                setTimeout(() => {
+                    icon.textContent = originalText;
+                    group.style.background = '';
+                    group.style.borderColor = '';
+                }, 2000);
+            })
+            .catch(err => console.error('Failed to copy text:', err));
+    });
+});
+</script>
 {% endblock %}
