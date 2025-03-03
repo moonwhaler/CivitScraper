@@ -4,13 +4,15 @@
 .gallery-container {
     margin-top: 20px;
     position: relative;
+    max-width: 100%;
+    padding-left: 40px; /* Space for the toggle button */
 }
 
 /* Directory tree toggle button */
 .directory-tree-toggle {
-    position: fixed;
-    left: 20px;
-    top: 80px;
+    position: absolute;
+    left: 0;
+    top: 0;
     z-index: 100;
 }
 
@@ -18,7 +20,7 @@
     background-color: var(--primary-color);
     color: white;
     border: none;
-    border-radius: 50%;
+    border-radius: 4px 0 0 4px;
     width: 40px;
     height: 40px;
     display: flex;
@@ -31,13 +33,13 @@
 
 #toggle-directory-tree:hover {
     background-color: var(--button-hover);
-    transform: scale(1.05);
 }
 
 /* Gallery content wrapper */
 .gallery-content-wrapper {
     display: flex;
-    gap: 20px;
+    gap: 0;
+    position: relative;
 }
 
 /* Directory tree sidebar */
@@ -45,8 +47,9 @@
     width: 0;
     flex-shrink: 0;
     background-color: var(--card-background);
-    border-radius: 8px;
+    border-radius: 0 8px 8px 0;
     border: 1px solid var(--border-color);
+    border-left: none;
     overflow: hidden;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     height: calc(100vh - 160px);
@@ -54,7 +57,7 @@
     top: 80px;
     transition: width 0.3s ease, opacity 0.3s ease;
     opacity: 0;
-    margin-left: 40px;
+    margin-left: 0;
 }
 
 .directory-tree.visible {
@@ -180,6 +183,7 @@
 .gallery-main-content {
     flex: 1;
     min-width: 0; /* Prevent flex item from overflowing */
+    padding-left: 10px; /* Add some spacing from the directory tree */
 }
 
 .gallery-controls {
@@ -576,6 +580,20 @@
 }
 
 @media (max-width: 992px) {
+    .gallery-container {
+        padding-left: 0; /* Remove padding on mobile */
+    }
+    
+    .directory-tree-toggle {
+        position: fixed;
+        left: 0;
+        top: 80px;
+    }
+    
+    #toggle-directory-tree {
+        border-radius: 0 4px 4px 0;
+    }
+    
     .directory-tree {
         position: fixed;
         left: 0;
@@ -595,6 +613,10 @@
     
     .directory-tree-header {
         padding-top: 20px;
+    }
+    
+    .gallery-main-content {
+        padding-left: 0; /* Remove padding on mobile */
     }
 }
 
