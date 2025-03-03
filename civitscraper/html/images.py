@@ -52,7 +52,9 @@ class ImageHandler:
         """
         # Log the max_count value for debugging
         if self.max_count is not None:
-            logger.debug(f"ImageHandler using max_count limit: {self.max_count} for file: {file_path}")
+            logger.debug(
+                f"ImageHandler using max_count limit: {self.max_count} for file: {file_path}"
+            )
         else:
             logger.debug(f"ImageHandler processing all images for file: {file_path}")
 

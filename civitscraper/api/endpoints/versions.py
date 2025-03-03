@@ -3,7 +3,7 @@
 This module handles all model version-related API operations.
 """
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Union
 
 from ..models import ModelVersion
 from .base import BaseEndpoint
@@ -14,7 +14,7 @@ class VersionsEndpoint(BaseEndpoint):
 
     def get(
         self, version_id: int, force_refresh: bool = False, response_type: Optional[type] = None
-    ) -> Any:
+    ) -> Union[Dict[str, Any], ModelVersion]:
         """
         Get model version by ID.
 
@@ -35,7 +35,7 @@ class VersionsEndpoint(BaseEndpoint):
 
     def get_by_hash(
         self, hash_value: str, force_refresh: bool = False, response_type: Optional[type] = None
-    ) -> Any:
+    ) -> Union[Dict[str, Any], ModelVersion]:
         """
         Get model version by hash.
 
@@ -78,8 +78,9 @@ class VersionsEndpoint(BaseEndpoint):
             if not download_url:
                 return False
 
-            # Download model
-            return self.client.download(download_url, output_path)
+            # Download model and ensure boolean return
+            result = self.client.download(download_url, output_path)
+            return bool(result)
 
         except Exception:
             return False

@@ -15,6 +15,7 @@ from .api.client import CivitAIClient
 from .config.loader import load_and_validate_config
 from .html.generator import HTMLGenerator
 from .jobs.executor import JobExecutor
+
 # Removed templates module imports as part of job inheritance refactoring
 from .organization.organizer import FileOrganizer
 from .scanner.discovery import filter_files, find_model_files

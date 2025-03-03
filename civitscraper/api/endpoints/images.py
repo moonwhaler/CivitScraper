@@ -3,7 +3,7 @@
 This module handles all image-related API operations.
 """
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Union
 
 from ..models import ImageSearchResult
 from .base import BaseEndpoint
@@ -20,7 +20,7 @@ class ImagesEndpoint(BaseEndpoint):
         page: int = 1,
         force_refresh: bool = False,
         response_type: Optional[type] = None,
-    ) -> Any:
+    ) -> Union[Dict[str, Any], ImageSearchResult]:
         """
         Get images.
 
@@ -65,4 +65,8 @@ class ImagesEndpoint(BaseEndpoint):
         Returns:
             True if download was successful, False otherwise
         """
-        return self.client.download(url, output_path)
+        try:
+            result = self.client.download(url, output_path)
+            return bool(result)
+        except Exception:
+            return False

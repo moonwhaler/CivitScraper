@@ -87,7 +87,7 @@ def main():
             if "logging" not in config:
                 config["logging"] = {}
             config["logging"]["level"] = "DEBUG"
-            
+
             # Also set console logging level
             if "console" not in config["logging"]:
                 config["logging"]["console"] = {}

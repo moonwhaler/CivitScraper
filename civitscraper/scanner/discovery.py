@@ -367,7 +367,7 @@ def find_html_files(config: Dict[str, Any], path_ids: Optional[List[str]] = None
         # Find HTML files
         logger.debug(f"Scanning directory for HTML files: {directory}")
         files = find_files(directory, ["*.html"], recursive)
-        
+
         # Filter to only include valid model card HTML files
         for html_file in files:
             # Check if this is a model card HTML file by looking for a corresponding metadata file
@@ -375,10 +375,10 @@ def find_html_files(config: Dict[str, Any], path_ids: Optional[List[str]] = None
             html_dir = os.path.dirname(html_file)
             html_basename = os.path.basename(html_file)
             model_name = os.path.splitext(html_basename)[0]
-            
+
             # Look for a metadata file with the same base name
             metadata_path = os.path.join(html_dir, f"{model_name}.json")
-            
+
             if os.path.isfile(metadata_path):
                 html_files.append(html_file)
                 logger.debug(f"Found valid model card HTML file: {html_file}")

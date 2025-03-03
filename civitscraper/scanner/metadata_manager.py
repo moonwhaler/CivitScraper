@@ -10,6 +10,7 @@ import os
 from typing import Any, Dict, Optional
 
 from ..api.client import CivitAIClient
+from ..api.models import ModelVersion
 from .discovery import get_metadata_path
 
 logger = logging.getLogger(__name__)
@@ -55,10 +56,12 @@ class MetadataManager:
 
         try:
             logger.debug(f"Fetching metadata for hash {file_hash}")
-            metadata = self.api_client.get_model_version_by_hash(
+            response = self.api_client.get_model_version_by_hash(
                 file_hash, force_refresh=force_refresh
             )
-            return metadata
+            if isinstance(response, ModelVersion):
+                return response.__dict__
+            return response
         except Exception as e:
             logger.error(f"Failed to fetch metadata for hash {file_hash}: {e}")
             return None

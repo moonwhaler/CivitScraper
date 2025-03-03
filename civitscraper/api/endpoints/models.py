@@ -3,7 +3,7 @@
 This module handles all model-related API operations.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union, cast
 
 from ..models import Model, SearchResult
 from .base import BaseEndpoint
@@ -12,7 +12,9 @@ from .base import BaseEndpoint
 class ModelsEndpoint(BaseEndpoint):
     """Endpoint for model operations."""
 
-    def get(self, model_id: int, force_refresh: bool = False, response_type: Optional[type] = None) -> Any:
+    def get(
+        self, model_id: int, force_refresh: bool = False, response_type: Optional[type] = None
+    ) -> Union[Dict[str, Any], Model]:
         """
         Get model by ID.
 
@@ -33,7 +35,7 @@ class ModelsEndpoint(BaseEndpoint):
 
     def get_by_hash(
         self, hash_value: str, force_refresh: bool = False, response_type: Optional[type] = None
-    ) -> Optional[Any]:
+    ) -> Optional[Union[Dict[str, Any], Model]]:
         """
         Get model by hash.
 
@@ -56,13 +58,12 @@ class ModelsEndpoint(BaseEndpoint):
         )
 
         # Extract first item from response
+        if isinstance(response, SearchResult) and response.items:
+            return cast(Model, response.items[0])
         if isinstance(response, dict):
             items = response.get("items", [])
-            if not items or not isinstance(items[0], dict):
-                return None
-            return dict(items[0])
-        elif isinstance(response, SearchResult):
-            return response.items[0] if response.items else None
+            if items:
+                return cast(Dict[str, Any], items[0])
         return None
 
     def search(
@@ -78,7 +79,7 @@ class ModelsEndpoint(BaseEndpoint):
         page: int = 1,
         force_refresh: bool = False,
         response_type: Optional[type] = None,
-    ) -> Any:
+    ) -> Union[Dict[str, Any], SearchResult]:
         """
         Search models.
 

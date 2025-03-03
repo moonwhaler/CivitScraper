@@ -37,7 +37,7 @@ class TemplateRenderer:
         )
 
         # Add a function to read css/js files
-        self.env.globals['read_file'] = self._read_file
+        self.env.globals["read_file"] = self._read_file
 
         # Load templates
         self.model_template = self.env.get_template("model.html")
@@ -46,18 +46,21 @@ class TemplateRenderer:
     def _read_file(self, file_path: str) -> str:
         """
         Read file content for inclusion in templates.
-        
+
         Args:
             file_path: Path to file relative to templates directory
-            
+
         Returns:
             File content as string
         """
-        template_dir = self.env.loader.searchpath[0]
+        loader = self.env.loader
+        if not isinstance(loader, FileSystemLoader):
+            raise RuntimeError("Template loader not properly initialized")
+        template_dir = loader.searchpath[0]
         full_path = os.path.join(template_dir, file_path)
-        
+
         try:
-            with open(full_path, 'r', encoding='utf-8') as f:
+            with open(full_path, "r", encoding="utf-8") as f:
                 return f.read()
         except Exception as e:
             logger.error(f"Error reading file {file_path}: {e}")

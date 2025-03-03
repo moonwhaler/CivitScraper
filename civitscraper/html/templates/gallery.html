@@ -19,7 +19,7 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
         </button>
     </div>
-    
+
     <div class="gallery-content-wrapper">
         <div id="directory-tree" class="directory-tree">
             <div class="directory-tree-header">
@@ -42,13 +42,13 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
                 </button>
             </div>
-            
+
             <div class="search-container">
                 <input type="text" id="gallery-search" placeholder="Search models...">
                 <button id="clear-search" title="Clear search">×</button>
             </div>
         </div>
-        
+
         <div class="sort-controls">
             <select id="sort-by" title="Sort by">
                 <option value="name">Name</option>
@@ -62,23 +62,23 @@
             </button>
         </div>
     </div>
-    
+
     <div id="no-results" class="no-results" style="display: none;">
         <p>No matching models found. Try adjusting your search.</p>
     </div>
-    
+
     <div class="models-grid view-active">
         {% for model in models %}
             {% include "components/model_card.html" %}
         {% endfor %}
     </div>
-    
+
     <div class="models-list">
         {% for model in models %}
             {% include "components/model_list_item.html" %}
         {% endfor %}
     </div>
-    
+
             {% else %}
             <div class="empty-gallery">
                 <p>No models found.</p>
@@ -93,7 +93,7 @@
 // Immediately executing function for gallery functionality
 (function() {
   console.log("Gallery functionality script running");
-  
+
   // DOM Elements
   const gridViewBtn = document.getElementById('grid-view');
   const listViewBtn = document.getElementById('list-view');
@@ -110,13 +110,13 @@
   const toggleDirectoryTreeBtn = document.getElementById('toggle-directory-tree');
   const closeDirectoryTreeBtn = document.getElementById('close-directory-tree');
   const directoryTreeContent = document.querySelector('.directory-tree-content');
-  
+
   console.log("Gallery elements found:", {
     gridViewBtn, listViewBtn, modelsGrid, modelsList,
     searchInput, clearSearchBtn, sortBySelect, sortDirectionBtn,
     modelCards: modelCards.length, modelListItems: modelListItems.length
   });
-  
+
   // Helper for localStorage
   function storePreference(key, value) {
     try {
@@ -125,7 +125,7 @@
       console.warn('localStorage not available:', e);
     }
   }
-  
+
   function getPreference(key, defaultValue) {
     try {
       const value = localStorage.getItem('gallery_' + key);
@@ -135,7 +135,7 @@
       return defaultValue;
     }
   }
-  
+
   // 1. View Toggle Functionality
   if (gridViewBtn && listViewBtn) {
     function setViewMode(mode) {
@@ -153,50 +153,50 @@
       }
       storePreference('view', mode);
     }
-    
+
     gridViewBtn.addEventListener('click', function() {
       setViewMode('grid');
     });
-    
+
     listViewBtn.addEventListener('click', function() {
       setViewMode('list');
     });
-    
+
     // Load saved view preference
     const savedView = getPreference('view', 'grid');
     if (savedView === 'list') {
       setViewMode('list');
     }
-    
+
     console.log("View toggle event listeners attached");
   } else {
     console.error("View toggle buttons not found");
   }
-  
+
   // 2. Sorting Functionality
   if (sortBySelect && sortDirectionBtn) {
     function sortModels(sortBy, direction) {
       console.log(`Sorting by: ${sortBy}, direction: ${direction}`);
-      
+
       // Store preferences
       storePreference('sortBy', sortBy);
       storePreference('sortDir', direction);
-      
+
       const multiplier = direction === 'asc' ? 1 : -1;
-      
+
       // Sort function for different data types
       function compareValues(a, b) {
         let valueA, valueB;
-        
+
         if (sortBy === 'name') {
           valueA = a.dataset.name || '';
           valueB = b.dataset.name || '';
           return multiplier * valueA.localeCompare(valueB);
-        } 
+        }
         else if (sortBy === 'rating') {
           valueA = parseFloat(a.dataset.rating) || 0;
           valueB = parseFloat(b.dataset.rating) || 0;
-        } 
+        }
         else if (sortBy === 'downloads') {
           valueA = parseInt(a.dataset.downloads) || 0;
           valueB = parseInt(b.dataset.downloads) || 0;
@@ -206,7 +206,7 @@
           valueA = a.dataset[sortBy] ? new Date(a.dataset[sortBy]).getTime() : 0;
           valueB = b.dataset[sortBy] ? new Date(b.dataset[sortBy]).getTime() : 0;
         }
-        
+
         // For numeric values
         if (valueA === valueB) {
           // Secondary sort by name if values are equal
@@ -214,36 +214,36 @@
         }
         return multiplier * (valueA - valueB);
       }
-      
+
       // Convert collections to arrays for sorting
       const gridItems = Array.from(modelCards);
       const listItems = Array.from(modelListItems);
-      
+
       // Sort grid items
       gridItems.sort(compareValues);
       gridItems.forEach(item => modelsGrid.appendChild(item));
-      
+
       // Sort list items
       listItems.sort(compareValues);
       listItems.forEach(item => modelsList.appendChild(item));
-      
+
       console.log(`Sorted ${gridItems.length} grid items and ${listItems.length} list items`);
     }
-    
+
     // Load saved sort preferences
     const savedSortBy = getPreference('sortBy', 'name');
     const savedSortDir = getPreference('sortDir', 'desc');
-    
+
     // Initialize with saved preferences
     sortBySelect.value = savedSortBy;
     sortDirectionBtn.setAttribute('data-direction', savedSortDir);
     if (savedSortDir === 'asc') {
       sortDirectionBtn.querySelector('svg').style.transform = 'rotate(180deg)';
     }
-    
+
     // Apply initial sorting
     sortModels(savedSortBy, savedSortDir);
-    
+
     // Add event listeners
     sortBySelect.addEventListener('change', function() {
       console.log("Sort by changed:", this.value);
@@ -251,48 +251,48 @@
       const direction = sortDirectionBtn.getAttribute('data-direction');
       sortModels(sortBy, direction);
     });
-    
+
     sortDirectionBtn.addEventListener('click', function() {
       const currentDirection = this.getAttribute('data-direction');
       const newDirection = currentDirection === 'desc' ? 'asc' : 'desc';
-      
+
       console.log("Sort direction changed:", newDirection);
-      
+
       this.setAttribute('data-direction', newDirection);
-      
+
       // Toggle the arrow direction
       if (newDirection === 'asc') {
         this.querySelector('svg').style.transform = 'rotate(180deg)';
       } else {
         this.querySelector('svg').style.transform = '';
       }
-      
+
       sortModels(sortBySelect.value, newDirection);
     });
-    
+
     console.log("Sort functionality event listeners attached");
   } else {
     console.error("Sort controls not found");
   }
-  
+
   // 3. Search Functionality
   if (searchInput && clearSearchBtn) {
     let debounceTimeout;
-    
+
     function debounce(fn, delay) {
       return function(...args) {
         clearTimeout(debounceTimeout);
         debounceTimeout = setTimeout(() => fn.apply(this, args), delay);
       };
     }
-    
+
     function escapeRegExp(string) {
       return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
-    
+
     function highlightText(element, searchText) {
       if (!searchText.trim()) return;
-      
+
       const allTextNodes = [];
       const walker = document.createTreeWalker(
         element,
@@ -300,23 +300,23 @@
         { acceptNode: node => node.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT },
         false
       );
-      
+
       let node;
       while (node = walker.nextNode()) {
         allTextNodes.push(node);
       }
-      
+
       const regex = new RegExp(`(${escapeRegExp(searchText)})`, 'gi');
       allTextNodes.forEach(textNode => {
         const parent = textNode.parentNode;
         if (parent.nodeName === 'SCRIPT' || parent.closest('.highlight')) return;
-        
+
         const matches = textNode.nodeValue.match(regex);
         if (!matches) return;
-        
+
         const fragment = document.createDocumentFragment();
         const parts = textNode.nodeValue.split(regex);
-        
+
         parts.forEach((part, i) => {
           if (i % 2 === 0) {
             // Regular text
@@ -329,11 +329,11 @@
             fragment.appendChild(highlightSpan);
           }
         });
-        
+
         parent.replaceChild(fragment, textNode);
       });
     }
-    
+
     function removeHighlights(element) {
       const highlights = element.querySelectorAll('.highlight');
       highlights.forEach(highlight => {
@@ -343,92 +343,92 @@
         parent.normalize(); // Combine adjacent text nodes
       });
     }
-    
+
     function searchModels(searchText) {
       console.log("Searching for:", searchText);
-      
+
       searchText = searchText.trim().toLowerCase();
       let matchCount = 0;
-      
+
       // Process all model cards
       modelCards.forEach(card => {
         removeHighlights(card);
-        
+
         const name = card.dataset.name || '';
         const type = card.dataset.type || '';
         const baseModel = card.dataset.baseModel || '';
         const description = card.dataset.description || '';
-        
-        const isMatch = !searchText || 
-          name.includes(searchText) || 
-          type.includes(searchText) || 
-          baseModel.includes(searchText) || 
+
+        const isMatch = !searchText ||
+          name.includes(searchText) ||
+          type.includes(searchText) ||
+          baseModel.includes(searchText) ||
           description.includes(searchText);
-        
+
         card.style.display = isMatch ? '' : 'none';
-        
+
         if (isMatch) {
           matchCount++;
           highlightText(card, searchText);
         }
       });
-      
+
       // Process all model list items
       modelListItems.forEach(item => {
         removeHighlights(item);
-        
+
         const name = item.dataset.name || '';
         const type = item.dataset.type || '';
         const baseModel = item.dataset.baseModel || '';
         const description = item.dataset.description || '';
-        
-        const isMatch = !searchText || 
-          name.includes(searchText) || 
-          type.includes(searchText) || 
-          baseModel.includes(searchText) || 
+
+        const isMatch = !searchText ||
+          name.includes(searchText) ||
+          type.includes(searchText) ||
+          baseModel.includes(searchText) ||
           description.includes(searchText);
-        
+
         item.style.display = isMatch ? '' : 'none';
-        
+
         if (isMatch) {
           highlightText(item, searchText);
         }
       });
-      
+
       // Show/hide no results message
       noResultsEl.style.display = matchCount === 0 ? 'block' : 'none';
-      
+
       console.log(`Search found ${matchCount} matches`);
       return matchCount;
     }
-    
+
     const debouncedSearch = debounce(searchModels, 300);
-    
+
     searchInput.addEventListener('input', function() {
       debouncedSearch(this.value);
     });
-    
+
     clearSearchBtn.addEventListener('click', function() {
       searchInput.value = '';
       searchModels('');
       searchInput.focus();
     });
-    
+
     console.log("Search functionality event listeners attached");
   } else {
     console.error("Search controls not found");
   }
-  
+
   // 4. Format Dates
   function formatDates() {
     document.querySelectorAll('.date-value').forEach(dateEl => {
       const dateStr = dateEl.textContent;
       if (!dateStr) return;
-      
+
       try {
         const date = new Date(dateStr);
         if (isNaN(date.getTime())) return;
-        
+
         // Format: YYYY-MM-DD
         const formatted = date.toISOString().split('T')[0];
         dateEl.textContent = formatted;
@@ -438,9 +438,9 @@
     });
     console.log("Date formatting applied");
   }
-  
+
   formatDates();
-  
+
   // 5. Directory Tree Functionality
   if (directoryTree && directoryTreeContent) {
     // Generate directory structure from model data
@@ -448,19 +448,19 @@
       // Create map to store directory structure
       const modelTypes = new Map();
       const baseModels = new Map();
-      
+
       // Process all models to build directory structure
       modelCards.forEach(card => {
         const type = card.dataset.type || 'Unknown';
         const baseModel = card.dataset.baseModel || 'Unknown';
-        
+
         // Count models by type
         if (!modelTypes.has(type)) {
           modelTypes.set(type, 1);
         } else {
           modelTypes.set(type, modelTypes.get(type) + 1);
         }
-        
+
         // Count models by base model
         if (!baseModels.has(baseModel)) {
           baseModels.set(baseModel, 1);
@@ -468,7 +468,7 @@
           baseModels.set(baseModel, baseModels.get(baseModel) + 1);
         }
       });
-      
+
       // Create directory tree HTML
       const treeHtml = `
         <div class="directory-category">
@@ -478,7 +478,7 @@
             <span class="directory-count">${modelCards.length}</span>
           </div>
         </div>
-        
+
         <div class="directory-category">
           <div class="directory-category-header" data-category="type">
             <span class="directory-icon">📂</span>
@@ -495,7 +495,7 @@
             `).join('')}
           </div>
         </div>
-        
+
         <div class="directory-category">
           <div class="directory-category-header" data-category="base-model">
             <span class="directory-icon">📂</span>
@@ -513,19 +513,19 @@
           </div>
         </div>
       `;
-      
+
       // Insert tree HTML
       directoryTreeContent.innerHTML = treeHtml;
-      
+
       // Add event listeners to category headers
       document.querySelectorAll('.directory-category-header').forEach(header => {
         header.addEventListener('click', function() {
           const category = this.getAttribute('data-category');
-          
+
           if (category === 'all') {
             // Reset filters when "All Models" is clicked
             resetFilters();
-            
+
             // Set active state
             document.querySelectorAll('.directory-category-header').forEach(h => h.classList.remove('active'));
             this.classList.add('active');
@@ -534,135 +534,135 @@
             // Toggle child items visibility
             const itemsContainer = this.nextElementSibling;
             const isExpanded = itemsContainer.style.display !== 'none';
-            
+
             // Update toggle symbol
             this.querySelector('.directory-toggle').textContent = isExpanded ? '+' : '-';
-            
+
             // Toggle display
             itemsContainer.style.display = isExpanded ? 'none' : 'block';
           }
         });
       });
-      
+
       // Add event listeners to directory items
       document.querySelectorAll('.directory-item').forEach(item => {
         item.addEventListener('click', function(e) {
           e.stopPropagation(); // Prevent triggering parent category click
-          
+
           const filterType = this.getAttribute('data-filter-type');
           const filterValue = this.getAttribute('data-filter-value');
-          
+
           // Remove active class from all items
           document.querySelectorAll('.directory-category-header').forEach(h => h.classList.remove('active'));
           document.querySelectorAll('.directory-item').forEach(i => i.classList.remove('active'));
-          
+
           // Add active class to clicked item
           this.classList.add('active');
-          
+
           // Apply filter
           filterModels(filterType, filterValue);
         });
       });
     }
-    
+
     // Filter models based on directory selection
     function filterModels(filterType, filterValue) {
       console.log(`Filtering by ${filterType}: ${filterValue}`);
-      
+
       let matchCount = 0;
-      
+
       // Clear search input since we're filtering by directory
       searchInput.value = '';
-      
+
       // Process all model cards
       modelCards.forEach(card => {
         let isMatch = false;
-        
+
         if (filterType === 'type') {
           isMatch = (card.dataset.type || '').toLowerCase() === filterValue;
         } else if (filterType === 'base-model') {
           isMatch = (card.dataset.baseModel || '').toLowerCase() === filterValue;
         }
-        
+
         card.style.display = isMatch ? '' : 'none';
-        
+
         if (isMatch) {
           matchCount++;
         }
       });
-      
+
       // Process all model list items
       modelListItems.forEach(item => {
         let isMatch = false;
-        
+
         if (filterType === 'type') {
           isMatch = (item.dataset.type || '').toLowerCase() === filterValue;
         } else if (filterType === 'base-model') {
           isMatch = (item.dataset.baseModel || '').toLowerCase() === filterValue;
         }
-        
+
         item.style.display = isMatch ? '' : 'none';
       });
-      
+
       // Show/hide no results message
       noResultsEl.style.display = matchCount === 0 ? 'block' : 'none';
-      
+
       console.log(`Filter found ${matchCount} matches`);
       return matchCount;
     }
-    
+
     // Reset all filters
     function resetFilters() {
       console.log("Resetting all filters");
-      
+
       // Show all model cards
       modelCards.forEach(card => {
         card.style.display = '';
       });
-      
+
       // Show all model list items
       modelListItems.forEach(item => {
         item.style.display = '';
       });
-      
+
       // Clear search
       searchInput.value = '';
-      
+
       // Hide no results message
       noResultsEl.style.display = 'none';
     }
-    
+
     // Toggle directory tree visibility
     function toggleDirectoryTree() {
       const isVisible = directoryTree.classList.contains('visible');
-      
+
       if (isVisible) {
         directoryTree.classList.remove('visible');
       } else {
         directoryTree.classList.add('visible');
       }
-      
+
       storePreference('directoryTreeVisible', !isVisible);
     }
-    
+
     // Load saved directory tree state
     const savedDirectoryTreeVisible = getPreference('directoryTreeVisible', 'false') === 'true';
     if (savedDirectoryTreeVisible) {
       directoryTree.classList.add('visible');
     }
-    
+
     // Add event listeners for directory tree toggle
     toggleDirectoryTreeBtn.addEventListener('click', toggleDirectoryTree);
     closeDirectoryTreeBtn.addEventListener('click', toggleDirectoryTree);
-    
+
     // Generate directory tree
     generateDirectoryTree();
-    
+
     console.log("Directory tree initialized");
   } else {
     console.error("Directory tree elements not found");
   }
-  
+
   console.log("Gallery script initialization complete");
 })();
 </script>

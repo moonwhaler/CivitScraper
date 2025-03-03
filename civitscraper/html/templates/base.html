@@ -4,19 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Model Gallery{% endblock %}</title>
-    
+
     <!-- CSS includes -->
     {% block css %}
     <!-- base.css -->
     <style>
         {{ read_file('css/base.css') }}
     </style>
-    
+
     <!-- components.css -->
     <style>
         {{ read_file('css/components.css') }}
     </style>
-    
+
     <!-- Additional page-specific styles -->
     {% block page_styles %}{% endblock %}
     {% endblock %}
@@ -38,7 +38,7 @@
     <script>
         {{ read_file('js/base.js') }}
     </script>
-    
+
     <!-- Additional page-specific scripts -->
     {% block page_scripts %}{% endblock %}
     {% endblock %}

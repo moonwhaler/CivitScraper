@@ -12,7 +12,7 @@ from ..api.client import CivitAIClient
 from ..config.loader import merge_configs
 from ..html.generator import HTMLGenerator
 from ..organization import FileOrganizer
-from ..scanner.discovery import filter_files, find_html_files, find_model_files
+from ..scanner.discovery import filter_files, find_model_files
 from ..scanner.processor import ModelProcessor
 
 logger = logging.getLogger(__name__)
@@ -152,16 +152,20 @@ class JobExecutor:
 
             # Use the job configuration directly
             job_specific_config = self.config.copy()
-            
+
             # Apply job-specific configuration
             for key, value in job_config.items():
-                if key in job_specific_config and isinstance(job_specific_config[key], dict) and isinstance(value, dict):
+                if (
+                    key in job_specific_config
+                    and isinstance(job_specific_config[key], dict)
+                    and isinstance(value, dict)
+                ):
                     # For dictionary values, merge them
                     job_specific_config[key] = merge_configs(job_specific_config[key], value)
                 else:
                     # For other values, override them
                     job_specific_config[key] = value
-            
+
             # Create a temporary processor with the job-specific configuration
             temp_processor = ModelProcessor(
                 job_specific_config, self.api_client, self.html_generator
@@ -193,9 +197,7 @@ class JobExecutor:
 
                 # Create a job-specific organizer with the updated configuration
                 job_organizer = FileOrganizer(job_specific_config)
-                job_organizer.organize_files(
-                    list(metadata_dict.keys()), metadata_dict
-                )
+                job_organizer.organize_files(list(metadata_dict.keys()), metadata_dict)
 
             # Generate gallery
             if job_config.get("generate_gallery", False):
@@ -205,20 +207,20 @@ class JobExecutor:
 
                 logger.info(f"Generating gallery at {gallery_path}")
                 logger.debug(f"Include existing model cards: {include_existing}")
-                
+
                 # Create a temporary HTML generator with the job-specific configuration
                 # and pass the path_ids to use for finding existing HTML files
                 temp_html_generator = HTMLGenerator(job_specific_config)
-                
+
                 # Store the path_ids in the config for use by find_html_files
                 if include_existing:
                     job_specific_config["gallery_path_ids"] = path_ids
-                
+
                 temp_html_generator.generate_gallery(
-                    list(metadata_dict.keys()), 
-                    gallery_path, 
+                    list(metadata_dict.keys()),
+                    gallery_path,
                     gallery_title,
-                    include_existing=include_existing
+                    include_existing=include_existing,
                 )
 
             return True

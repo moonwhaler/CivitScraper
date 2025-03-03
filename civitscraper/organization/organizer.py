@@ -34,9 +34,7 @@ class FileOrganizer:
         self.path_formatter = PathFormatter()
         self.file_handler = FileOperationHandler(config)
 
-    def organize_file(
-        self, file_path: str, metadata: Dict[str, Any]
-    ) -> Optional[str]:
+    def organize_file(self, file_path: str, metadata: Dict[str, Any]) -> Optional[str]:
         """
         Organize a model file.
 

@@ -107,18 +107,20 @@ class ImageManager:
         """
         # Get max_count from config
         max_count = self.output_config.get("images", {}).get("max_count")
-        
+
         if max_count is not None:
             # If max_count is set, only remove specific preview files up to max_count
             for i in range(max_count):
-                for ext in ['.jpeg', '.jpg', '.png', '.webp', '.mp4']:
+                for ext in [".jpeg", ".jpg", ".png", ".webp", ".mp4"]:
                     preview_path = os.path.join(model_dir, f"{model_name}.preview{i}{ext}")
                     if os.path.isfile(preview_path):
                         try:
                             os.remove(preview_path)
                             logger.debug(f"Removed old preview image: {preview_path}")
                         except Exception as e:
-                            logger.warning(f"Failed to remove old preview image {preview_path}: {e}")
+                            logger.warning(
+                                f"Failed to remove old preview image {preview_path}: {e}"
+                            )
         else:
             # If no max_count, clean up all preview files
             preview_pattern = os.path.join(model_dir, f"{model_name}.preview*.*")

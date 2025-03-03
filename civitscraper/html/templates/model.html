@@ -116,15 +116,15 @@
 // Immediately executing function for image viewer functionality
 (function() {
   console.log("Image viewer script running");
-  
+
   const galleryItems = document.querySelectorAll('.gallery-item');
   if (galleryItems.length === 0) {
     console.warn('No gallery items found, skipping image viewer initialization');
     return;
   }
-  
+
   console.log(`Found ${galleryItems.length} gallery items`);
-  
+
   const imageViewer = document.getElementById('image-viewer');
   const viewerImage = document.getElementById('viewer-image');
   const viewerVideo = document.getElementById('viewer-video');
@@ -138,21 +138,21 @@
   const imagesDataElem = document.getElementById('images-data');
 
   console.log("Image viewer elements:", {
-    imageViewer, viewerImage, viewerVideo, positivePrompt, 
+    imageViewer, viewerImage, viewerVideo, positivePrompt,
     negativePrompt, additionalInfo, closeButton, prevButton, nextButton,
     copyButtons: copyButtons.length, imagesDataElem
   });
 
   // Verify all required elements exist
-  if (!imageViewer || !viewerImage || !viewerVideo || !positivePrompt || 
-      !negativePrompt || !additionalInfo || !closeButton || 
+  if (!imageViewer || !viewerImage || !viewerVideo || !positivePrompt ||
+      !negativePrompt || !additionalInfo || !closeButton ||
       !prevButton || !nextButton || !imagesDataElem) {
     console.error('Missing required DOM elements for image viewer functionality');
     return;
   }
 
   let currentIndex = 0;
-  
+
   // Function to decode base64 encoded JSON data
   function decodeBase64Json(base64String) {
     try {
@@ -175,10 +175,10 @@
       console.error('No encoded image data found');
       return;
     }
-    
+
     imageData = decodeBase64Json(encodedData);
     console.log(`Successfully decoded image data for ${imageData.length} images`);
-    
+
     if (!Array.isArray(imageData) || imageData.length === 0) {
       console.warn('Image data is empty or invalid');
       return;
@@ -200,7 +200,7 @@
 
       const data = imageData[index];
       const galleryItem = galleryItems[index];
-      
+
       // Check if this is a video or image
       const isVideo = data.is_video || false;
 
@@ -312,7 +312,7 @@
       }
 
       const text = targetElement.textContent;
-      
+
       navigator.clipboard.writeText(text)
         .then(() => {
           button.textContent = '✓ Copied!';
@@ -365,7 +365,7 @@ document.querySelectorAll('.trigger-word-group').forEach(group => {
     group.addEventListener('click', () => {
         const text = group.textContent.trim().replace('📋', '').trim();
         const icon = group.querySelector('.copy-icon');
-        
+
         navigator.clipboard.writeText(text)
             .then(() => {
                 // Visual feedback
@@ -373,7 +373,7 @@ document.querySelectorAll('.trigger-word-group').forEach(group => {
                 icon.textContent = '✓';
                 group.style.background = 'rgba(46, 204, 113, 0.15)';
                 group.style.borderColor = 'rgba(46, 204, 113, 0.3)';
-                
+
                 setTimeout(() => {
                     icon.textContent = originalText;
                     group.style.background = '';
