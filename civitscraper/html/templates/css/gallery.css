@@ -373,7 +373,7 @@
 }
 
 .model-preview {
-    height: 150px;
+    height: 250px;
     overflow: hidden;
     position: relative;
     background-color: rgba(0, 0, 0, 0.2);
@@ -405,12 +405,12 @@
 }
 
 .model-info {
-    padding: 15px;
+    padding: 12px;
 }
 
 .model-name {
-    margin: 0 0 8px 0;
-    font-size: 1.1rem;
+    margin: 0 0 6px 0;
+    font-size: 0.95rem;
     font-weight: 500;
     color: var(--text-color);
 }
@@ -418,29 +418,29 @@
 .model-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
-    font-size: 0.85rem;
+    gap: 8px;
+    font-size: 0.75rem;
 }
 
 .model-type {
     color: var(--primary-color);
     background-color: rgba(52, 152, 219, 0.1);
-    padding: 2px 8px;
-    border-radius: 4px;
+    padding: 2px 6px;
+    border-radius: 3px;
 }
 
 .model-base {
     color: var(--text-color);
     background-color: rgba(46, 204, 113, 0.1);
-    padding: 2px 8px;
-    border-radius: 4px;
+    padding: 2px 6px;
+    border-radius: 3px;
 }
 
 .model-stats {
     display: flex;
-    gap: 15px;
-    margin-top: 8px;
-    font-size: 0.85rem;
+    gap: 12px;
+    margin-top: 6px;
+    font-size: 0.75rem;
 }
 
 .stat-item {
@@ -461,12 +461,12 @@
 
 .stat-count {
     color: var(--metadata-label-color);
-    font-size: 0.8rem;
+    font-size: 0.7rem;
 }
 
 .model-version {
-    margin-top: 8px;
-    font-size: 0.8rem;
+    margin-top: 6px;
+    font-size: 0.7rem;
     color: var(--metadata-label-color);
 }
 
