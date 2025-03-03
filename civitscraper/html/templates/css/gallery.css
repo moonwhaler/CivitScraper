@@ -234,25 +234,27 @@
 #clear-search {
     position: absolute;
     right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
+    top: 8px;
+    background-color: rgba(0, 0, 0, 0.2);
     border: none;
-    color: var(--metadata-label-color);
+    border-radius: 50%;
+    color: var(--text-color);
     font-size: 1.2rem;
     cursor: pointer;
     padding: 0;
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
-    opacity: 0.7;
-    transition: opacity 0.2s;
+    opacity: 0.8;
+    transition: all 0.2s;
 }
 
 #clear-search:hover {
     opacity: 1;
+    background-color: rgba(0, 0, 0, 0.4);
+    color: white;
 }
 
 /* View toggle controls */
