@@ -7,11 +7,23 @@ This module handles preparing context data for templates.
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypedDict
 
 from .images import ImageHandler
 from .paths import PathManager
 from .sanitizer import DataSanitizer
+
+
+# Define a typed dictionary for the preview image result
+class PreviewImageDict(TypedDict):
+    """TypedDict representing a preview image with path and video flag."""
+
+    path: str
+    is_video: bool
+
+
+# Type alias for the optional preview image result
+PreviewImageResult = Optional[PreviewImageDict]
 
 logger = logging.getLogger(__name__)
 
@@ -101,213 +113,238 @@ class ContextBuilder:
         Returns:
             Template context
         """
-        # Prepare context with explicit type annotations
         context: Dict[str, Any] = {
             "title": title,
-            "models": [],  # Initialize as an empty list
+            "models": [],
             "output_path": output_path,
         }
 
-        # Add models to context
         for file_path in file_paths:
-            # Check if this is an HTML file or a model file
-            is_html_file = file_path.lower().endswith(".html")
-
-            # Get metadata path and HTML path based on file type
-            if is_html_file:
-                # For HTML files, the metadata file should be in the same dir (and same base name)
-                metadata_path = os.path.splitext(file_path)[0] + ".json"
-                html_path = file_path  # The file is already an HTML file
-                logger.debug(f"Processing existing HTML file: {file_path}")
-            else:
-                # For model files, get the metadata path and HTML path as before
-                metadata_path = os.path.splitext(file_path)[0] + ".json"
-                html_path = self.path_manager.get_html_path(file_path)
-                logger.debug(f"Processing model file: {file_path}")
-
-            # Check if metadata exists
-            if not os.path.isfile(metadata_path):
-                logger.warning(f"Metadata not found for {file_path}")
-                continue
-
-            # Load metadata
-            try:
-                with open(metadata_path, "r", encoding="utf-8") as f:
-                    metadata = json.load(f)
-            except Exception as e:
-                logger.error(f"Error loading metadata for {file_path}: {e}")
-                continue
-
-            # Calculate relative paths
-            # If output_path is not provided, use the file_path's directory as reference
-            output_dir = os.path.dirname(output_path) if output_path else os.path.dirname(file_path)
-            html_rel_path = os.path.relpath(html_path, output_dir)
-
-            # Log paths for debugging
-            logger.debug(f"Gallery output dir: {output_dir}")
-            logger.debug(f"HTML path: {html_path}")
-            logger.debug(f"HTML relative path: {html_rel_path}")
-
-            # Get base preview path without extension
-            if is_html_file:
-                # For HTML files, we need to determine the model file path to find preview images
-                # Assume model file has the same base name as HTML file with different extension
-                html_dir = os.path.dirname(file_path)
-                model_name = os.path.splitext(os.path.basename(file_path))[0]
-
-                # Look for potential model files with common extensions
-                model_file_path = None
-                for ext in [".safetensors", ".ckpt", ".pt", ".bin"]:
-                    potential_path = os.path.join(html_dir, model_name + ext)
-                    if os.path.isfile(potential_path):
-                        model_file_path = potential_path
-                        break
-
-                if model_file_path:
-                    # Use the path manager with the actual model file path
-                    logger.debug(f"Found model file for HTML: {model_file_path}")
-                    base_preview_path = os.path.splitext(
-                        self.path_manager.get_image_path(model_file_path, "preview0")
-                    )[0]
-                else:
-                    # Fallback to simple naming scheme if model file not found
-                    logger.debug("Model file not found for HTML, using fallback naming scheme")
-                    base_preview_path = os.path.join(html_dir, f"{model_name}.preview0")
-            else:
-                # For model files, use the path manager
-                base_preview_path = os.path.splitext(
-                    self.path_manager.get_image_path(file_path, "preview0")
-                )[0]
-
-            # Try to find the preview image with any extension
-            preview_rel_path = None
-
-            # First try the base preview path
-            for ext in [".jpeg", ".jpg", ".png", ".webp", ".mp4"]:
-                preview_path = base_preview_path + ext
-                if os.path.isfile(preview_path):
-                    preview_rel_path = os.path.relpath(preview_path, output_dir)
-                    logger.debug(f"Found preview image with base path: {preview_path}")
-                    logger.debug(f"Preview relative path: {preview_rel_path}")
-                    break
-
-            # If nothing found and it's an HTML file, try a few more common patterns
-            if is_html_file and preview_rel_path is None:
-                html_dir = os.path.dirname(file_path)
-                model_name = os.path.splitext(os.path.basename(file_path))[0]
-
-                # Additional patterns to try
-                additional_patterns = [
-                    f"{model_name}_preview",  # No number suffix
-                    f"{model_name}.preview",  # Different delimiter
-                    f"{model_name}preview0",  # No delimiter
-                    f"{model_name}-preview0",  # Different delimiter
-                    f"{model_name}_image0",  # Different naming convention
-                    f"{model_name}.image0",  # Different naming convention
-                ]
-
-                # Try each pattern with different extensions
-                for pattern in additional_patterns:
-                    for ext in [".jpeg", ".jpg", ".png", ".webp", ".mp4"]:
-                        preview_path = os.path.join(html_dir, pattern + ext)
-                        if os.path.isfile(preview_path):
-                            preview_rel_path = os.path.relpath(preview_path, output_dir)
-                            logger.debug(
-                                f"Found preview image with alternative pattern: {preview_path}"
-                            )
-                            logger.debug(f"Preview relative path: {preview_rel_path}")
-                            break
-                    if preview_rel_path:
-                        break
-
-                # If still not found, check if there's an "images" directory and look there
-                if preview_rel_path is None:
-                    images_dir = os.path.join(html_dir, "images")
-                    if os.path.isdir(images_dir):
-                        logger.debug(f"Checking images directory: {images_dir}")
-                        for filename in os.listdir(images_dir):
-                            if model_name.lower() in filename.lower() and any(
-                                filename.lower().endswith(ext)
-                                for ext in [".jpeg", ".jpg", ".png", ".webp", ".mp4"]
-                            ):
-                                preview_path = os.path.join(images_dir, filename)
-                                preview_rel_path = os.path.relpath(preview_path, output_dir)
-                                logger.debug(
-                                    f"Found preview image in images directory: {preview_path}"
-                                )
-                                break
-
-                # If still no preview image found, check if there are any in the metadata
-                if (
-                    preview_rel_path is None
-                    and "images" in metadata
-                    and isinstance(metadata["images"], list)
-                    and metadata["images"]
-                ):
-                    # Get the first image URL from metadata
-                    for image in metadata["images"]:
-                        if "url" in image and image["url"]:
-                            preview_url = image["url"]
-                            logger.debug(
-                                f"Using image URL from metadata as fallback: {preview_url}"
-                            )
-
-                            # Check if we have a local copy of this image
-                            image_filename = os.path.basename(preview_url)
-                            local_path = os.path.join(html_dir, image_filename)
-                            if os.path.isfile(local_path):
-                                preview_rel_path = os.path.relpath(local_path, output_dir)
-                                logger.debug(f"Found local copy of metadata image: {local_path}")
-                                break
-
-                            # If we don't have a local copy, just use the URL directly
-                            preview_rel_path = preview_url
-                            logger.debug(f"Using remote image URL directly: {preview_url}")
-                            break
-
-            # Check if the preview is a video
-            is_video = False
-            if preview_rel_path and preview_rel_path.lower().endswith(".mp4"):
-                is_video = True
-                logger.debug(f"Preview is video: {is_video}")
-
-            # Add model to context
-            # Ensure models is a list
-            models_list = context.get("models", [])
-            if not isinstance(models_list, list):
-                models_list = []
-                context["models"] = models_list
-
-            # Get model stats
-            stats = metadata.get("stats", {})
-            download_count = stats.get("downloadCount", 0)
-            rating = stats.get("rating", 0)
-            rating_count = stats.get("ratingCount", 0)
-
-            # Get model name - prefer model.name over version name if available
-            model_name = metadata.get("model", {}).get("name") or metadata.get("name", "Unknown")
-
-            # Now we can safely append with complete metadata
-            models_list.append(
-                {
-                    "name": model_name,
-                    "type": metadata.get("model", {}).get("type", "Unknown"),
-                    "base_model": metadata.get("baseModel", "Unknown"),
-                    "description": metadata.get("description", ""),
-                    "html_path": html_rel_path,
-                    "preview_image_path": preview_rel_path,
-                    "is_video": is_video,
-                    "stats": {
-                        "downloads": download_count,
-                        "rating": rating,
-                        "rating_count": rating_count,
-                    },
-                    "created_at": metadata.get("createdAt"),
-                    "updated_at": metadata.get("updatedAt"),
-                    "version": metadata.get("name"),  # Version name
-                    "model_id": metadata.get("modelId"),
-                    "version_id": metadata.get("id"),
-                }
-            )
+            model_data = self._process_gallery_model(file_path, output_path)
+            if model_data:
+                context["models"].append(model_data)
 
         return context
+
+    def _process_gallery_model(
+        self, file_path: str, output_path: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Process a single model file for gallery context."""
+        is_html_file = file_path.lower().endswith(".html")
+        metadata_path = os.path.splitext(file_path)[0] + ".json"
+        html_path = file_path if is_html_file else self.path_manager.get_html_path(file_path)
+
+        # Check and load metadata
+        metadata = self._load_metadata(metadata_path)
+        if not metadata:
+            return None
+
+        # Calculate paths
+        output_dir = os.path.dirname(output_path) if output_path else os.path.dirname(file_path)
+        html_rel_path = os.path.relpath(html_path, output_dir)
+
+        # Find preview image
+        preview_image = self._find_preview_image(file_path, metadata, output_dir, is_html_file)
+        preview_data: Dict[str, Any] = {
+            "path": preview_image["path"] if preview_image else None,
+            "is_video": preview_image["is_video"] if preview_image else False,
+        }
+
+        # Get model stats
+        stats = metadata.get("stats", {})
+        model_stats = {
+            "downloads": stats.get("downloadCount", 0),
+            "rating": stats.get("rating", 0),
+            "rating_count": stats.get("ratingCount", 0),
+        }
+
+        # Get model name
+        model_name = metadata.get("model", {}).get("name") or metadata.get("name", "Unknown")
+
+        return {
+            "name": model_name,
+            "type": metadata.get("model", {}).get("type", "Unknown"),
+            "base_model": metadata.get("baseModel", "Unknown"),
+            "description": metadata.get("description", ""),
+            "html_path": html_rel_path,
+            "preview_image_path": preview_data.get("path"),
+            "is_video": preview_data.get("is_video", False),
+            "stats": model_stats,
+            "created_at": metadata.get("createdAt"),
+            "updated_at": metadata.get("updatedAt"),
+            "version": metadata.get("name"),
+            "model_id": metadata.get("modelId"),
+            "version_id": metadata.get("id"),
+        }
+
+    def _load_metadata(self, metadata_path: str) -> Optional[Dict[str, Any]]:
+        """Load metadata from a JSON file."""
+        if not os.path.isfile(metadata_path):
+            logger.warning(f"Metadata not found: {metadata_path}")
+            return None
+
+        try:
+            with open(metadata_path, "r", encoding="utf-8") as f:
+                metadata: Dict[str, Any] = json.load(f)
+                return metadata
+        except Exception as e:
+            logger.error(f"Error loading metadata: {e}")
+            return None
+
+    def _find_preview_image(
+        self, file_path: str, metadata: Dict[str, Any], output_dir: str, is_html_file: bool
+    ) -> PreviewImageResult:
+        """Find preview image for a model."""
+        # Define the return type explicitly
+        preview_result: PreviewImageResult = None
+
+        # Try standard preview path first
+        preview_path: PreviewImageResult = self._try_standard_preview_path(
+            file_path, output_dir, is_html_file
+        )
+        if preview_path is not None:
+            preview_result = preview_path
+            return preview_result
+
+        # Try alternative patterns for HTML files
+        if is_html_file:
+            alt_preview_path: PreviewImageResult = self._try_alternative_patterns(
+                file_path, output_dir
+            )
+            if alt_preview_path is not None:
+                preview_result = alt_preview_path
+                return preview_result
+
+            # Try images directory
+            dir_preview_path: PreviewImageResult = self._try_images_directory(file_path, output_dir)
+            if dir_preview_path is not None:
+                preview_result = dir_preview_path
+                return preview_result
+
+            # Try metadata URLs as last resort
+            metadata_preview_path: PreviewImageResult = self._try_metadata_urls(
+                metadata, file_path, output_dir
+            )
+            preview_result = metadata_preview_path
+            return preview_result
+
+        return preview_result
+
+    def _try_standard_preview_path(
+        self, file_path: str, output_dir: str, is_html_file: bool
+    ) -> PreviewImageResult:
+        """Try finding preview image at standard path."""
+        if is_html_file:
+            model_file = self._find_model_file(file_path)
+            base_preview_path = (
+                os.path.splitext(self.path_manager.get_preview_path(model_file, 0))[0]
+                if model_file
+                else os.path.join(
+                    os.path.dirname(file_path),
+                    f"{os.path.splitext(os.path.basename(file_path))[0]}.preview0",
+                )
+            )
+        else:
+            base_preview_path = self.path_manager.get_preview_base_path(file_path)
+
+        for ext in [".jpeg", ".jpg", ".png", ".webp", ".mp4"]:
+            preview_path = base_preview_path + ext
+            if os.path.isfile(preview_path):
+                is_video = ext.lower() == ".mp4"
+                result: PreviewImageDict = {
+                    "path": os.path.relpath(preview_path, output_dir),
+                    "is_video": is_video,
+                }
+                return result
+
+        return None
+
+    def _find_model_file(self, html_file: str) -> Optional[str]:
+        """Find corresponding model file for an HTML file."""
+        html_dir = os.path.dirname(html_file)
+        model_name = os.path.splitext(os.path.basename(html_file))[0]
+
+        for ext in [".safetensors", ".ckpt", ".pt", ".bin"]:
+            potential_path = os.path.join(html_dir, model_name + ext)
+            if os.path.isfile(potential_path):
+                return potential_path
+
+        return None
+
+    def _try_alternative_patterns(self, file_path: str, output_dir: str) -> PreviewImageResult:
+        """Try alternative naming patterns for preview images."""
+        html_dir = os.path.dirname(file_path)
+        model_name = os.path.splitext(os.path.basename(file_path))[0]
+
+        patterns = [
+            f"{model_name}_preview",
+            f"{model_name}.preview",
+            f"{model_name}preview0",
+            f"{model_name}-preview0",
+            f"{model_name}_image0",
+            f"{model_name}.image0",
+        ]
+
+        for pattern in patterns:
+            for ext in [".jpeg", ".jpg", ".png", ".webp", ".mp4"]:
+                preview_path = os.path.join(html_dir, pattern + ext)
+                if os.path.isfile(preview_path):
+                    is_video = ext.lower() == ".mp4"
+                    result: PreviewImageDict = {
+                        "path": os.path.relpath(preview_path, output_dir),
+                        "is_video": is_video,
+                    }
+                    return result
+
+        return None
+
+    def _try_images_directory(self, file_path: str, output_dir: str) -> PreviewImageResult:
+        """Try finding preview image in images directory."""
+        html_dir = os.path.dirname(file_path)
+        model_name = os.path.splitext(os.path.basename(file_path))[0]
+        images_dir = os.path.join(html_dir, "images")
+
+        if os.path.isdir(images_dir):
+            for filename in os.listdir(images_dir):
+                if model_name.lower() in filename.lower():
+                    preview_path = os.path.join(images_dir, filename)
+                    is_video = filename.lower().endswith(".mp4")
+                    result: PreviewImageDict = {
+                        "path": os.path.relpath(preview_path, output_dir),
+                        "is_video": is_video,
+                    }
+                    return result
+
+        return None
+
+    def _try_metadata_urls(
+        self, metadata: Dict[str, Any], file_path: str, output_dir: str
+    ) -> PreviewImageResult:
+        """Try using image URLs from metadata."""
+        if not (
+            "images" in metadata and isinstance(metadata["images"], list) and metadata["images"]
+        ):
+            return None
+
+        for image in metadata["images"]:
+            if "url" in image and image["url"]:
+                preview_url = image["url"]
+                image_filename = os.path.basename(preview_url)
+                local_path = os.path.join(os.path.dirname(file_path), image_filename)
+
+                if os.path.isfile(local_path):
+                    is_video = local_path.lower().endswith(".mp4")
+                    local_result: PreviewImageDict = {
+                        "path": os.path.relpath(local_path, output_dir),
+                        "is_video": is_video,
+                    }
+                    return local_result
+
+                # Use remote URL as last resort
+                is_video = preview_url.lower().endswith(".mp4")
+                if preview_url:
+                    remote_result: PreviewImageDict = {"path": preview_url, "is_video": is_video}
+                    return remote_result
+                return None
+
+        return None
