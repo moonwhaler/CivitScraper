@@ -115,7 +115,7 @@ class ContextBuilder:
 
             # Get metadata path and HTML path based on file type
             if is_html_file:
-                # For HTML files, the metadata file should be in the same directory with the same base name
+                # For HTML files, the metadata file should be in the same dir (and same base name)
                 metadata_path = os.path.splitext(file_path)[0] + ".json"
                 html_path = file_path  # The file is already an HTML file
                 logger.debug(f"Processing existing HTML file: {file_path}")
@@ -150,8 +150,8 @@ class ContextBuilder:
 
             # Get base preview path without extension
             if is_html_file:
-                # For HTML files, we need to determine the model file path to correctly find preview images
-                # Assume model file has the same base name as the HTML file, just different extension
+                # For HTML files, we need to determine the model file path to find preview images
+                # Assume model file has the same base name as HTML file with different extension
                 html_dir = os.path.dirname(file_path)
                 model_name = os.path.splitext(os.path.basename(file_path))[0]
 
@@ -261,7 +261,6 @@ class ContextBuilder:
                                 break
 
                             # If we don't have a local copy, just use the URL directly
-                            # Note: This is a fallback and might not work if the URL is no longer accessible
                             preview_rel_path = preview_url
                             logger.debug(f"Using remote image URL directly: {preview_url}")
                             break

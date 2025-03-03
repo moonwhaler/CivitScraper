@@ -36,8 +36,17 @@ repos:
     hooks:
     -   id: pytest
         name: pytest
-        entry: pytest
-        language: system
+        entry: env PYTHONPATH=. pytest
+        language: python
         pass_filenames: false
         always_run: true
         args: ["--cov=civitscraper", "--cov-report=term"]
+        additional_dependencies: [
+            "pytest>=7.0.0",
+            "pytest-cov>=4.0.0",
+            "pytest-mock>=3.10.0",
+            "PyYAML>=5.4.0",
+            "requests>=2.25.0",
+            "jinja2>=3.0.0",
+            "blake3>=0.3.0"
+        ]
