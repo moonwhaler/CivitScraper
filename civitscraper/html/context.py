@@ -255,40 +255,69 @@ class ContextBuilder:
         self, file_path: str, metadata: Dict[str, Any], output_dir: str, is_html_file: bool
     ) -> PreviewImageResult:
         """Find preview image for a model."""
-        # Define the return type explicitly
-        preview_result: PreviewImageResult = None
+        # Check if this is a file in an organized directory
+        is_organized = "/organized/" in file_path
 
-        # Try standard preview path first
-        preview_path: PreviewImageResult = self._try_standard_preview_path(
-            file_path, output_dir, is_html_file
-        )
+        # If this is an HTML file in the original location, try to find its organized version first
+        if is_html_file and not is_organized:
+            organized_path = self._find_organized_version(file_path)
+            if organized_path:
+                # Try to find preview for the organized version
+                organized_preview = self._try_standard_preview_path(
+                    organized_path, output_dir, is_html_file
+                )
+                if organized_preview is not None:
+                    return organized_preview
+
+        # Try standard preview path
+        preview_path = self._try_standard_preview_path(file_path, output_dir, is_html_file)
         if preview_path is not None:
-            preview_result = preview_path
-            return preview_result
+            return preview_path
 
-        # Try alternative patterns for HTML files
+        # For HTML files, try additional locations
         if is_html_file:
-            alt_preview_path: PreviewImageResult = self._try_alternative_patterns(
-                file_path, output_dir
-            )
+            # Try alternative patterns
+            alt_preview_path = self._try_alternative_patterns(file_path, output_dir)
             if alt_preview_path is not None:
-                preview_result = alt_preview_path
-                return preview_result
+                return alt_preview_path
 
             # Try images directory
-            dir_preview_path: PreviewImageResult = self._try_images_directory(file_path, output_dir)
+            dir_preview_path = self._try_images_directory(file_path, output_dir)
             if dir_preview_path is not None:
-                preview_result = dir_preview_path
-                return preview_result
+                return dir_preview_path
 
             # Try metadata URLs as last resort
-            metadata_preview_path: PreviewImageResult = self._try_metadata_urls(
-                metadata, file_path, output_dir
-            )
-            preview_result = metadata_preview_path
-            return preview_result
+            metadata_preview_path = self._try_metadata_urls(metadata, file_path, output_dir)
+            if metadata_preview_path is not None:
+                return metadata_preview_path
 
-        return preview_result
+        return None
+
+    def _find_organized_version(self, file_path: str) -> Optional[str]:
+        """Find organized version of a file."""
+        # Get the base directory (before the file path)
+        base_dir = file_path
+        while "/models/" in base_dir:
+            base_dir = os.path.dirname(base_dir)
+
+        if not base_dir:
+            return None
+
+        # Get the model name
+        model_name = os.path.splitext(os.path.basename(file_path))[0]
+
+        # Look for organized version recursively
+        organized_base = os.path.join(base_dir, "organized")
+        if not os.path.isdir(organized_base):
+            return None
+
+        # Search for the file recursively
+        for root, _, files in os.walk(organized_base):
+            for filename in files:
+                if filename == f"{model_name}.html":
+                    return os.path.join(root, filename)
+
+        return None
 
     def _try_standard_preview_path(
         self, file_path: str, output_dir: str, is_html_file: bool

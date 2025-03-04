@@ -7,7 +7,7 @@ This module handles discovering model files in the configured directories.
 import glob
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -334,7 +334,7 @@ def find_html_files(config: Dict[str, Any], path_ids: Optional[List[str]] = None
         path_ids: List of path IDs to search, or None for all
 
     Returns:
-        List of valid model card HTML file paths
+        List of valid model card HTML file paths, prioritizing organized locations
     """
     # Get input paths
     input_paths = config.get("input_paths", {})
@@ -343,8 +343,9 @@ def find_html_files(config: Dict[str, Any], path_ids: Optional[List[str]] = None
     if path_ids is None:
         path_ids = list(input_paths.keys())
 
-    # Find HTML files for each path
-    html_files = []
+    # Dictionary to store unique model cards, keyed by model name
+    # Value is a tuple of (html_path, is_organized)
+    unique_models: Dict[str, Tuple[str, bool]] = {}
 
     for path_id in path_ids:
         # Check if path ID exists
@@ -365,9 +366,9 @@ def find_html_files(config: Dict[str, Any], path_ids: Optional[List[str]] = None
         recursive = path_config.get("recursive", True)
 
         # Build a list of directories to scan
-        directories_to_scan = [directory]
+        directories_to_scan = []
 
-        # Check if organization is enabled and add organized directories
+        # Check if organization is enabled and add organized directories first
         organization_config = config.get("organization", {})
         if organization_config.get("enabled", False):
             # Get output directory template
@@ -376,11 +377,14 @@ def find_html_files(config: Dict[str, Any], path_ids: Optional[List[str]] = None
                 # Replace {model_dir} with the actual directory
                 organized_dir = output_dir.replace("{model_dir}", directory)
                 if os.path.isdir(organized_dir):
-                    directories_to_scan.append(organized_dir)
+                    directories_to_scan.append((organized_dir, True))
                     logger.debug(f"Adding organized directory to scan: {organized_dir}")
 
+        # Add original directory last (lower priority)
+        directories_to_scan.append((directory, False))
+
         # Scan all directories
-        for scan_dir in directories_to_scan:
+        for scan_dir, is_organized in directories_to_scan:
             # Find HTML files
             logger.debug(f"Scanning directory for HTML files: {scan_dir}")
             files = find_files(scan_dir, ["*.html"], recursive)
@@ -388,7 +392,6 @@ def find_html_files(config: Dict[str, Any], path_ids: Optional[List[str]] = None
             # Filter to only include valid model card HTML files
             for html_file in files:
                 # Check if this is a model card HTML file by looking for a metadata file
-                # First, try to derive the model file path from the HTML path
                 html_dir = os.path.dirname(html_file)
                 html_basename = os.path.basename(html_file)
                 model_name = os.path.splitext(html_basename)[0]
@@ -397,12 +400,22 @@ def find_html_files(config: Dict[str, Any], path_ids: Optional[List[str]] = None
                 metadata_path = os.path.join(html_dir, f"{model_name}.json")
 
                 if os.path.isfile(metadata_path):
-                    html_files.append(html_file)
-                    logger.debug(f"Found valid model card HTML file: {html_file}")
+                    # Check if we already have this model
+                    if model_name not in unique_models or (
+                        is_organized and not unique_models[model_name][1]
+                    ):
+                        # Add model if it's new or if this is an organized version
+                        unique_models[model_name] = (html_file, is_organized)
+                        logger.debug(
+                            f"{'Updated' if model_name in unique_models else 'Added'} model card: "
+                            f"{html_file} (organized: {is_organized})"
+                        )
                 else:
                     logger.debug(f"Skipping HTML file without metadata: {html_file}")
 
-    logger.info(f"Found {len(html_files)} valid model card HTML files")
+    # Extract final list of HTML files
+    html_files = [path for path, _ in unique_models.values()]
+    logger.info(f"Found {len(html_files)} unique model card HTML files")
     return html_files
 
 

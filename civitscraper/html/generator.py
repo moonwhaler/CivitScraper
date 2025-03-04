@@ -6,7 +6,7 @@ This module handles generating HTML pages for models using Jinja templates.
 
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..scanner.discovery import find_html_files
 from .context import ContextBuilder
@@ -107,11 +107,21 @@ class HTMLGenerator:
         # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        # Combine newly processed files with existing HTML files if requested
-        all_file_paths = list(file_paths)  # Create a copy of the list
+        # Dictionary to store unique models, keyed by model name
+        # Value is a tuple of (file_path, is_organized)
+        unique_models: Dict[str, Tuple[str, bool]] = {}
 
+        # Process input file paths first
+        for file_path in file_paths:
+            model_name = os.path.splitext(os.path.basename(file_path))[0]
+            is_organized = "/organized/" in file_path
+            if model_name not in unique_models or (
+                is_organized and not unique_models[model_name][1]
+            ):
+                unique_models[model_name] = (file_path, is_organized)
+
+        # Add existing HTML files if requested
         if include_existing:
-            # Always scan for existing HTML files, especially now that we might have organized files
             logger.info(
                 "Scanning for existing model card HTML files (including in organized directories)"
             )
@@ -124,12 +134,20 @@ class HTMLGenerator:
 
             if html_files:
                 logger.info(f"Found {len(html_files)} existing model card HTML files")
-                # Add HTML files that aren't already in all_file_paths
+                # Process each HTML file
                 for html_path in html_files:
-                    if html_path not in all_file_paths:
-                        all_file_paths.append(html_path)
+                    model_name = os.path.splitext(os.path.basename(html_path))[0]
+                    is_organized = "/organized/" in html_path
+                    if model_name not in unique_models or (
+                        is_organized and not unique_models[model_name][1]
+                    ):
+                        unique_models[model_name] = (html_path, is_organized)
             else:
                 logger.info("No existing model card HTML files found")
+
+        # Extract final list of unique file paths
+        all_file_paths = [path for path, _ in unique_models.values()]
+        logger.info(f"Processing {len(all_file_paths)} unique models")
 
         # Build context with output path for relative path calculation
         context = self.context_builder.build_gallery_context(all_file_paths, title, output_path)
