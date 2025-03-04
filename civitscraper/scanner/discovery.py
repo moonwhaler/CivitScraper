@@ -364,26 +364,43 @@ def find_html_files(config: Dict[str, Any], path_ids: Optional[List[str]] = None
         # Get recursive flag
         recursive = path_config.get("recursive", True)
 
-        # Find HTML files
-        logger.debug(f"Scanning directory for HTML files: {directory}")
-        files = find_files(directory, ["*.html"], recursive)
+        # Build a list of directories to scan
+        directories_to_scan = [directory]
 
-        # Filter to only include valid model card HTML files
-        for html_file in files:
-            # Check if this is a model card HTML file by looking for a corresponding metadata file
-            # First, try to derive the model file path from the HTML path
-            html_dir = os.path.dirname(html_file)
-            html_basename = os.path.basename(html_file)
-            model_name = os.path.splitext(html_basename)[0]
+        # Check if organization is enabled and add organized directories
+        organization_config = config.get("organization", {})
+        if organization_config.get("enabled", False):
+            # Get output directory template
+            output_dir = organization_config.get("output_dir", "{model_dir}/organized")
+            if "{model_dir}" in output_dir:
+                # Replace {model_dir} with the actual directory
+                organized_dir = output_dir.replace("{model_dir}", directory)
+                if os.path.isdir(organized_dir):
+                    directories_to_scan.append(organized_dir)
+                    logger.debug(f"Adding organized directory to scan: {organized_dir}")
 
-            # Look for a metadata file with the same base name
-            metadata_path = os.path.join(html_dir, f"{model_name}.json")
+        # Scan all directories
+        for scan_dir in directories_to_scan:
+            # Find HTML files
+            logger.debug(f"Scanning directory for HTML files: {scan_dir}")
+            files = find_files(scan_dir, ["*.html"], recursive)
 
-            if os.path.isfile(metadata_path):
-                html_files.append(html_file)
-                logger.debug(f"Found valid model card HTML file: {html_file}")
-            else:
-                logger.debug(f"Skipping HTML file without metadata: {html_file}")
+            # Filter to only include valid model card HTML files
+            for html_file in files:
+                # Check if this is a model card HTML file by looking for a metadata file
+                # First, try to derive the model file path from the HTML path
+                html_dir = os.path.dirname(html_file)
+                html_basename = os.path.basename(html_file)
+                model_name = os.path.splitext(html_basename)[0]
+
+                # Look for a metadata file with the same base name
+                metadata_path = os.path.join(html_dir, f"{model_name}.json")
+
+                if os.path.isfile(metadata_path):
+                    html_files.append(html_file)
+                    logger.debug(f"Found valid model card HTML file: {html_file}")
+                else:
+                    logger.debug(f"Skipping HTML file without metadata: {html_file}")
 
     logger.info(f"Found {len(html_files)} valid model card HTML files")
     return html_files

@@ -178,18 +178,55 @@ class ContextBuilder:
         }
 
     def _load_metadata(self, metadata_path: str) -> Optional[Dict[str, Any]]:
-        """Load metadata from a JSON file."""
-        if not os.path.isfile(metadata_path):
-            logger.warning(f"Metadata not found: {metadata_path}")
-            return None
+        """Load metadata from a JSON file, checking both organized and original locations."""
+        # First try the direct path
+        if os.path.isfile(metadata_path):
+            try:
+                with open(metadata_path, "r", encoding="utf-8") as f:
+                    metadata: Dict[str, Any] = json.load(f)
+                    return metadata
+            except Exception as e:
+                logger.error(f"Error loading metadata from {metadata_path}: {e}")
+                return None
 
-        try:
-            with open(metadata_path, "r", encoding="utf-8") as f:
-                metadata: Dict[str, Any] = json.load(f)
-                return metadata
-        except Exception as e:
-            logger.error(f"Error loading metadata: {e}")
-            return None
+        # If not found, check if this is an organized path or original path
+        is_in_organized_dir = "/organized/" in metadata_path
+
+        if is_in_organized_dir:
+            # We have an organized path, try to find original
+            try:
+                # Extract the base filename from the organized path
+                filename = os.path.basename(metadata_path)
+
+                # Find the "models/" part of the path to extract base directory
+                models_index = metadata_path.find("/models/")
+                if models_index != -1:
+                    # Extract model type (e.g., "Lora")
+                    path_parts = metadata_path[models_index:].split("/")
+                    if len(path_parts) >= 3:
+                        original_dir = "/".join(path_parts[:3])
+                        original_path = os.path.join(original_dir, filename)
+
+                        if os.path.isfile(original_path):
+                            try:
+                                with open(original_path, "r", encoding="utf-8") as f:
+                                    original_metadata: Dict[str, Any] = json.load(f)
+                                    logger.debug(
+                                        f"Found metadata in original location: {original_path}"
+                                    )
+                                    return original_metadata
+                            except Exception as e:
+                                logger.error(
+                                    f"Error loading metadata from org path {original_path}: {e}"
+                                )
+            except Exception as e:
+                logger.error(
+                    f"Error trying to find original metadata path for {metadata_path}: {e}"
+                )
+
+        # If we got here, the metadata wasn't found in either location
+        logger.warning(f"Metadata not found: {metadata_path}")
+        return None
 
     def _find_preview_image(
         self, file_path: str, metadata: Dict[str, Any], output_dir: str, is_html_file: bool

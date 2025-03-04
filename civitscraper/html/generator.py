@@ -110,10 +110,11 @@ class HTMLGenerator:
         # Combine newly processed files with existing HTML files if requested
         all_file_paths = list(file_paths)  # Create a copy of the list
 
-        if include_existing and not file_paths:
-            # Only scan for existing HTML files if no new files were processed
-            # This prevents duplicate entries when both new and existing files are present
-            logger.info("No new models processed, scanning for existing model card HTML files")
+        if include_existing:
+            # Always scan for existing HTML files, especially now that we might have organized files
+            logger.info(
+                "Scanning for existing model card HTML files (including in organized directories)"
+            )
 
             # Get path IDs from job configuration if available
             path_ids = self.config.get("gallery_path_ids")  # Use the path_ids from job config
@@ -123,7 +124,10 @@ class HTMLGenerator:
 
             if html_files:
                 logger.info(f"Found {len(html_files)} existing model card HTML files")
-                all_file_paths.extend(html_files)
+                # Add HTML files that aren't already in all_file_paths
+                for html_path in html_files:
+                    if html_path not in all_file_paths:
+                        all_file_paths.append(html_path)
             else:
                 logger.info("No existing model card HTML files found")
 

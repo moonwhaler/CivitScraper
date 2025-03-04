@@ -147,9 +147,6 @@ class JobExecutor:
             filtered_files = filter_files(files, skip_existing)
             logger.info(f"Filtered to {len(filtered_files)} files")
 
-            # Process files
-            logger.info(f"Processing {len(filtered_files)} files")
-
             # Use the job configuration directly
             job_specific_config = self.config.copy()
 
@@ -176,30 +173,57 @@ class JobExecutor:
             if not force_refresh:
                 force_refresh = job_specific_config.get("scanner", {}).get("force_refresh", False)
 
-            # Use the temporary processor
-            results = temp_processor.process_files_in_batches(
-                filtered_files,
-                verify_hash=verify_hashes,
-                force_refresh=force_refresh,
-            )
-
-            # Create metadata dictionary
+            # PHASE 1: Fetch metadata
+            logger.info(f"Fetching metadata for {len(filtered_files)} files")
             metadata_dict = {}
-            for file_path, metadata in results:
+            organized_files_mapping = {}
+
+            # First, fetch metadata for all files without processing them
+            for file_path in filtered_files:
+                metadata = temp_processor.fetch_metadata(
+                    file_path, verify_hash=verify_hashes, force_refresh=force_refresh
+                )
                 if metadata:
                     metadata_dict[file_path] = metadata
 
-            # Organize files if enabled in organization config
+            # PHASE 2: Organize files if enabled
             organization_config = job_config.get("organization", {})
-            if organization_config.get("enabled", False):
+            if organization_config.get("enabled", False) and metadata_dict:
                 logger.info(f"Organizing {len(metadata_dict)} files")
                 logger.debug(f"Using organization settings from job: {organization_config}")
 
                 # Create a job-specific organizer with the updated configuration
                 job_organizer = FileOrganizer(job_specific_config)
-                job_organizer.organize_files(list(metadata_dict.keys()), metadata_dict)
+                organized_results = job_organizer.organize_files(
+                    list(metadata_dict.keys()), metadata_dict
+                )
 
-            # Generate gallery
+                # Create mapping from original path to new path
+                for orig_path, new_path in organized_results:
+                    if new_path:
+                        organized_files_mapping[orig_path] = new_path
+
+            # PHASE 3: Process organized files (or original files if not organized)
+            logger.info(f"Processing {len(metadata_dict)} files with metadata")
+            results = []
+
+            for file_path, metadata in metadata_dict.items():
+                # Determine which path to use for processing
+                process_path = organized_files_mapping.get(file_path, file_path)
+                if process_path:
+                    # Save and process with metadata
+                    processed_metadata = temp_processor.save_and_process_with_metadata(
+                        process_path, metadata
+                    )
+                    results.append((process_path, processed_metadata))
+                else:
+                    # If organization failed, use original path
+                    processed_metadata = temp_processor.save_and_process_with_metadata(
+                        file_path, metadata
+                    )
+                    results.append((file_path, processed_metadata))
+
+            # PHASE 4: Generate gallery
             html_config = job_config.get("output", {}).get("metadata", {}).get("html", {})
             if html_config.get("generate_gallery", False):
                 gallery_path = html_config.get("gallery_path", "gallery.html")

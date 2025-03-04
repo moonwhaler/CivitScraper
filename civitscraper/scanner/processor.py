@@ -64,11 +64,11 @@ class ModelProcessor:
         # Initialize failure tracking
         self.failures: List[Tuple[str, str]] = []
 
-    def process_file(
+    def fetch_metadata(
         self, file_path: str, verify_hash: bool = True, force_refresh: bool = False
     ) -> Optional[Dict[str, Any]]:
         """
-        Process a model file.
+        Fetch metadata for a model file without saving to disk or generating HTML/images.
 
         Args:
             file_path: Path to model file
@@ -76,10 +76,10 @@ class ModelProcessor:
             force_refresh: Whether to force refresh metadata
 
         Returns:
-            Metadata or None if processing failed
+            Metadata or None if fetching failed
         """
         try:
-            # Process the file
+            # Process the file to get hash
             result = self.file_processor.process(file_path, verify_hash)
             if not result.success:
                 self.failures.append((file_path, result.error or "Unknown error"))
@@ -90,12 +90,39 @@ class ModelProcessor:
                 self.failures.append((file_path, "No file hash available"))
                 return None
 
-            metadata = self.metadata_manager.fetch_and_save(
-                file_path, result.file_hash, force_refresh=force_refresh, dry_run=self.dry_run
+            # Just fetch metadata without saving
+            metadata = self.metadata_manager.fetch_metadata(
+                result.file_hash, force_refresh=force_refresh
             )
 
             if not metadata:
                 self.failures.append((file_path, "Failed to fetch metadata"))
+                return None
+
+            return metadata
+
+        except Exception as e:
+            logger.error(f"Error fetching metadata for {file_path}: {e}")
+            self.failures.append((file_path, f"Error fetching metadata: {e}"))
+            return None
+
+    def save_and_process_with_metadata(
+        self, file_path: str, metadata: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Save metadata and process a model file with already fetched metadata.
+
+        Args:
+            file_path: Path to model file
+            metadata: Pre-fetched metadata
+
+        Returns:
+            Metadata or None if processing failed
+        """
+        try:
+            # Save metadata to disk
+            if not self.metadata_manager.save_metadata(file_path, metadata, self.dry_run):
+                self.failures.append((file_path, "Failed to save metadata"))
                 return None
 
             # Download images if configured
@@ -112,6 +139,34 @@ class ModelProcessor:
                 self.html_manager.generate_html(file_path, metadata)
 
             return metadata
+
+        except Exception as e:
+            logger.error(f"Error processing {file_path}: {e}")
+            self.failures.append((file_path, f"Error processing: {e}"))
+            return None
+
+    def process_file(
+        self, file_path: str, verify_hash: bool = True, force_refresh: bool = False
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Process a model file (fetches metadata and processes in one step).
+
+        Args:
+            file_path: Path to model file
+            verify_hash: Whether to verify file hash
+            force_refresh: Whether to force refresh metadata
+
+        Returns:
+            Metadata or None if processing failed
+        """
+        try:
+            # Fetch metadata
+            metadata = self.fetch_metadata(file_path, verify_hash, force_refresh)
+            if not metadata:
+                return None
+
+            # Save and process with metadata
+            return self.save_and_process_with_metadata(file_path, metadata)
 
         except Exception as e:
             logger.error(f"Error processing {file_path}: {e}")

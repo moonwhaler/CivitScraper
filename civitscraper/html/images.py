@@ -110,12 +110,10 @@ class ImageHandler:
         max_images = self.max_count if self.max_count is not None else total_images
         logger.debug(f"Processing up to {max_images} images based on configuration")
 
-        for i in range(max_images):
-            # Skip if we've reached the end of available images
-            if i >= total_images:
-                break
+        # First, pre-filter images to avoid warnings for images beyond max_count
+        images_to_process = images[:max_images] if max_images < total_images else images
 
-            image = images[i]
+        for i, image in enumerate(images_to_process):
             # Get image URL
             image_url = image.get("url")
             if not image_url:
@@ -162,13 +160,15 @@ class ImageHandler:
                         image_paths.append(image_data)
                 # If no image or video file exists, log a warning
                 else:
-                    logger.warning(f"Image file not found: {image_path}")
-                    # In dry run mode, we would normally download the image
-                    if self.dry_run:
-                        logger.info(
-                            f"Dry run: Would download image {i+1}/{len(images)} from "
-                            f"{image.get('url')} to {image_path}"
-                        )
+                    if i < max_images:
+                        # Only warn for images within our max_count limit
+                        logger.debug(f"Image file not found: {image_path}")
+                        # In dry run mode, we would normally download the image
+                        if self.dry_run:
+                            logger.info(
+                                f"Dry run: Download image {i+1}/{len(images_to_process)} from "
+                                f"{image.get('url')} to {image_path}"
+                            )
 
         return image_paths
 
