@@ -5,7 +5,6 @@ This module handles formatting file paths based on metadata.
 """
 
 import logging
-import os
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -123,24 +122,4 @@ class PathFormatter:
 
         return path
 
-    def handle_collision(self, path: str) -> str:
-        """
-        Handle path collision by adding a counter to the filename.
-
-        Args:
-            path: Path that already exists
-
-        Returns:
-            New path that doesn't exist
-        """
-        # Get path components
-        dir_path, filename = os.path.split(path)
-        name, ext = os.path.splitext(filename)
-
-        # Try adding numbers until we find a path that doesn't exist
-        counter = 1
-        while os.path.exists(path):
-            path = os.path.join(dir_path, f"{name}_{counter}{ext}")
-            counter += 1
-
-        return path
+    # Collision detection removed - files should be overwritten or skipped based on skip_existing

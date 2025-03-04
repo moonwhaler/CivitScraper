@@ -6,13 +6,16 @@ and saving the metadata.
 """
 
 import concurrent.futures
+import json
 import logging
+import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..api.client import CivitAIClient
 from ..utils.logging import ProgressLogger
 from .batch_processor import BatchProcessor
+from .discovery import get_metadata_path
 from .file_processor import ModelFileProcessor
 from .html_manager import HTMLManager
 from .image_manager import ImageManager
@@ -107,7 +110,7 @@ class ModelProcessor:
             return None
 
     def save_and_process_with_metadata(
-        self, file_path: str, metadata: Dict[str, Any]
+        self, file_path: str, metadata: Dict[str, Any], force_refresh: bool = False
     ) -> Optional[Dict[str, Any]]:
         """
         Save metadata and process a model file with already fetched metadata.
@@ -115,28 +118,45 @@ class ModelProcessor:
         Args:
             file_path: Path to model file
             metadata: Pre-fetched metadata
+            force_refresh: Whether to force refresh all data
 
         Returns:
             Metadata or None if processing failed
         """
         try:
-            # Save metadata to disk
+            # Get skip_existing configuration
+            skip_existing = self.config.get("skip_existing", False)
+
+            # Save metadata to disk - skip_existing is handled inside the method
             if not self.metadata_manager.save_metadata(file_path, metadata, self.dry_run):
                 self.failures.append((file_path, "Failed to save metadata"))
                 return None
 
             # Download images if configured
             if self.config.get("output", {}).get("images", {}).get("save", True):
-                self.image_manager.download_images(file_path, metadata)
+                self.image_manager.download_images(file_path, metadata, force_refresh=force_refresh)
 
             # Generate HTML if configured
-            if (
+            html_enabled = (
                 self.config.get("output", {})
                 .get("metadata", {})
                 .get("html", {})
                 .get("enabled", True)
-            ):
-                self.html_manager.generate_html(file_path, metadata)
+            )
+
+            generate_gallery = (
+                self.config.get("output", {})
+                .get("metadata", {})
+                .get("html", {})
+                .get("generate_gallery", False)
+            )
+
+            # Always generate HTML if enabled and either:
+            # 1. force_refresh is true
+            # 2. skip_existing is false
+            # 3. generate_gallery is true
+            if html_enabled and (force_refresh or not skip_existing or generate_gallery):
+                self.html_manager.generate_html(file_path, metadata, force_refresh=force_refresh)
 
             return metadata
 
@@ -160,13 +180,36 @@ class ModelProcessor:
             Metadata or None if processing failed
         """
         try:
+            # Check if we should skip this file
+            skip_existing = self.config.get("skip_existing", False)
+
+            # If skip_existing is true and not force_refresh and metadata exists,
+            # we still need to check if the max_count matches for preview images
+            # and update the HTML if necessary
+            metadata_path = get_metadata_path(file_path, self.config)
+            if skip_existing and not force_refresh and os.path.exists(metadata_path):
+                try:
+                    # Load existing metadata
+                    with open(metadata_path, "r") as f:
+                        metadata = json.load(f)
+
+                    # Process with the loaded metadata - this will handle HTML and images properly
+                    return self.save_and_process_with_metadata(
+                        file_path, metadata, force_refresh=force_refresh
+                    )
+                except Exception as e:
+                    logger.error(f"Error loading existing metadata for {file_path}: {e}")
+                    # Fall through to full processing
+
             # Fetch metadata
             metadata = self.fetch_metadata(file_path, verify_hash, force_refresh)
             if not metadata:
                 return None
 
             # Save and process with metadata
-            return self.save_and_process_with_metadata(file_path, metadata)
+            return self.save_and_process_with_metadata(
+                file_path, metadata, force_refresh=force_refresh
+            )
 
         except Exception as e:
             logger.error(f"Error processing {file_path}: {e}")

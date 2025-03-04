@@ -52,7 +52,9 @@ def find_files(directory: str, patterns: List[str], recursive: bool = True) -> L
 
 
 def find_model_files(
-    config: Dict[str, Any], path_ids: Optional[List[str]] = None
+    config: Dict[str, Any],
+    path_ids: Optional[List[str]] = None,
+    job_recursive: Optional[bool] = None,
 ) -> Dict[str, List[str]]:
     """
     Find model files in configured directories.
@@ -60,6 +62,7 @@ def find_model_files(
     Args:
         config: Configuration
         path_ids: List of path IDs to search, or None for all
+        job_recursive: Override setting from job config (takes precedence over path config)
 
     Returns:
         Dictionary of path ID -> list of file paths
@@ -92,11 +95,16 @@ def find_model_files(
         # Get patterns
         patterns = path_config.get("patterns", ["*.safetensors"])
 
-        # Get recursive flag
-        recursive = path_config.get("recursive", True)
+        # Get recursive flag - job_recursive overrides path_config if provided
+        if job_recursive is not None:
+            recursive = job_recursive
+            logger.debug(f"Using job recursive setting: {recursive} for path {path_id}")
+        else:
+            recursive = path_config.get("recursive", True)
+            logger.debug(f"Using path recursive setting: {recursive} for path {path_id}")
 
         # Find files
-        logger.info(f"Scanning directory: {directory}")
+        logger.info(f"Scanning directory: {directory} (recursive: {recursive})")
         files = find_files(directory, patterns, recursive)
 
         # Add to result
@@ -325,13 +333,18 @@ def get_image_path(
     return str(result)
 
 
-def find_html_files(config: Dict[str, Any], path_ids: Optional[List[str]] = None) -> List[str]:
+def find_html_files(
+    config: Dict[str, Any],
+    path_ids: Optional[List[str]] = None,
+    job_recursive: Optional[bool] = None,
+) -> List[str]:
     """
     Find existing model card HTML files in configured directories.
 
     Args:
         config: Configuration
         path_ids: List of path IDs to search, or None for all
+        job_recursive: Override recursive setting from job config
 
     Returns:
         List of valid model card HTML file paths, prioritizing organized locations
@@ -362,8 +375,17 @@ def find_html_files(config: Dict[str, Any], path_ids: Optional[List[str]] = None
             logger.error(f"No path specified for path ID: {path_id}")
             continue
 
-        # Get recursive flag
-        recursive = path_config.get("recursive", True)
+        # Get recursive flag - job_recursive overrides path_config if provided
+        if job_recursive is not None:
+            recursive = job_recursive
+            logger.debug(
+                f"Using job recursive setting: {recursive} for HTML search in path {path_id}"
+            )
+        else:
+            recursive = path_config.get("recursive", True)
+            logger.debug(
+                f"Using path recursive setting: {recursive} for HTML search in path {path_id}"
+            )
 
         # Build a list of directories to scan
         directories_to_scan = []

@@ -135,7 +135,9 @@ class JobExecutor:
 
             # Find model files
             logger.info(f"Finding model files for paths: {path_ids}")
-            path_files = find_model_files(self.config, path_ids)
+            # Use job's recursive setting if specified
+            job_recursive = job_config.get("recursive")
+            path_files = find_model_files(self.config, path_ids, job_recursive)
 
             # Flatten files
             files: List[str] = []
@@ -282,7 +284,9 @@ class JobExecutor:
 
             # Find model files
             logger.info(f"Finding model files for paths: {path_ids}")
-            path_files = find_model_files(self.config, path_ids)
+            # Use job's recursive setting if specified
+            job_recursive = job_config.get("recursive")
+            path_files = find_model_files(self.config, path_ids, job_recursive)
 
             # Flatten files
             files: List[str] = []

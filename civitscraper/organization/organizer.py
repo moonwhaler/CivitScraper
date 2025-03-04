@@ -75,12 +75,11 @@ class FileOrganizer:
             target_dir = os.path.join(output_dir, relative_path)
             target_path = os.path.join(target_dir, os.path.basename(file_path))
 
-            # Check if target path exists
+            # Check if target path exists - we will just warn but not handle collision
             if os.path.exists(target_path):
-                logger.warning(f"Target path already exists: {target_path}")
-
-                # Handle collision
-                target_path = self.path_formatter.handle_collision(target_path)
+                logger.warning(
+                    f"Target path already exists: {target_path}. It will be overwritten if needed."
+                )
 
             # Determine operation type
             operation_type = self.org_config.operation_mode

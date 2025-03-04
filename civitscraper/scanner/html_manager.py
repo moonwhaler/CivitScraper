@@ -37,13 +37,16 @@ class HTMLManager:
         # Get dry run flag
         self.dry_run = config.get("dry_run", False)
 
-    def generate_html(self, file_path: str, metadata: Dict[str, Any]) -> Optional[str]:
+    def generate_html(
+        self, file_path: str, metadata: Dict[str, Any], force_refresh: bool = False
+    ) -> Optional[str]:
         """
         Generate HTML for model.
 
         Args:
             file_path: Path to model file
             metadata: Model metadata
+            force_refresh: Whether to force refresh HTML
 
         Returns:
             Path to generated HTML file, or None if generation failed
@@ -52,6 +55,26 @@ class HTMLManager:
 
         # Get HTML path
         html_path = get_html_path(file_path, self.config)
+
+        # Check if generate_gallery is enabled
+        generate_gallery = (
+            self.output_config.get("metadata", {}).get("html", {}).get("generate_gallery", False)
+        )
+
+        # Check if we should skip existing HTML files
+        skip_existing = self.config.get("skip_existing", False)
+
+        # If skip_existing is true and file exists
+        # and force_refresh is false and generate_gallery is false
+        # then we can skip generating the HTML
+        if (
+            skip_existing
+            and os.path.exists(html_path)
+            and not force_refresh
+            and not generate_gallery
+        ):
+            logger.info(f"Skipping existing HTML at {html_path}")
+            return html_path
 
         if self.dry_run:
             # Simulate HTML generation in dry run mode

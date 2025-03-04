@@ -61,7 +61,7 @@ class MetadataManager:
             )
             if isinstance(response, ModelVersion):
                 return response.__dict__
-            return response
+            return None
         except Exception as e:
             logger.error(f"Failed to fetch metadata for hash {file_hash}: {e}")
             return None
@@ -83,6 +83,12 @@ class MetadataManager:
         # Get metadata path
         metadata_path = get_metadata_path(file_path, self.config)
 
+        # Check if metadata file exists and skip_existing is enabled
+        skip_existing = self.config.get("skip_existing", False)
+        if skip_existing and os.path.exists(metadata_path):
+            logger.info(f"Skipping existing metadata at {metadata_path}")
+            return True
+
         if dry_run:
             # Simulate saving metadata in dry run mode
             logger.info(f"Dry run: Would save metadata to {metadata_path}")
@@ -92,7 +98,7 @@ class MetadataManager:
             # Create directory if it doesn't exist
             os.makedirs(os.path.dirname(metadata_path), exist_ok=True)
 
-            # Save metadata
+            # Save metadata - always overwrite if we reached this point
             with open(metadata_path, "w") as f:
                 json.dump(metadata, f, indent=2)
 
@@ -117,6 +123,22 @@ class MetadataManager:
         Returns:
             Metadata or None if fetching or saving failed
         """
+        # Check if metadata file exists and skip_existing is enabled
+        skip_existing = self.config.get("skip_existing", False)
+        metadata_path = get_metadata_path(file_path, self.config)
+
+        if skip_existing and os.path.exists(metadata_path) and not force_refresh:
+            logger.info(f"Using existing metadata at {metadata_path}")
+            try:
+                with open(metadata_path, "r") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        return data
+                    return None
+            except Exception as e:
+                logger.error(f"Failed to load existing metadata from {metadata_path}: {e}")
+                # Fall through to fetch new metadata
+
         # Fetch metadata
         metadata = self.fetch_metadata(file_hash, force_refresh)
         if not metadata:

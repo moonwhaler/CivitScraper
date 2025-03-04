@@ -4,6 +4,7 @@ File operations for organization.
 This module handles file operations (copy, move, symlink) for the organization feature.
 """
 
+import glob
 import logging
 import os
 import shutil
@@ -47,21 +48,10 @@ class FileOperationHandler:
         if os.path.isfile(html_path):
             related_files.append((html_path, "html"))
 
-        # Add preview images
-        # Get max_count from configuration to know how many preview images to look for
-        max_count = self.config.get("output", {}).get("images", {}).get("max_count")
-
-        # Check for indexed preview images (preview0.jpeg, preview1.jpeg, etc.)
-        for i in range(max_count):
-            for ext in [".jpeg", ".jpg", ".png"]:
-                preview_path = f"{base_path}.preview{i}{ext}"
-                if os.path.isfile(preview_path):
-                    related_files.append((preview_path, f"preview{i}"))
-
-        # Check for legacy non-indexed format (preview.jpg)
-        legacy_preview_path = f"{base_path}.preview.jpg"
-        if os.path.isfile(legacy_preview_path):
-            related_files.append((legacy_preview_path, "preview"))
+        # Add preview images using simplified pattern matching
+        preview_pattern = f"{base_path}.preview*.*"
+        for preview_path in glob.glob(preview_pattern):
+            related_files.append((preview_path, "preview"))
 
         return related_files
 
@@ -90,6 +80,16 @@ class FileOperationHandler:
             if dry_run:
                 logger.info(f"Dry run: Would {operation_type} {source_path} to {target_path}")
                 return True
+
+            # Check if target exists - we'll overwrite it
+            if os.path.exists(target_path) and not dry_run:
+                logger.info(f"Target exists, it will be overwritten: {target_path}")
+                if os.path.isfile(target_path):
+                    try:
+                        os.remove(target_path)
+                    except Exception as e:
+                        logger.warning(f"Failed to remove existing file {target_path}: {e}")
+                        # Continue anyway, the operation might succeed
 
             if operation_type == "move":
                 logger.info(f"Moving {source_path} to {target_path}")
