@@ -6,7 +6,7 @@
 # Settings for connecting to the CivitAI API
 # =============================================================================
 api:
-  key: "YOUR_API_KEY_HERE"                # Your CivitAI API key (Set via CIVITAI_API_KEY environment variable)
+  key: "YOUR_API_KEY"                # Your CivitAI API key (Set via CIVITAI_API_KEY environment variable)
   base_url: "https://civitai.com/api/v1"  # API endpoint
   timeout: 30             # [seconds] API request timeout
   max_retries: 3         # Number of times to retry failed requests
@@ -34,19 +34,19 @@ api:
 input_paths:
   # LORA models directory
   lora:
-    path: "/path/to/loras"           # Directory containing LORA models
+    path: "path/to/loras"           # Directory containing LORA models
     type: LORA                      # Model type identifier
     patterns: ["*.safetensors"]  # File patterns to match
 
   # Stable Diffusion checkpoints
   checkpoints:
-    path: "/path/to/checkpoints"  # Directory containing checkpoints
+    path: "path/to/checkpoints"  # Directory containing checkpoints
     type: Checkpoint                   # Model type identifier
     patterns: ["*.safetensors"]  # File patterns to match
 
   # Textual Inversion embeddings
   embeddings:
-    path: "./models/embeddings"     # Directory containing embeddings
+    path: "path/to/embeddings"     # Directory containing embeddings
     type: TextualInversion         # Model type identifier
     patterns: ["*.pt", "*.safetensors"]  # File patterns to match
 
@@ -77,19 +77,22 @@ jobs:
         html:
           enabled: true         # Generate HTML preview pages
           filename: "{model_name}.html"  # HTML filename
+          generate_gallery: false
+          gallery_path: "path/to/html-output/model_gallery.html"
+          gallery_title: "Model Gallery"
       images:
         save: true             # Download preview images
         path: "{model_dir}"    # Where to save images
-        max_count: 4           # Maximum number of images to download
+        max_count: 4        # Maximum number of images to download (null for no limit)
         filenames:
           preview: "{model_name}.preview{ext}"  # Preview image filename pattern
     organization:
-      enabled: false            # Enable model organization
+      enabled: true            # Enable model organization
       dry_run: false            # [true/false] Simulate file operations without making changes
       template: "by_type_and_basemodel"  # Organization template to use
       custom_template: ""       # Custom organization path template (leave empty to use predefined template)
       output_dir: "{model_dir}/organized"  # Where to put organized files
-      operation_mode: "move"    # [copy/move/symlink] How to organize files
+      operation_mode: "copy"    # [copy/move/symlink] How to organize files
 
   # Metadata-only job (no images)
   metadata-only:
@@ -98,6 +101,7 @@ jobs:
     skip_existing: true
     verify_hashes: true
     paths: ["lora"]
+    organize: false
     output:
       metadata:
         format: "json"
@@ -106,59 +110,21 @@ jobs:
         html:
           enabled: true
           filename: "{model_name}.html"
+          generate_gallery: true
+          gallery_path: "path/to/html-output/model_gallery.html"
+          gallery_title: "Model Gallery"
       images:
         save: false             # Don't download images
-
-  # Organize existing files
-  organize-files:
-    type: scan-paths
-    recursive: true
-    skip_existing: false
-    verify_hashes: false
-    paths: ["lora"]
-    output:
-      metadata:
-        format: "json"
-        path: "{model_dir}"
-        filename: "{model_name}.json"
-        html:
-          enabled: false
-      images:
-        save: false
-    organization:
-      enabled: true
-      dry_run: false
-      template: "by_type_and_basemodel"
-      output_dir: "{model_dir}/organized"
-      operation_mode: "move"
-
-  # Generate gallery from existing files
-  generate-gallery:
-    type: scan-paths
-    recursive: true
-    skip_existing: false
-    verify_hashes: false
-    paths: ["lora", "checkpoints"]
-    generate_gallery: true
-    gallery_path: "gallery.html"
-    gallery_title: "Model Gallery"
-    output:
-      metadata:
-        format: "json"
-        path: "{model_dir}"
-        filename: "{model_name}.json"
-        html:
-          enabled: false
-      images:
-        save: false
 
   # Synchronize LoRA trigger words
   sync-triggers:
     type: sync-lora-triggers
     description: "Synchronize LoRA trigger words"
     recursive: true
+    skip_existing: true
+    verify_hashes: true
     loras_file: "loras.json"
-    paths: ["lora"]
+    paths: []
 
 # =============================================================================
 # Scanner Settings
@@ -179,7 +145,7 @@ logging:
   # Console output settings
   console:
     enabled: true                  # [true/false] Log to console
-    level: INFO                    # Console log level
+    level: INFO                # Console log level
     simple: false                  # Use detailed format for debugging
 
   # File logging settings
@@ -187,5 +153,5 @@ logging:
     enabled: true                  # [true/false] Log to file
     level: DEBUG                   # File log level
     directory: logs                # Log file directory
-    max_size: 10                   # [MB] Max log file size
-    backup_count: 5                # Number of backup files to keep
+    max_size: 10                  # [MB] Max log file size
+    backup_count: 5               # Number of backup files to keep
