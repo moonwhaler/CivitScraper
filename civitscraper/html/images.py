@@ -122,11 +122,12 @@ class ImageHandler:
             # Get image extension
             ext = os.path.splitext(image_url)[1]
 
-            # Get the image path with the index number
+            # Get the image path with the index number (using 1-based indexing)
             # The ModelProcessor downloads images with filenames that include the index number
-            image_path = self.path_manager.get_image_path(file_path, f"preview{i+1}", ext)
+            preview_index = i + 1
+            image_path = self.path_manager.get_image_path(file_path, f"preview{preview_index}", ext)
 
-            logger.debug(f"Looking for indexed image file ({i+1}): {image_path}")
+            logger.debug(f"Looking for indexed image file ({preview_index}): {image_path}")
 
             # Check if the indexed image file exists
             if os.path.isfile(image_path):
@@ -165,7 +166,7 @@ class ImageHandler:
                     # In dry run mode, we would normally download the image
                     if self.dry_run:
                         logger.info(
-                            f"Dry run: Download image {i+1}/{len(images_to_process)} from "
+                            f"Dry run: Download {preview_index}/{len(images_to_process)} from "
                             f"{image.get('url')} to {image_path}"
                         )
 

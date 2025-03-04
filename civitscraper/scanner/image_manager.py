@@ -112,8 +112,11 @@ class ImageManager:
         if max_count is not None:
             # If max_count is set, only remove specific preview files up to max_count
             for i in range(max_count):
+                preview_index = i + 1
                 for ext in [".jpeg", ".jpg", ".png", ".webp", ".mp4"]:
-                    preview_path = os.path.join(model_dir, f"{model_name}.preview{i}{ext}")
+                    preview_path = os.path.join(
+                        model_dir, f"{model_name}.preview{preview_index}{ext}"
+                    )
                     if os.path.isfile(preview_path):
                         try:
                             os.remove(preview_path)
@@ -155,9 +158,10 @@ class ImageManager:
         # Get image extension
         ext = os.path.splitext(image_url)[1]
 
-        # Get image path with explicit index in the image type
+        # Get image path with explicit index in the image type (using 1-based indexing)
         # This ensures each image gets a unique filename
-        image_path = get_image_path(file_path, self.config, f"preview{index}", ext)
+        preview_index = index + 1
+        image_path = get_image_path(file_path, self.config, f"preview{preview_index}", ext)
 
         # Get image metadata
         image_meta = image.get("meta", {})
@@ -180,7 +184,7 @@ class ImageManager:
 
         if self.dry_run:
             # Simulate download in dry run mode
-            logger.info(f"Dry run: Would download image {index+1} to {image_path}")
+            logger.info(f"Dry run: Would download image {preview_index} to {image_path}")
             # Add placeholder for dry run
             return self._create_image_info(image_path, html_dir, image_meta)
         else:
@@ -214,12 +218,15 @@ class ImageManager:
         # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(image_path), exist_ok=True)
 
+        # Calculate preview index (1-based)
+        preview_index = index + 1
+
         # Download image
-        logger.debug(f"Downloading image {index+1}/{total_count}")
+        logger.debug(f"Downloading image {preview_index}/{total_count}")
         success, content_type = self.api_client.download_image(image_url, image_path)
 
         if not success:
-            logger.warning(f"Failed to download image {index+1}/{total_count}")
+            logger.warning(f"Failed to download image {preview_index}/{total_count}")
             return None
 
         # Check if the content type indicates a video

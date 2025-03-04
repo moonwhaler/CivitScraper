@@ -37,11 +37,4 @@
         <span class="model-info-value">{{ stats.downloadCount }}</span>
     </div>
     {% endif %}
-
-    {% if metadata.createdAt %}
-    <div class="model-info-item">
-        <span class="model-info-label">Created</span>
-        <span class="model-info-value">{{ metadata.createdAt|replace('T', ' ')|replace('Z', '')|replace('.000', '') }}</span>
-    </div>
-    {% endif %}
 </div>

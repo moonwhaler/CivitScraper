@@ -50,7 +50,7 @@ class PathManager:
         reference_dir = os.path.dirname(reference_path)
         return os.path.relpath(target_path, reference_dir)
 
-    def get_preview_path(self, file_path: str, index: int = 0, ext: str = ".jpg") -> str:
+    def get_preview_path(self, file_path: str, index: int = 1, ext: str = ".jpg") -> str:
         """
         Get preview image path with index.
 
@@ -64,7 +64,7 @@ class PathManager:
         """
         return self.get_image_path(file_path, f"preview{index}", ext)
 
-    def get_preview_base_path(self, file_path: str, index: int = 0) -> str:
+    def get_preview_base_path(self, file_path: str, index: int = 1) -> str:
         """
         Get base preview path without extension.
 
