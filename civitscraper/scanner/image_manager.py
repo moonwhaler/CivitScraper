@@ -90,8 +90,9 @@ class ImageManager:
 
         # Download images
         downloaded_images = []
+        total_count = len(images)
         for i, image in enumerate(images):
-            image_info = self._download_single_image(file_path, image, i)
+            image_info = self._download_single_image(file_path, image, i, total_count)
             if image_info:
                 downloaded_images.append(image_info)
 
@@ -132,7 +133,7 @@ class ImageManager:
                     logger.warning(f"Failed to remove old preview image {old_image}: {e}")
 
     def _download_single_image(
-        self, file_path: str, image: Dict[str, Any], index: int
+        self, file_path: str, image: Dict[str, Any], index: int, total_count: int
     ) -> Optional[Dict[str, Any]]:
         """
         Download a single image.
@@ -141,6 +142,7 @@ class ImageManager:
             file_path: Path to model file
             image: Image data
             index: Image index
+            total_count: Total number of images to download
 
         Returns:
             Dictionary with information about downloaded image, or None if download failed
@@ -183,7 +185,7 @@ class ImageManager:
             return self._create_image_info(image_path, html_dir, image_meta)
         else:
             return self._perform_download(
-                image_url, image_path, html_dir, image_meta, index, len(image.get("images", []))
+                image_url, image_path, html_dir, image_meta, index, total_count
             )
 
     def _perform_download(
@@ -193,7 +195,7 @@ class ImageManager:
         html_dir: str,
         image_meta: Dict[str, Any],
         index: int,
-        total_images: int,
+        total_count: int,
     ) -> Optional[Dict[str, Any]]:
         """
         Perform the actual download of an image.
@@ -204,7 +206,7 @@ class ImageManager:
             html_dir: HTML directory for relative path calculation
             image_meta: Image metadata
             index: Image index
-            total_images: Total number of images
+            total_count: Total number of images to download
 
         Returns:
             Dictionary with information about downloaded image, or None if download failed
@@ -213,11 +215,11 @@ class ImageManager:
         os.makedirs(os.path.dirname(image_path), exist_ok=True)
 
         # Download image
-        logger.debug(f"Downloading image {index+1}/{total_images}")
+        logger.debug(f"Downloading image {index+1}/{total_count}")
         success, content_type = self.api_client.download_image(image_url, image_path)
 
         if not success:
-            logger.warning(f"Failed to download image {index+1}/{total_images}")
+            logger.warning(f"Failed to download image {index+1}/{total_count}")
             return None
 
         # Check if the content type indicates a video

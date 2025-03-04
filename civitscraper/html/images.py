@@ -124,9 +124,9 @@ class ImageHandler:
 
             # Get the image path with the index number
             # The ModelProcessor downloads images with filenames that include the index number
-            image_path = self.path_manager.get_image_path(file_path, f"preview{i}", ext)
+            image_path = self.path_manager.get_image_path(file_path, f"preview{i+1}", ext)
 
-            logger.debug(f"Looking for indexed image file ({i}): {image_path}")
+            logger.debug(f"Looking for indexed image file ({i+1}): {image_path}")
 
             # Check if the indexed image file exists
             if os.path.isfile(image_path):
@@ -160,15 +160,14 @@ class ImageHandler:
                         image_paths.append(image_data)
                 # If no image or video file exists, log a warning
                 else:
-                    if i < max_images:
-                        # Only warn for images within our max_count limit
-                        logger.debug(f"Image file not found: {image_path}")
-                        # In dry run mode, we would normally download the image
-                        if self.dry_run:
-                            logger.info(
-                                f"Dry run: Download image {i+1}/{len(images_to_process)} from "
-                                f"{image.get('url')} to {image_path}"
-                            )
+                    # Log a debug message about the missing file
+                    logger.debug(f"Image file not found: {image_path}")
+                    # In dry run mode, we would normally download the image
+                    if self.dry_run:
+                        logger.info(
+                            f"Dry run: Download image {i+1}/{len(images_to_process)} from "
+                            f"{image.get('url')} to {image_path}"
+                        )
 
         return image_paths
 
