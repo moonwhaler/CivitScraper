@@ -189,42 +189,65 @@ class ContextBuilder:
                 logger.error(f"Error loading metadata from {metadata_path}: {e}")
                 return None
 
-        # If not found, check if this is an organized path or original path
-        is_in_organized_dir = "/organized/" in metadata_path
+        # If metadata not found at direct path, try alternative paths
+        try:
+            filename = os.path.basename(metadata_path)
 
-        if is_in_organized_dir:
-            # We have an organized path, try to find original
-            try:
-                # Extract the base filename from the organized path
-                filename = os.path.basename(metadata_path)
+            # Check if this is an organized or original path
+            is_in_organized_dir = "/organized/" in metadata_path
 
-                # Find the "models/" part of the path to extract base directory
-                models_index = metadata_path.find("/models/")
-                if models_index != -1:
-                    # Extract model type (e.g., "Lora")
-                    path_parts = metadata_path[models_index:].split("/")
-                    if len(path_parts) >= 3:
-                        original_dir = "/".join(path_parts[:3])
-                        original_path = os.path.join(original_dir, filename)
+            if is_in_organized_dir:
+                # We're in an organized directory, try to find the original
+                # Extract path segments to reconstruct the original path
+                organized_idx = metadata_path.find("/organized/")
+                if organized_idx != -1:
+                    # Get the path prefix before "/organized/"
+                    original_base = metadata_path[:organized_idx]
+                    original_path = os.path.join(original_base, filename)
 
-                        if os.path.isfile(original_path):
-                            try:
-                                with open(original_path, "r", encoding="utf-8") as f:
-                                    original_metadata: Dict[str, Any] = json.load(f)
-                                    logger.debug(
-                                        f"Found metadata in original location: {original_path}"
-                                    )
-                                    return original_metadata
-                            except Exception as e:
-                                logger.error(
-                                    f"Error loading metadata from org path {original_path}: {e}"
+                    if os.path.isfile(original_path):
+                        try:
+                            with open(original_path, "r", encoding="utf-8") as f:
+                                original_metadata: Dict[str, Any] = json.load(f)
+                                logger.debug(
+                                    f"Found metadata in original location: {original_path}"
                                 )
-            except Exception as e:
-                logger.error(
-                    f"Error trying to find original metadata path for {metadata_path}: {e}"
-                )
+                                return original_metadata
+                        except Exception as e:
+                            logger.error(
+                                f"Error loading metadata from original path {original_path}: {e}"
+                            )
+            else:
+                # We're in an original path, try to find organized version
+                # This handles the case where HTML files may have been left in the original location
+                # but metadata was moved to organized locations
+                organized_idx = metadata_path.rfind("/")
+                if organized_idx != -1:
+                    parent_dir = metadata_path[:organized_idx]
+                    organized_dir = os.path.join(parent_dir, "organized")
 
-        # If we got here, the metadata wasn't found in either location
+                    # Search for the file recursively in the organized directory
+                    if os.path.isdir(organized_dir):
+                        for root, _, files in os.walk(organized_dir):
+                            organized_path = os.path.join(root, filename)
+                            if os.path.isfile(organized_path):
+                                try:
+                                    with open(organized_path, "r", encoding="utf-8") as f:
+                                        organized_metadata: Dict[str, Any] = json.load(f)
+                                        logger.debug(
+                                            f"Found metadata in new location: {organized_path}"
+                                        )
+                                        return organized_metadata
+                                except Exception as e:
+                                    logger.error(
+                                        f"Error loading metadata from path {organized_path}: {e}"
+                                    )
+                                break
+
+        except Exception as e:
+            logger.error(f"Error trying to find alternative metadata path for {metadata_path}: {e}")
+
+        # If we got here, the metadata wasn't found in any location
         logger.warning(f"Metadata not found: {metadata_path}")
         return None
 
