@@ -420,13 +420,41 @@ output:
     html:
       enabled: true         # Generate HTML preview pages
       filename: "{model_name}.html"  # HTML filename
+      generate_gallery: true         # Generate a gallery of all models
+      gallery_path: "gallery.html"   # Path to gallery HTML file
+      gallery_title: "Model Gallery" # Gallery title
+      include_existing_in_gallery: true # Include existing model cards in gallery
 ```
+
+#### Gallery Generation
+
+CivitScraper can generate a comprehensive gallery view that showcases all your models in a single HTML page. This feature:
+
+- Creates a unified view of all your model cards
+- Intelligently prioritizes organized model versions
+- Can include both newly processed and existing model cards
+- Supports custom titles and output paths
+- Provides easy navigation between models
+
+The gallery is automatically generated during the model processing phase when enabled in the configuration:
+
+```yaml
+output:
+  metadata:
+    html:
+      generate_gallery: true                       # Enable gallery generation
+      gallery_path: "/path/to/model_gallery.html"  # Output path for gallery
+      gallery_title: "My AI Model Collection"      # Custom gallery title
+      include_existing_in_gallery: true            # Include existing model cards
+```
+
+The gallery provides a convenient overview of your entire model collection, making it easier to browse and find models without having to navigate through directories.
 
 ### File Organization
 
 CivitScraper can organize model files based on metadata. The organization is controlled by the organization settings:
 
-> **⚠️ WARNING**: The file organization feature will change file locations (in "move" mode) or create new files (in "copy" mode). The author takes no responsibility for any unexpected outcomes when using this feature. Always back up your files before using the organization functionality - and test it before production run!
+> **⚠️ WARNING**: The file organization feature will change file locations (in "move" mode) or create new files (in "copy" or "symlink" mode). The author takes no responsibility for any unexpected outcomes when using this feature. Always back up your files before using the organization functionality - and test it before production run!
 
 ```yaml
 # In a job configuration:
@@ -436,13 +464,45 @@ organization:
   template: "by_type_and_basemodel"  # Organization template to use
   custom_template: ""       # Custom organization path template
   output_dir: "{model_dir}/organized"  # Where to put organized files
-  operation_mode: "move"    # [copy/move/symlink] How to organize files
+  operation_mode: "symlink"    # [copy/move/symlink] How to organize files
 ```
 
 The organization can be performed using different operation modes:
 - `copy`: Copy files to the organized location
-- `move`: Move files to the organized location
-- `symlink`: Create symbolic links in the organized location
+- `move`: Move files to the organized location (warning: changes your original file locations)
+- `symlink`: Create symbolic links in the organized location (safest option, preserves originals)
+
+The `symlink` mode is especially useful as it allows you to maintain the original file structure while creating an organized view, without duplicating files or risking file moves.
+
+## Processing Flow
+
+CivitScraper processes model files in multiple phases, ensuring efficient and organized handling:
+
+### Phase 1: Metadata Fetching
+- Scans directories for model files based on configured patterns
+- Computes file hashes for model identification
+- Fetches metadata from CivitAI API for all files in a batch
+- Builds a complete metadata dictionary before proceeding
+
+### Phase 2: File Organization (if enabled)
+- Uses the metadata to organize files according to the configured template
+- Creates the organization structure (directories) as needed
+- Performs the file operation (copy/move/symlink) based on configured mode
+- Maintains a mapping between original files and their organized versions
+
+### Phase 3: Processing Organized Files
+- Processes the organized files (or original files if organization disabled)
+- Generates JSON metadata files
+- Creates HTML model card pages
+- Downloads preview images
+
+### Phase 4: Gallery Generation (if enabled)
+- Scans for model card HTML files
+- Prioritizes organized versions when duplicates exist
+- Optionally includes pre-existing model cards
+- Generates a unified gallery of all models
+
+This phased approach ensures that all files are processed consistently and maintains proper relationships between original and organized files.
 
 ## Job System
 
@@ -461,7 +521,7 @@ Each job is self-contained with all necessary settings. Here are examples of dif
 ```yaml
 fetch-all:
   type: scan-paths
-  recursive: true      # Search in subdirectories
+  recursive: false     # Search in top level directory only
   skip_existing: true  # Skip files that already have metadata
   verify_hashes: true  # Verify file hashes against CivitAI data
   paths: ["lora"]      # Process these path types
@@ -473,24 +533,49 @@ fetch-all:
       html:
         enabled: true
         filename: "{model_name}.html"
+        generate_gallery: true
+        gallery_path: "gallery.html"
+        gallery_title: "Model Gallery"
     images:
       save: true
       path: "{model_dir}"
-      max_count: 4
+      max_count: 2     # Maximum number of images to download
       filenames:
         preview: "{model_name}.preview{ext}"
+  organization:
+    enabled: true             # Enable model organization
+    dry_run: false            # Simulate file operations without making changes
+    template: "by_type_and_basemodel"  # Organization template to use
+    output_dir: "{model_dir}/organized"  # Where to put organized files
+    operation_mode: "symlink"    # [copy/move/symlink] How to organize files
 ```
 
-#### Sync-Lora-Triggers Job
+## Krita AI Diffusion Integration
+
+CivitScraper includes specialized functionality for integration with Krita AI Diffusion, a popular AI painting tool.
+
+### Synchronizing LoRA Trigger Words
+
+The `sync-lora-triggers` job type allows you to synchronize LoRA trigger words (activation text) with Krita AI Diffusion's `loras.json` file:
 
 ```yaml
 sync-triggers:
   type: sync-lora-triggers
   description: "Synchronize LoRA trigger words"
   recursive: true
+  skip_existing: true
+  verify_hashes: true
   loras_file: "loras.json"
   paths: ["lora"]
 ```
+
+This functionality:
+- Scans your LoRA model files and their associated metadata
+- Extracts the recommended activation text (trigger words) from CivitAI metadata
+- Updates the Krita AI Diffusion `loras.json` file with these trigger words
+- Enables one-click activation of LoRAs in Krita with the correct parameters
+
+The integration ensures that your LoRA models work correctly in Krita AI Diffusion without manual configuration of trigger words.
 
 ### Creating Custom Jobs
 
@@ -512,10 +597,12 @@ jobs:
         html:
           enabled: true
           filename: "{model_name}.html"
+          generate_gallery: true
+          gallery_path: "custom_gallery.html"
       images:
         save: true
         path: "{model_dir}"
-        max_count: 2               # Set max_count to 2
+        max_count: 2               # Limit to 2 images
 ```
 
 You can create multiple jobs with different configurations to handle different tasks:
@@ -540,17 +627,23 @@ jobs:
     paths: ["checkpoints"]
     # ... other settings ...
 
-  # Generate gallery
-  generate-gallery:
+  # Metadata only (no images)
+  metadata-only:
     type: scan-paths
     recursive: true
-    skip_existing: false
-    verify_hashes: false
-    paths: ["lora", "checkpoints"]
-    generate_gallery: true
-    gallery_path: "gallery.html"
-    gallery_title: "Model Gallery"
-    # ... other settings ...
+    skip_existing: true
+    verify_hashes: true
+    paths: ["lora"]
+    output:
+      metadata:
+        format: "json"
+        path: "{model_dir}"
+        filename: "{model_name}.json"
+        html:
+          enabled: true
+          filename: "{model_name}.html"
+      images:
+        save: false             # Don't download images
 ```
 
 ## Advanced Usage
@@ -563,10 +656,46 @@ CivitScraper supports batch processing for efficient handling of large collectio
 api:
   batch:
     enabled: true         # Enable batch processing
-    max_concurrent: 4     # Maximum parallel requests
-    rate_limit: 100       # Requests/minute
-    retry_delay: 1000     # Base delay (ms) for exponential backoff
-    cache_size: 100       # LRU cache size
+    max_concurrent: 4     # Maximum parallel requests using thread-safe semaphore
+    rate_limit: 100       # Requests/minute (uses token bucket with per-endpoint tracking)
+    retry_delay: 1000     # Base delay (ms) for exponential backoff when rate limited
+    cache_size: 100       # LRU cache size - evicts least recently used entries when full
+    
+    # Advanced batch settings
+    # Circuit breaker prevents API abuse during outages by tracking failures per endpoint
+    circuit_breaker:
+      failure_threshold: 5    # Number of failures before blocking requests to an endpoint
+      reset_timeout: 60       # Seconds to wait before auto-recovery after blocking
+```
+
+### File Discovery and Path Management
+
+CivitScraper provides sophisticated file discovery and path management capabilities:
+
+```yaml
+# In a job configuration:
+recursive: true      # Enable recursive directory scanning
+skip_existing: true  # Skip files that already have metadata
+verify_hashes: true  # Verify file hashes against CivitAI data
+```
+
+The file discovery system:
+- Recursively scans directories for model files based on patterns
+- Identifies model types automatically based on directory configuration
+- Skips files that already have metadata if configured
+- Prioritizes organized model versions over original versions
+
+The path management system handles file paths using templates with placeholders:
+
+```yaml
+output:
+  metadata:
+    path: "{model_dir}"
+    filename: "{model_name}.json"
+  images:
+    path: "{model_dir}"
+    filenames:
+      preview: "{model_name}.preview{ext}"
 ```
 
 ### Custom Organization Templates
@@ -587,6 +716,8 @@ Available placeholders:
 - `{nsfw}`: NSFW status (nsfw/sfw)
 - `{year}`: Creation year
 - `{month}`: Creation month
+
+The organization system intelligently creates the directory structure and formats file paths using these placeholders, ensuring a consistent and logical organization scheme.
 
 ### API Rate Limiting and Circuit Breaker
 
