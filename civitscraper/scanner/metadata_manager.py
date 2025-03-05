@@ -59,9 +59,62 @@ class MetadataManager:
             response = self.api_client.get_model_version_by_hash(
                 file_hash, force_refresh=force_refresh
             )
+            logger.debug(f"Got API response for hash {file_hash}: {type(response)}")
+
+            # Handle both ModelVersion objects and dicts
             if isinstance(response, ModelVersion):
-                return response.__dict__
-            return None
+                metadata = {
+                    "id": response.id,
+                    "modelId": response.id,
+                    "name": response.name,
+                    "createdAt": response.created_at.isoformat(),
+                    "downloadUrl": response.download_url,
+                    "description": response.description,
+                    "trainedWords": response.trained_words,
+                    "files": [
+                        {
+                            "name": f.name,
+                            "id": f.id,
+                            "sizeKb": f.size_kb,
+                            "type": f.type,
+                            "metadata": f.metadata.__dict__ if f.metadata else None,
+                            "pickleScanResult": f.pickle_scan_result,
+                            "virusScanResult": f.virus_scan_result,
+                            "scannedAt": f.scanned_at.isoformat() if f.scanned_at else None,
+                            "primary": f.primary,
+                        }
+                        for f in response.files
+                    ],
+                    "images": [
+                        {
+                            "id": i.id,
+                            "url": i.url,
+                            "nsfw": i.nsfw,
+                            "width": i.width,
+                            "height": i.height,
+                            "hash": i.hash,
+                            "meta": i.meta.__dict__ if i.meta else None,
+                        }
+                        for i in response.images
+                    ],
+                    "stats": response.stats.__dict__ if response.stats else None,
+                }
+            elif isinstance(response, dict):
+                # If it's already a dict, use it directly
+                metadata = response
+            else:
+                logger.warning(f"Invalid response type for hash {file_hash}: {type(response)}")
+                return None
+
+            # Validate required fields
+            if not metadata.get("images"):
+                logger.warning(f"No images found in metadata for hash {file_hash}")
+                return None
+
+            logger.debug(
+                f"Processed hash: {file_hash}, found {len(metadata.get('images', []))} images"
+            )
+            return metadata
         except Exception as e:
             logger.error(f"Failed to fetch metadata for hash {file_hash}: {e}")
             return None

@@ -182,11 +182,25 @@ class JobExecutor:
 
             # First, fetch metadata for all files without processing them
             for file_path in filtered_files:
-                metadata = temp_processor.fetch_metadata(
-                    file_path, verify_hash=verify_hashes, force_refresh=force_refresh
-                )
-                if metadata:
-                    metadata_dict[file_path] = metadata
+                try:
+                    result = temp_processor.file_processor.process(
+                        file_path, verify_hash=verify_hashes
+                    )
+                    if not result.success or not result.file_hash:
+                        logger.warning(f"Failed to process file {file_path}: {result.error}")
+                        continue
+
+                    # Get metadata from API
+                    metadata = temp_processor.metadata_manager.fetch_metadata(
+                        result.file_hash, force_refresh=force_refresh
+                    )
+                    if metadata:
+                        logger.debug(f"Got metadata for {file_path}")
+                        metadata_dict[file_path] = metadata
+                    else:
+                        logger.warning(f"No metadata found for {file_path}")
+                except Exception as e:
+                    logger.error(f"Error fetching metadata for {file_path}: {e}")
 
             # PHASE 2: Organize files if enabled
             organization_config = job_config.get("organization", {})
