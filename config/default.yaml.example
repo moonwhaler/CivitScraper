@@ -38,6 +38,12 @@ input_paths:
     type: LORA                      # Model type identifier
     patterns: ["*.safetensors"]  # File patterns to match
 
+  # ALL LORA models directory
+  all-lora:
+    path: "path/to/all-loras"           # Directory containing all LORA models
+    type: LORA                      # Model type identifier
+    patterns: ["*.safetensors"]  # File patterns to match
+
   # Stable Diffusion checkpoints
   checkpoints:
     path: "path/to/checkpoints"  # Directory containing checkpoints
@@ -65,8 +71,8 @@ jobs:
   # Process all model types with full settings
   fetch-all:
     type: scan-paths
-    recursive: true      # Search in subdirectories
-    skip_existing: true  # Skip files that already have metadata
+    recursive: false      # Search in subdirectories
+    skip_existing: false  # Skip files that already have metadata
     verify_hashes: true  # Verify file hashes against CivitAI data
     paths: ["lora"]      # Process these path types
     output:
@@ -77,21 +83,80 @@ jobs:
         html:
           enabled: true         # Generate HTML preview pages
           filename: "{model_name}.html"  # HTML filename
-          generate_gallery: false
+          generate_gallery: true
           gallery_path: "path/to/html-output/model_gallery.html"
           gallery_title: "Model Gallery"
       images:
         save: true             # Download preview images
         path: "{model_dir}"    # Where to save images
-        max_count: 4        # Maximum number of images to download (null for no limit)
+        max_count: 2        # Maximum number of images to download (null for no limit)
         filenames:
           preview: "{model_name}.preview{ext}"  # Preview image filename pattern
     organization:
       enabled: true            # Enable model organization
-      template: "by_type_and_basemodel"  # Organization template to use
-      custom_template: ""       # Custom organization path template (leave empty to use predefined template)
+      # Available predefined templates:
+      # - by_type: Organize by model type
+      # - by_creator: Organize by creator
+      # - by_type_and_creator: Organize by type and creator
+      # - by_type_and_basemodel: Organize by type and base model
+      # - by_base_model: Organize by base model and type
+      # - by_nsfw: Organize by NSFW status and type
+      # - by_type_basemodel_nsfw: Organize by type, base model, and NSFW status
+      # - by_date: Organize by year, month, and type
+      # - by_model_info: Organize by model type and name
+      # - by_rating: Organize by weighted rating and type
+      # - by_type_and_rating: Organize by type and weighted rating
+      template: "by_type_and_rating"  # Use predefined organization template
+      # Or use custom template with available placeholders:
+      # {model_name}: Model name
+      # {model_type} or {type}: Model type
+      # {creator}: Creator username
+      # {base_model}: Base model
+      # {nsfw}: NSFW status (nsfw/sfw)
+      # {year}: Creation year
+      # {month}: Creation month
+      # {weighted_rating}: Rating (1-5) adjusted by rating count vs downloads
+      # {weighted_thumbsup}: Normalized thumbs up rating (1-5) based on ratio
+      custom_template: "{type}/{creator}/{base_model}/{weighted_rating}"
       output_dir: "{model_dir}/organized"  # Where to put organized files
-      operation_mode: "copy"    # [copy/move/symlink] How to organize files
+      operation_mode: "symlink"    # [copy/move/symlink] How to organize files
+
+  # Organize by rating example
+  organize-by-rating:
+    type: scan-paths
+    recursive: true
+    paths: ["lora", "checkpoints"]
+    output:
+      metadata:
+        format: "json"
+        path: "{model_dir}"
+    organization:
+      enabled: true
+      template: "by_rating"  # Uses weighted rating system (1-5)
+      output_dir: "path/to/rating-organized"
+      operation_mode: "symlink"
+
+  # Date-based organization example
+  organize-by-date:
+    type: scan-paths
+    recursive: true
+    paths: ["lora"]
+    organization:
+      enabled: true
+      template: "by_date"  # Organizes by year/month
+      output_dir: "path/to/date-organized"
+      operation_mode: "copy"
+
+  # NSFW filtering example
+  organize-nsfw:
+    type: scan-paths
+    recursive: true
+    paths: ["lora", "checkpoints"]
+    organization:
+      enabled: true
+      template: "by_nsfw"  # Separates NSFW/SFW content
+      output_dir: "path/to/nsfw-organized"
+      operation_mode: "symlink"
 
   # Metadata-only job (no images)
   metadata-only:
@@ -120,7 +185,7 @@ jobs:
     type: sync-lora-triggers
     description: "Synchronize LoRA trigger words"
     recursive: true
-    loras_file: "loras.json"
+    loras_file: "path/to/loras.json"
     paths: ["lora"]
 
 # =============================================================================
