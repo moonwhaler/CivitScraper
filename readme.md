@@ -448,6 +448,32 @@ output:
       include_existing_in_gallery: true            # Include existing model cards
 ```
 
+##### The include_existing_in_gallery Option
+
+The `include_existing_in_gallery` option controls whether previously generated HTML model cards should be included in a new gallery generation:
+
+- When set to `true` (default), the system will scan for existing HTML model cards across your configured directories and include them in the gallery, alongside any newly processed models
+- When set to `false`, the gallery will only contain model cards for files that were processed in the current job run
+
+**Implications:**
+
+With `include_existing_in_gallery: true`:
+- **Comprehensive gallery**: Your gallery will include ALL model cards that exist in your directories, providing a complete view of your entire collection
+- **Persistence**: Models processed in previous runs will remain in the gallery even if you're only processing a few new models in the current run
+- **Organization awareness**: The system prioritizes organized versions of model cards when duplicates exist (if you have both original and organized versions of the same model)
+
+With `include_existing_in_gallery: false`:
+- **Partial gallery**: The gallery will only show models processed in the current job run
+- **Isolation**: Each job run creates an independent gallery that doesn't reflect your entire collection
+- **Faster generation**: No need to scan directories for existing HTML files, which could be faster for very large collections
+
+**Example scenario:**
+If you have 500 models with existing HTML cards and add 10 new models:
+- With `true`: Your gallery will show all 510 models
+- With `false`: Your gallery will only show the 10 new models
+
+Most users would want this set to `true` (the default) to maintain a complete gallery of their entire collection, but the `false` option can be useful for creating separate galleries for specific subsets of models.
+
 The gallery provides a convenient overview of your entire model collection, making it easier to browse and find models without having to navigate through directories.
 
 ### File Organization
