@@ -5,9 +5,23 @@ This module handles formatting file paths based on metadata.
 """
 
 import logging
+from math import log
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def calculate_weighted_rating(rating: float, rating_count: int, download_count: int) -> float:
+    """Calculate weighted rating based on rating and download count."""
+    if rating_count == 0 or download_count == 0:
+        return 0.0
+
+    # Use log scaling for downloads to prevent overwhelming the rating
+    log_downloads = log(download_count + 1)
+    weighted = (rating * rating_count + rating * log_downloads) / (rating_count + log_downloads)
+
+    # Cap at 5.0 and ensure non-negative
+    return min(max(abs(weighted), 0.0), 5.0)
 
 
 class PathFormatter:
@@ -17,6 +31,8 @@ class PathFormatter:
         """Initialize path formatter."""
         # Predefined templates
         self.templates = {
+            "by_rating": "{weighted_rating}/{type}",
+            "by_type_and_rating": "{type}/{weighted_rating}",
             "by_type": "{type}",
             "by_creator": "{creator}",
             "by_type_and_creator": "{type}/{creator}",
@@ -89,8 +105,21 @@ class PathFormatter:
         year = created_at[:4] if created_at else "Unknown"
         month = created_at[5:7] if created_at else "Unknown"
 
+        # Get stats
+        stats = model_info.get("stats", {})
+        if not stats:
+            stats = {}
+
+        # Calculate weighted rating
+        rating = stats.get("rating", 0.0)
+        rating_count = stats.get("rating_count", 0)
+        download_count = stats.get("download_count", 0)
+        weighted_rating = calculate_weighted_rating(rating, rating_count, download_count)
+        weighted_rating_str = f"rating_{weighted_rating: .1f}"
+
         # Format path
         path = template
+        path = path.replace("{weighted_rating}", weighted_rating_str)
         path = path.replace("{model_name}", self.sanitize_path(model_name))
         path = path.replace("{model_type}", self.sanitize_path(model_type))
         path = path.replace("{type}", self.sanitize_path(model_type))
