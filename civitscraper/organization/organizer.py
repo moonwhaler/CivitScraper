@@ -33,6 +33,7 @@ class FileOrganizer:
         self.org_config = OrganizationConfig.from_dict(config)
         self.path_formatter = PathFormatter()
         self.file_handler = FileOperationHandler(config)
+        self.dry_run = config.get("dry_run", False)
 
     def get_target_path(self, file_path: str, metadata: Dict[str, Any]) -> Optional[str]:
         """
@@ -120,7 +121,7 @@ class FileOrganizer:
             if self.should_process_file(file_path):
                 # Perform file operation
                 success = self.file_handler.perform_operation(
-                    file_path, target_path, self.org_config.operation_mode, self.org_config.dry_run
+                    file_path, target_path, self.org_config.operation_mode, self.dry_run
                 )
                 if not success:
                     return None
@@ -143,7 +144,7 @@ class FileOrganizer:
                             related_path,
                             related_target_path,
                             self.org_config.operation_mode,
-                            self.org_config.dry_run,
+                            self.dry_run,
                         )
 
             return target_path

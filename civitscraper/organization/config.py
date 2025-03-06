@@ -20,7 +20,6 @@ class OrganizationConfig:
     custom_template: Optional[str] = None
     output_dir: Optional[str] = None
     operation_mode: str = "copy"
-    dry_run: bool = False
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]) -> "OrganizationConfig":
@@ -63,14 +62,10 @@ class OrganizationConfig:
         elif "create_symlinks" in org_config and org_config.get("create_symlinks", False):
             operation_mode = "symlink"
 
-        # Get dry run flag
-        dry_run = org_config.get("dry_run", False)
-
         return cls(
             enabled=enabled,
             template=template,
             custom_template=custom_template,
             output_dir=output_dir,
             operation_mode=operation_mode,
-            dry_run=dry_run,
         )

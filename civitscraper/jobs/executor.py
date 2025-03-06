@@ -211,17 +211,6 @@ class JobExecutor:
                 # Create a job-specific organizer with the updated configuration
                 job_organizer = FileOrganizer(job_specific_config)
 
-                # Get target paths for all files
-                target_paths = job_organizer.get_target_paths(
-                    list(metadata_dict.keys()), metadata_dict
-                )
-
-                # Create directories for target paths
-                for target_path in target_paths.values():
-                    target_dir = os.path.dirname(target_path)
-                    if not os.path.exists(target_dir):
-                        os.makedirs(target_dir, exist_ok=True)
-
                 # Organize pre-existing files
                 logger.info(f"Organizing {len(metadata_dict)} files")
                 organized_results = job_organizer.organize_files(

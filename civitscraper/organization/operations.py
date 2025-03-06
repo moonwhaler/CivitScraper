@@ -73,15 +73,17 @@ class FileOperationHandler:
             True if operation was successful, False otherwise
         """
         try:
-            # Create target directory if it doesn't exist
-            target_dir = os.path.dirname(target_path)
-            if not dry_run:
-                os.makedirs(target_dir, exist_ok=True)
-
-            # Perform operation
+            # In dry run mode, just log what would happen
             if dry_run:
+                target_dir = os.path.dirname(target_path)
+                if not os.path.exists(target_dir):
+                    logger.info(f"Dry run: Would create directory: {target_dir}")
                 logger.info(f"Dry run: Would {operation_type} {source_path} to {target_path}")
                 return True
+
+            # Create target directory if it doesn't exist
+            target_dir = os.path.dirname(target_path)
+            os.makedirs(target_dir, exist_ok=True)
 
             # Check if target exists - we'll overwrite it
             if os.path.exists(target_path) and not dry_run:
