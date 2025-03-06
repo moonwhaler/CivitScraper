@@ -88,7 +88,6 @@ jobs:
           preview: "{model_name}.preview{ext}"  # Preview image filename pattern
     organization:
       enabled: true            # Enable model organization
-      dry_run: false            # [true/false] Simulate file operations without making changes
       template: "by_type_and_basemodel"  # Organization template to use
       custom_template: ""       # Custom organization path template (leave empty to use predefined template)
       output_dir: "{model_dir}/organized"  # Where to put organized files
@@ -121,10 +120,8 @@ jobs:
     type: sync-lora-triggers
     description: "Synchronize LoRA trigger words"
     recursive: true
-    skip_existing: true
-    verify_hashes: true
     loras_file: "loras.json"
-    paths: []
+    paths: ["lora"]
 
 # =============================================================================
 # Scanner Settings
