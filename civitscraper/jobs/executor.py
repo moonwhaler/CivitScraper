@@ -333,7 +333,13 @@ class JobExecutor:
 
             # Update loras.json
             updated_count = 0
+            processed_count = 0
+            logger.debug(f"Total files to process: {len(lora_files)}")
+
             for file_path in lora_files:
+                processed_count += 1
+                logger.debug(f"Processing {file_path}")
+
                 # Get metadata path
                 metadata_path = os.path.splitext(file_path)[0] + ".json"
 
@@ -341,29 +347,52 @@ class JobExecutor:
                 with open(metadata_path, "r") as f:
                     metadata = json.load(f)
 
-                # Get activation text
-                activation_text = metadata.get("activation text")
-                if not activation_text:
-                    continue
+                # Try both possible keys for trigger words
+                trigger_words = metadata.get("trainedWords")
+                if not trigger_words:
+                    # Try alternate key if trainedWords not found
+                    trigger_words = metadata.get("activation text")
+                    if trigger_words:
+                        logger.debug(f"Found activation text: {trigger_words}")
+                    else:
+                        logger.debug(
+                            f"No trigger words in trainedWords or activation text for {file_path}"
+                        )
+                        continue
+                else:
+                    logger.debug(f"Found trainedWords: {trigger_words}")
 
-                # Get relative path
-                relative_path = os.path.relpath(file_path)
+                # Get filename for matching
+                filename = os.path.basename(file_path)
+                logger.debug(f"Looking for entry with filename: {filename}")
 
                 # Find entry in loras.json
                 for entry in loras_data:
-                    if entry.get("id") == relative_path:
+                    entry_filename = os.path.basename(entry.get("id", ""))
+                    if entry_filename == filename:
+                        logger.debug(f"Found entry with id: {entry.get('id')}")
+                        current_triggers = entry.get("metadata", {}).get("lora_triggers", "None")
+                        if current_triggers != "None":
+                            logger.debug(
+                                f"Found pre-existing triggers for {filename}: {current_triggers}"
+                            )
+                        logger.debug(f"Updating with new triggers: {trigger_words}")
+
                         # Update entry
                         if "metadata" not in entry:
                             entry["metadata"] = {}
 
-                        entry["metadata"]["lora_triggers"] = activation_text
+                        entry["metadata"]["lora_triggers"] = trigger_words
                         updated_count += 1
                         break
+                else:
+                    logger.debug(f"No matching entry found in loras.json for {filename}")
 
             # Save loras.json
             with open(loras_file, "w") as f:
                 json.dump(loras_data, f, indent=2)
 
+            logger.info(f"Files processed: {processed_count}")
             logger.info(f"Updated {updated_count} entries in loras.json")
 
             return True
