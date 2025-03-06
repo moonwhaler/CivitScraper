@@ -80,7 +80,7 @@
     align-items: center;
 }
 
-.rating-count {
+.rating-count, .weighted-rating, .weighted-thumbs {
     color: var(--metadata-label-color);
     font-size: 0.9rem;
     margin-left: 5px;

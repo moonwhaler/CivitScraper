@@ -26,6 +26,23 @@
                     {% endif %}
                 {% endfor %}
                 <span class="rating-count">({{ stats.ratingCount|default(0) }})</span>
+                {% if stats.weighted_rating %}
+                <span class="weighted-rating">[{{ "%.1f"|format(stats.weighted_rating) }}]</span>
+                {% endif %}
+            </span>
+        </span>
+    </div>
+    {% endif %}
+
+    {% if stats and stats.thumbsUpCount %}
+    <div class="model-info-item">
+        <span class="model-info-label">Thumbs Up</span>
+        <span class="model-info-value">
+            <span class="thumbs-up">
+                {{ stats.thumbsUpCount }}
+                {% if stats.weighted_thumbsup %}
+                <span class="weighted-thumbs">[{{ "%.1f"|format(stats.weighted_thumbsup) }}]</span>
+                {% endif %}
             </span>
         </span>
     </div>

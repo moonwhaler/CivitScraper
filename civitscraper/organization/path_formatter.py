@@ -10,6 +10,13 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 
+def round_to_half(value: float) -> str:
+    """Round a value to nearest 0.5 and format with one decimal."""
+    rounded = round(value * 2) / 2
+    rounded = min(max(rounded, 1.0), 5.0)  # Ensure between 1-5
+    return f"{rounded: .1f}"
+
+
 def calculate_weighted_rating(rating: float, rating_count: int, download_count: int) -> str:
     """Calculate weighted rating (1-5) with confidence adjustment."""
     if rating_count == 0:
@@ -24,8 +31,9 @@ def calculate_weighted_rating(rating: float, rating_count: int, download_count: 
     # Scale rating toward neutral (3.0) based on confidence
     weighted = 3.0 + (rating - 3.0) * confidence
 
-    # Ensure between 1-5 and format with one decimal
+    # Ensure between 1-5 and round to nearest 0.5
     weighted = min(max(weighted, 1.0), 5.0)
+    weighted = round(weighted * 2) / 2
     return f"{weighted: .1f}"
 
 
@@ -42,6 +50,9 @@ def calculate_weighted_thumbsup(download_count: int, thumbs_up_count: int) -> st
     # ratio 15% = 4.0 rating
     # ratio 20% = 5.0 rating
     weighted = 1.0 + min(ratio * 5, 1.0) * 4.0
+
+    # Round to nearest 0.5
+    weighted = round(weighted * 2) / 2
     return f"{weighted: .1f}"
 
 
@@ -54,6 +65,8 @@ class PathFormatter:
         self.templates = {
             "by_rating": "{weighted_rating}/{type}",
             "by_type_and_rating": "{type}/{weighted_rating}",
+            "by_raw_rating": "{rating}/{type}",
+            "by_type_and_raw_rating": "{type}/{rating}",
             "by_type": "{type}",
             "by_creator": "{creator}",
             "by_type_and_creator": "{type}/{creator}",
@@ -129,17 +142,20 @@ class PathFormatter:
         # Get stats from version level
         stats = metadata.get("stats", {})
 
-        # Calculate weighted ratings
+        # Get stats and calculate ratings
         rating = stats.get("rating", 0.0)
         rating_count = stats.get("ratingCount", 0)
         download_count = stats.get("downloadCount", 0)
         thumbs_up_count = stats.get("thumbsUpCount", 0)
 
+        # Calculate raw and weighted ratings
+        rounded_rating = round_to_half(rating)
         weighted_rating = calculate_weighted_rating(rating, rating_count, download_count)
         weighted_thumbsup = calculate_weighted_thumbsup(download_count, thumbs_up_count)
 
         # Format path
         path = template
+        path = path.replace("{rating}", f"rating_{rounded_rating}")
         path = path.replace("{weighted_rating}", f"rating_{weighted_rating}")
         path = path.replace("{weighted_thumbsup}", f"thumbs_{weighted_thumbsup}")
         path = path.replace("{model_name}", self.sanitize_path(model_name))
