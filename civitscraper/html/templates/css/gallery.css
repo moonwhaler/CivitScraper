@@ -381,6 +381,20 @@
     background-color: rgba(0, 0, 0, 0.2);
 }
 
+/* Video styles */
+.video-indicator {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    z-index: 1;
+}
+
 .model-preview img, .model-preview video {
     width: 100%;
     height: 100%;

@@ -11,7 +11,7 @@
         {% if model.preview_image_path %}
         <div class="model-preview">
             {% if model.is_video %}
-            <video src="{{ model.preview_image_path }}" preload="metadata" class="preview-video"></video>
+            <video src="{{ model.preview_image_path }}" preload="metadata" class="preview-video" controls muted loop playsinline></video>
             <div class="video-indicator">VIDEO</div>
             {% else %}
             <img src="{{ model.preview_image_path }}" alt="{{ model.name }}" loading="lazy">
