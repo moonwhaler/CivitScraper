@@ -48,10 +48,13 @@ class FileOperationHandler:
         if os.path.isfile(html_path):
             related_files.append((html_path, "html"))
 
-        # Add preview images using simplified pattern matching
-        preview_pattern = f"{base_path}.preview*.*"
-        for preview_path in glob.glob(preview_pattern):
-            related_files.append((preview_path, "preview"))
+        # Add preview files using comprehensive pattern matching
+        # Support up to 10 preview images with various extensions
+        for i in range(10):
+            for ext in [".jpeg", ".jpg", ".png", ".webp", ".mp4"]:
+                preview_path = f"{base_path}.preview{i}{ext}"
+                if os.path.isfile(preview_path):
+                    related_files.append((preview_path, "preview"))
 
         return related_files
 

@@ -202,7 +202,15 @@ class JobExecutor:
                 except Exception as e:
                     logger.error(f"Error fetching metadata for {file_path}: {e}")
 
-            # PHASE 2: Organize files if enabled
+            # PHASE 2: Download images first
+            if metadata_dict:
+                logger.info(f"Downloading images for {len(metadata_dict)} files")
+                for file_path, metadata in metadata_dict.items():
+                    temp_processor.image_manager.download_images(
+                        file_path, metadata, force_refresh=force_refresh
+                    )
+
+            # PHASE 3: Organize files if enabled
             organization_config = job_config.get("organization", {})
             if organization_config.get("enabled", False) and metadata_dict:
                 logger.info(f"Organizing {len(metadata_dict)} files")
@@ -219,7 +227,7 @@ class JobExecutor:
                     if new_path:
                         organized_files_mapping[orig_path] = new_path
 
-            # PHASE 3: Process organized files (or original files if not organized)
+            # PHASE 4: Process remaining tasks
             logger.info(f"Processing {len(metadata_dict)} files with metadata")
             results = []
 
