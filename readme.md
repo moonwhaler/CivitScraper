@@ -686,7 +686,7 @@ api:
     rate_limit: 100       # Requests/minute (uses token bucket with per-endpoint tracking)
     retry_delay: 1000     # Base delay (ms) for exponential backoff when rate limited
     cache_size: 100       # LRU cache size - evicts least recently used entries when full
-    
+
     # Advanced batch settings
     # Circuit breaker prevents API abuse during outages by tracking failures per endpoint
     circuit_breaker:
