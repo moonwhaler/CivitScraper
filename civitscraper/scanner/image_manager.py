@@ -7,6 +7,7 @@ This module handles downloading and managing images for models.
 import glob
 import logging
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 from ..api.client import CivitAIClient
@@ -195,7 +196,13 @@ class ImageManager:
                 preview_files.append((image_path, ext == ".mp4"))
 
         # Sort by preview number (lowest to highest)
-        preview_files.sort(key=lambda x: int("".join(filter(str.isdigit, os.path.basename(x[0])))))
+        def extract_preview_number(filename: str) -> int:
+            match = re.search(r"preview(\d+)", os.path.basename(filename))
+            if not match:
+                raise ValueError("Invalid preview filename")
+            return int(match.group(1))
+
+        preview_files.sort(key=lambda x: extract_preview_number(x[0]))
 
         # Take first max_count files
         if max_count is not None:
@@ -229,31 +236,35 @@ class ImageManager:
             return
 
         # Sort by preview number (lowest to highest)
-        preview_files.sort(key=lambda x: int("".join(filter(str.isdigit, os.path.basename(x)))))
+        def extract_preview_number(filename: str) -> int:
+            match = re.search(r"preview(\d+)", os.path.basename(filename))
+            if not match:
+                raise ValueError("Invalid preview filename")
+            return int(match.group(1))
+
+        preview_files.sort(key=lambda x: extract_preview_number(x))
 
         if max_count is not None:
             if max_count > 0:
-                # Keep first max_count files, remove the rest
+                # Remove all files after max_count
                 files_to_remove = preview_files[max_count:]
-
-                # Remove files in reverse order (highest to lowest)
-                for file in reversed(files_to_remove):
+                for file in files_to_remove:
                     try:
                         os.remove(file)
                         logger.debug(f"Removed excess preview image: {file}")
                     except Exception as e:
                         logger.warning(f"Failed to remove preview image {file}: {e}")
             else:
-                # If max_count is 0, remove all files in reverse order
-                for file in reversed(preview_files):
+                # If max_count is 0, remove all files
+                for file in preview_files:
                     try:
                         os.remove(file)
                         logger.debug(f"Removed preview image: {file}")
                     except Exception as e:
                         logger.warning(f"Failed to remove preview image {file}: {e}")
         else:
-            # If no max_count, remove all files in reverse order
-            for file in reversed(preview_files):
+            # If no max_count, remove all files
+            for file in preview_files:
                 try:
                     os.remove(file)
                     logger.debug(f"Removed old preview image: {file}")
