@@ -202,22 +202,28 @@ class JobExecutor:
                 except Exception as e:
                     logger.error(f"Error fetching metadata for {file_path}: {e}")
 
-            # PHASE 2: Download images first
-            if metadata_dict:
-                logger.info(f"Downloading images for {len(metadata_dict)} files")
-                for file_path, metadata in metadata_dict.items():
-                    temp_processor.image_manager.download_images(
-                        file_path, metadata, force_refresh=force_refresh
-                    )
-
-            # PHASE 3: Organize files if enabled
+            # PHASE 2: Calculate target paths if organization is enabled
             organization_config = job_config.get("organization", {})
             if organization_config.get("enabled", False) and metadata_dict:
-                logger.info(f"Organizing {len(metadata_dict)} files")
+                logger.info(f"Calculating target paths for {len(metadata_dict)} files")
                 logger.debug(f"Using organization settings from job: {organization_config}")
 
                 # Create a job-specific organizer with the updated configuration
                 job_organizer = FileOrganizer(job_specific_config)
+
+                # Get target paths for all files
+                target_paths = job_organizer.get_target_paths(
+                    list(metadata_dict.keys()), metadata_dict
+                )
+
+                # Create directories for target paths
+                for target_path in target_paths.values():
+                    target_dir = os.path.dirname(target_path)
+                    if not os.path.exists(target_dir):
+                        os.makedirs(target_dir, exist_ok=True)
+
+                # Organize pre-existing files
+                logger.info(f"Organizing {len(metadata_dict)} files")
                 organized_results = job_organizer.organize_files(
                     list(metadata_dict.keys()), metadata_dict
                 )
@@ -227,7 +233,17 @@ class JobExecutor:
                     if new_path:
                         organized_files_mapping[orig_path] = new_path
 
-            # PHASE 4: Process remaining tasks
+            # PHASE 3: Download images to appropriate paths
+            if metadata_dict:
+                logger.info(f"Downloading images for {len(metadata_dict)} files")
+                for file_path, metadata in metadata_dict.items():
+                    # Use organized path if available, otherwise use original path
+                    target_path = organized_files_mapping.get(file_path, file_path)
+                    temp_processor.image_manager.download_images(
+                        target_path, metadata, force_refresh=force_refresh
+                    )
+
+            # PHASE 4: Process remaining tasks (metadata, HTML)
             logger.info(f"Processing {len(metadata_dict)} files with metadata")
             results = []
 

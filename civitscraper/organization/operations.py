@@ -4,7 +4,6 @@ File operations for organization.
 This module handles file operations (copy, move, symlink) for the organization feature.
 """
 
-import glob
 import logging
 import os
 import shutil
