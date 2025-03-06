@@ -7,10 +7,9 @@ This module handles fetching metadata from the CivitAI API and saving it to disk
 import json
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from ..api.client import CivitAIClient
-from ..api.models import ModelVersion
 from .discovery import get_metadata_path
 
 logger = logging.getLogger(__name__)
@@ -61,9 +60,11 @@ class MetadataManager:
             )
             logger.debug(f"Got API response for hash {file_hash}: {type(response)}")
 
-            # Handle both ModelVersion objects and dicts
-            if isinstance(response, ModelVersion):
-                metadata = {
+            # Convert response to metadata dict format
+            metadata = (
+                response
+                if isinstance(response, dict)
+                else {
                     "id": response.id,
                     "modelId": response.id,
                     "name": response.name,
@@ -99,21 +100,16 @@ class MetadataManager:
                     ],
                     "stats": response.stats.__dict__ if response.stats else None,
                 }
-            elif isinstance(response, dict):
-                # If it's already a dict, use it directly
-                metadata = response
-            else:
-                logger.warning(f"Invalid response type for hash {file_hash}: {type(response)}")
-                return None
+            )
 
             # Validate required fields
             if not metadata.get("images"):
                 logger.warning(f"No images found in metadata for hash {file_hash}")
                 return None
 
-            logger.debug(
-                f"Processed hash: {file_hash}, found {len(metadata.get('images', []))} images"
-            )
+            # Use cast to help mypy understand the type
+            images = cast(List[Any], metadata.get("images", []))
+            logger.debug(f"Processed hash: {file_hash}, found {len(images)} images")
             return metadata
         except Exception as e:
             logger.error(f"Failed to fetch metadata for hash {file_hash}: {e}")
@@ -161,6 +157,29 @@ class MetadataManager:
             logger.error(f"Failed to save metadata to {metadata_path}: {e}")
             return False
 
+    def load_existing_metadata(self, metadata_path: str) -> Optional[Dict[str, Any]]:
+        """
+        Load existing metadata from disk.
+
+        Args:
+            metadata_path: Path to metadata file
+
+        Returns:
+            Metadata dictionary or None if loading failed
+        """
+        try:
+            with open(metadata_path, "r") as f:
+                data = json.load(f)
+
+            if not isinstance(data, dict):
+                logger.warning(f"Metadata at {metadata_path} is not a dictionary")
+                return None
+
+            return data
+        except Exception as e:
+            logger.error(f"Failed to load existing metadata from {metadata_path}: {e}")
+            return None
+
     def fetch_and_save(
         self, file_path: str, file_hash: str, force_refresh: bool = False, dry_run: bool = False
     ) -> Optional[Dict[str, Any]]:
@@ -180,19 +199,14 @@ class MetadataManager:
         skip_existing = self.config.get("skip_existing", False)
         metadata_path = get_metadata_path(file_path, self.config)
 
+        # Try to load existing metadata first if applicable
         if skip_existing and os.path.exists(metadata_path) and not force_refresh:
             logger.info(f"Using existing metadata at {metadata_path}")
-            try:
-                with open(metadata_path, "r") as f:
-                    data = json.load(f)
-                    if isinstance(data, dict):
-                        return data
-                    return None
-            except Exception as e:
-                logger.error(f"Failed to load existing metadata from {metadata_path}: {e}")
-                # Fall through to fetch new metadata
+            existing_metadata = self.load_existing_metadata(metadata_path)
+            if existing_metadata:
+                return existing_metadata
 
-        # Fetch metadata
+        # If we reach this point, we need to fetch new metadata
         metadata = self.fetch_metadata(file_hash, force_refresh)
         if not metadata:
             return None
