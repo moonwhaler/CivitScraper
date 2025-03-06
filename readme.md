@@ -20,7 +20,25 @@ Available placeholders:
 - `{nsfw}`: NSFW status (nsfw/sfw)
 - `{year}`: Creation year
 - `{month}`: Creation month
-- `{weighted_rating}`: Weighted rating (format: "rating_X.X") that combines the model's rating with its download count using logarithmic scaling. For example, "rating_4.5". This provides a balanced metric that considers both the quality (rating) and popularity (downloads) of the model.
+- `{weighted_rating}`: Confidence-adjusted rating (1-5) that considers both rating value and rating count vs downloads
+- `{weighted_thumbsup}`: Normalized thumbs up rating (1-5) based on thumbs up to download ratio
+
+### Rating System
+
+CivitScraper provides two weighted rating metrics to help evaluate models:
+
+1. Weighted Rating (1-5):
+   - Adjusts the model's rating based on rating count vs download count
+   - Low rating count relative to downloads reduces confidence
+   - Rating pulls toward neutral (3.0) when confidence is low
+   - Full rating value preserved when confidence is high (20%+ ratio)
+
+2. Weighted Thumbs Up (1-5):
+   - Based on the ratio of thumbs up to downloads
+   - Uses 20% steps for clear categorization:
+     * 0% thumbs up = 1.0 rating
+     * 20%+ thumbs up = 5.0 rating
+     * Linear scale between 0-20%
 
 Available organization templates:
 - `by_type`: Organize by model type

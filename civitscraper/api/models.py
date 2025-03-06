@@ -22,10 +22,44 @@ class Stats:
     """Model statistics."""
 
     download_count: int
-    favorite_count: int
-    comment_count: int
     rating_count: int
     rating: float
+    thumbs_up_count: int
+    weighted_rating: float = 0.0  # Based on rating with confidence adjustment
+    weighted_thumbsup: float = 0.0  # Based on thumbs_up/download ratio
+
+    @staticmethod
+    def calculate_weighted_rating(rating: float, rating_count: int, download_count: int) -> float:
+        """Calculate weighted rating (1-5) with confidence adjustment."""
+        if rating_count == 0:
+            return 1.0
+
+        # Calculate ratio of ratings to downloads
+        rating_ratio = rating_count / max(download_count, 1)
+
+        # Confidence factor (0.0-1.0) based on rating ratio
+        confidence = min(rating_ratio * 5, 1.0)
+
+        # Scale rating toward neutral (3.0) based on confidence
+        weighted = 3.0 + (rating - 3.0) * confidence
+
+        return weighted
+
+    @staticmethod
+    def calculate_weighted_thumbsup(download_count: int, thumbs_up_count: int) -> float:
+        """Calculate weighted thumbs up rating (1-5) using 5% steps."""
+        if download_count == 0:
+            return 1.0
+
+        ratio = thumbs_up_count / download_count
+        # Scale in 5% steps:
+        # ratio 0%  = 1.0 rating
+        # ratio 5%  = 2.0 rating
+        # ratio 10% = 3.0 rating
+        # ratio 15% = 4.0 rating
+        # ratio 20% = 5.0 rating
+        scaled = 1.0 + min(ratio * 5, 1.0) * 4.0
+        return scaled
 
 
 @dataclass
@@ -189,12 +223,22 @@ class ModelVersion:
         # Parse stats
         stats = None
         if data.get("stats"):
+            download_count = data["stats"].get("downloadCount", 0)
+            rating_count = data["stats"].get("ratingCount", 0)
+            rating = data["stats"].get("rating", 0.0)
+            thumbs_up_count = data["stats"].get("thumbsUpCount", 0)
+
             stats = Stats(
-                download_count=data["stats"].get("downloadCount", 0),
-                favorite_count=data["stats"].get("favoriteCount", 0),
-                comment_count=data["stats"].get("commentCount", 0),
-                rating_count=data["stats"].get("ratingCount", 0),
-                rating=data["stats"].get("rating", 0.0),
+                download_count=download_count,
+                rating_count=rating_count,
+                rating=rating,
+                thumbs_up_count=thumbs_up_count,
+                weighted_rating=Stats.calculate_weighted_rating(
+                    rating, rating_count, download_count
+                ),
+                weighted_thumbsup=Stats.calculate_weighted_thumbsup(
+                    download_count, thumbs_up_count
+                ),
             )
 
         return cls(
@@ -247,12 +291,22 @@ class Model:
         # Parse stats
         stats = None
         if data.get("stats"):
+            download_count = data["stats"].get("downloadCount", 0)
+            rating_count = data["stats"].get("ratingCount", 0)
+            rating = data["stats"].get("rating", 0.0)
+            thumbs_up_count = data["stats"].get("thumbsUpCount", 0)
+
             stats = Stats(
-                download_count=data["stats"].get("downloadCount", 0),
-                favorite_count=data["stats"].get("favoriteCount", 0),
-                comment_count=data["stats"].get("commentCount", 0),
-                rating_count=data["stats"].get("ratingCount", 0),
-                rating=data["stats"].get("rating", 0.0),
+                download_count=download_count,
+                rating_count=rating_count,
+                rating=rating,
+                thumbs_up_count=thumbs_up_count,
+                weighted_rating=Stats.calculate_weighted_rating(
+                    rating, rating_count, download_count
+                ),
+                weighted_thumbsup=Stats.calculate_weighted_thumbsup(
+                    download_count, thumbs_up_count
+                ),
             )
 
         # Parse model versions

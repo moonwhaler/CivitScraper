@@ -5,23 +5,44 @@ This module handles formatting file paths based on metadata.
 """
 
 import logging
-from math import log
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 
-def calculate_weighted_rating(rating: float, rating_count: int, download_count: int) -> float:
-    """Calculate weighted rating based on rating and download count."""
-    if rating_count == 0 or download_count == 0:
-        return 0.0
+def calculate_weighted_rating(rating: float, rating_count: int, download_count: int) -> str:
+    """Calculate weighted rating (1-5) with confidence adjustment."""
+    if rating_count == 0:
+        return "1.0"
 
-    # Use log scaling for downloads to prevent overwhelming the rating
-    log_downloads = log(download_count + 1)
-    weighted = (rating * rating_count + rating * log_downloads) / (rating_count + log_downloads)
+    # Calculate ratio of ratings to downloads
+    rating_ratio = rating_count / max(download_count, 1)
 
-    # Cap at 5.0 and ensure non-negative
-    return min(max(abs(weighted), 0.0), 5.0)
+    # Confidence factor (0.0-1.0) based on rating ratio
+    confidence = min(rating_ratio * 5, 1.0)
+
+    # Scale rating toward neutral (3.0) based on confidence
+    weighted = 3.0 + (rating - 3.0) * confidence
+
+    # Ensure between 1-5 and format with one decimal
+    weighted = min(max(weighted, 1.0), 5.0)
+    return f"{weighted: .1f}"
+
+
+def calculate_weighted_thumbsup(download_count: int, thumbs_up_count: int) -> str:
+    """Calculate weighted thumbs up rating (1-5) using 5% steps."""
+    if download_count == 0:
+        return "1.0"
+
+    ratio = thumbs_up_count / download_count
+    # Scale in 5% steps:
+    # ratio 0%  = 1.0 rating
+    # ratio 5%  = 2.0 rating
+    # ratio 10% = 3.0 rating
+    # ratio 15% = 4.0 rating
+    # ratio 20% = 5.0 rating
+    weighted = 1.0 + min(ratio * 5, 1.0) * 4.0
+    return f"{weighted: .1f}"
 
 
 class PathFormatter:
@@ -105,21 +126,22 @@ class PathFormatter:
         year = created_at[:4] if created_at else "Unknown"
         month = created_at[5:7] if created_at else "Unknown"
 
-        # Get stats
-        stats = model_info.get("stats", {})
-        if not stats:
-            stats = {}
+        # Get stats from version level
+        stats = metadata.get("stats", {})
 
-        # Calculate weighted rating
+        # Calculate weighted ratings
         rating = stats.get("rating", 0.0)
-        rating_count = stats.get("rating_count", 0)
-        download_count = stats.get("download_count", 0)
+        rating_count = stats.get("ratingCount", 0)
+        download_count = stats.get("downloadCount", 0)
+        thumbs_up_count = stats.get("thumbsUpCount", 0)
+
         weighted_rating = calculate_weighted_rating(rating, rating_count, download_count)
-        weighted_rating_str = f"rating_{weighted_rating: .1f}"
+        weighted_thumbsup = calculate_weighted_thumbsup(download_count, thumbs_up_count)
 
         # Format path
         path = template
-        path = path.replace("{weighted_rating}", weighted_rating_str)
+        path = path.replace("{weighted_rating}", f"rating_{weighted_rating}")
+        path = path.replace("{weighted_thumbsup}", f"thumbs_{weighted_thumbsup}")
         path = path.replace("{model_name}", self.sanitize_path(model_name))
         path = path.replace("{model_type}", self.sanitize_path(model_type))
         path = path.replace("{type}", self.sanitize_path(model_type))
