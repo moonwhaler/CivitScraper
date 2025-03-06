@@ -1,0 +1,77 @@
+# Basic CivitScraper Configuration
+
+# API Configuration
+api:
+  key: "YOUR_API_KEY"
+  base_url: "https://civitai.com/api/v1"
+  timeout: 30
+  max_retries: 3
+  user_agent: "CivitScraper/0.2.0"
+
+# Input Paths
+input_paths:
+  lora:
+    path: "path/to/loras"
+    type: LORA
+    patterns: ["*.safetensors"]
+
+# Default Job
+default_job: "basic-scan"
+
+# Jobs
+jobs:
+  basic-scan:
+    type: scan-paths
+    recursive: false
+    skip_existing: false
+    verify_hashes: true
+    paths: ["lora"]
+    output:
+      metadata:
+        format: "json"
+        path: "{model_dir}"
+        filename: "{model_name}.json"
+        html:
+          enabled: true
+          filename: "{model_name}.html"
+          generate_gallery: true
+          gallery_path: "path/to/html-output/model_gallery.html"
+          gallery_title: "Model Gallery"
+      images:
+        save: true
+        path: "{model_dir}"
+        max_count: 2
+        filenames:
+          preview: "{model_name}.preview{ext}"
+
+  organize-basic:
+    type: scan-paths
+    recursive: false
+    paths: ["lora"]
+    output:
+      metadata:
+        format: "json"
+        path: "{model_dir}"
+    organization:
+      enabled: true
+      template: "by_type"
+      output_dir: "path/to/organized"
+      operation_mode: "symlink"
+
+  sync-loras:
+    type: sync-lora-triggers
+    description: "Sync LoRA trigger words"
+    recursive: false
+    loras_file: "path/to/loras.json"
+    paths: ["lora"]
+
+# Logging
+logging:
+  level: INFO
+  console:
+    enabled: true
+    level: INFO
+  file:
+    enabled: true
+    level: DEBUG
+    directory: logs
