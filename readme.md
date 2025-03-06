@@ -582,26 +582,26 @@ CivitScraper includes specialized functionality for integration with Krita AI Di
 
 ### Synchronizing LoRA Trigger Words
 
-The `sync-lora-triggers` job type allows you to synchronize LoRA trigger words (activation text) with Krita AI Diffusion's `loras.json` file:
+The `sync-lora-triggers` job type allows you to synchronize LoRA trigger words with Krita AI Diffusion's `loras.json` file:
 
 ```yaml
 sync-triggers:
   type: sync-lora-triggers
   description: "Synchronize LoRA trigger words"
   recursive: true
-  skip_existing: true
-  verify_hashes: true
   loras_file: "loras.json"
   paths: ["lora"]
 ```
 
 This functionality:
 - Scans your LoRA model files and their associated metadata
-- Extracts the recommended activation text (trigger words) from CivitAI metadata
+- Matches LoRAs by filename (ignoring directory structure)
+- Extracts trigger words from either "trainedWords" or "activation text" in the metadata
 - Updates the Krita AI Diffusion `loras.json` file with these trigger words
-- Enables one-click activation of LoRAs in Krita with the correct parameters
+- Always overwrites existing triggers if found
+- Provides detailed logging of the sync process, including when existing triggers are replaced
 
-The integration ensures that your LoRA models work correctly in Krita AI Diffusion without manual configuration of trigger words.
+The integration ensures that your LoRA models work correctly in Krita AI Diffusion without manual configuration of trigger words. When running with --debug, you'll see detailed information about which triggers are being updated and any pre-existing triggers that are being replaced.
 
 ### Creating Custom Jobs
 
