@@ -43,12 +43,6 @@ def calculate_weighted_thumbsup(download_count: int, thumbs_up_count: int) -> st
         return "1.0"
 
     ratio = thumbs_up_count / download_count
-    # Scale in 5% steps:
-    # ratio 0%  = 1.0 rating
-    # ratio 5%  = 2.0 rating
-    # ratio 10% = 3.0 rating
-    # ratio 15% = 4.0 rating
-    # ratio 20% = 5.0 rating
     weighted = 1.0 + min(ratio * 5, 1.0) * 4.0
 
     # Round to nearest 0.5
