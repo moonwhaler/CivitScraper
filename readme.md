@@ -59,6 +59,34 @@ CivitScraper works by:
 6. Generating HTML preview pages (optional)
 7. Organizing files based on metadata (optional)
 
+## Processing Flow
+
+CivitScraper processes model files in multiple phases, ensuring efficient and organized handling:
+
+### Phase 1: Metadata Fetching
+- Scans directories for model files based on configured patterns
+- Computes file hashes for model identification
+- Fetches metadata from CivitAI API for all files in a batch
+- Builds a complete metadata dictionary before proceeding
+
+### Phase 2: File Organization (if enabled)
+- Uses the metadata to organize files according to the configured template
+- Creates the organization structure (directories) as needed
+- Performs the file operation (copy/move/symlink) based on configured mode
+- Maintains a mapping between original files and their organized versions
+
+### Phase 3: Processing Organized Files
+- Processes the organized files (or original files if organization disabled)
+- Generates JSON metadata files
+- Creates HTML model card pages
+- Downloads preview images
+
+### Phase 4: Gallery Generation (if enabled)
+- Scans for model card HTML files
+- Prioritizes organized versions when duplicates exist
+- Optionally includes pre-existing model cards
+- Generates a unified gallery of all models
+
 ## Installation
 
 ### Requirements
@@ -516,36 +544,6 @@ The organization can be performed using different operation modes:
 - `symlink`: Create symbolic links in the organized location (safest option, preserves originals)
 
 The `symlink` mode is especially useful as it allows you to maintain the original file structure while creating an organized view, without duplicating files or risking file moves.
-
-## Processing Flow
-
-CivitScraper processes model files in multiple phases, ensuring efficient and organized handling:
-
-### Phase 1: Metadata Fetching
-- Scans directories for model files based on configured patterns
-- Computes file hashes for model identification
-- Fetches metadata from CivitAI API for all files in a batch
-- Builds a complete metadata dictionary before proceeding
-
-### Phase 2: File Organization (if enabled)
-- Uses the metadata to organize files according to the configured template
-- Creates the organization structure (directories) as needed
-- Performs the file operation (copy/move/symlink) based on configured mode
-- Maintains a mapping between original files and their organized versions
-
-### Phase 3: Processing Organized Files
-- Processes the organized files (or original files if organization disabled)
-- Generates JSON metadata files
-- Creates HTML model card pages
-- Downloads preview images
-
-### Phase 4: Gallery Generation (if enabled)
-- Scans for model card HTML files
-- Prioritizes organized versions when duplicates exist
-- Optionally includes pre-existing model cards
-- Generates a unified gallery of all models
-
-This phased approach ensures that all files are processed consistently and maintains proper relationships between original and organized files.
 
 ## Job System
 
