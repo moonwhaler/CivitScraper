@@ -364,9 +364,26 @@ CivitScraper retrieves metadata from the CivitAI API based on file hashes. The m
 - Base model
 - NSFW status
 - Creation date
-- Statistics (downloads, favorites, ratings)
+- Statistics (downloads, favorites)
+- Rating metrics:
+  - Raw rating (1-5 scale from CivitAI)
+  - Weighted rating (confidence-adjusted based on rating/download ratio)
+  - Weighted thumbs-up (1-5 rating based on thumbs-up/download ratio)
 - Trained words (for LORA models)
 - Preview images
+
+#### Rating Metrics
+
+CivitScraper provides three rating metrics for each model:
+
+- **Raw Rating**: The original 1-5 scale rating from CivitAI
+- **Weighted Rating**: A confidence-adjusted rating that scales toward neutral (3.0) based on the ratio of ratings to downloads. This helps account for models with few ratings relative to their download count.
+- **Weighted Thumbs-up**: A 1-5 rating calculated from the ratio of thumbs-up to downloads using 5% steps:
+  - 0% thumbs-up ratio = 1.0 rating
+  - 5% thumbs-up ratio = 2.0 rating
+  - 10% thumbs-up ratio = 3.0 rating
+  - 15% thumbs-up ratio = 4.0 rating
+  - 20% thumbs-up ratio = 5.0 rating
 
 The metadata is saved as JSON files in the configured location:
 
