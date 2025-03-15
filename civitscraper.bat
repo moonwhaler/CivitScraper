@@ -2,11 +2,11 @@
 REM Activate virtual environment
 call venv\Scripts\activate.bat
 
-REM DEV command to do pre-commit checks
-REM pre-commit run --all-files
-
-REM Install newer version, if source has changed
-pip install -e .
+REM Install package if not already installed
+pip show civitscraper >nul 2>&1
+if errorlevel 1 (
+    pip install -e .
+)
 
 REM Start with debug enabled - and executing all available jobs
 civitscraper --debug --all-jobs
