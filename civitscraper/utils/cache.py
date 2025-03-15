@@ -168,7 +168,7 @@ class DiskCache(Generic[T]):
 
         # Read cache file
         try:
-            with open(cache_path, "r") as f:
+            with open(cache_path, "r", encoding="utf-8") as f:
                 value = json.load(f)
 
                 # Add to memory cache
@@ -194,7 +194,7 @@ class DiskCache(Generic[T]):
         cache_path = self._get_cache_path(key)
 
         try:
-            with open(cache_path, "w") as f:
+            with open(cache_path, "w", encoding="utf-8") as f:
                 json.dump(value, f)
         except IOError as e:
             logger.error(f"Error writing cache file: {e}")

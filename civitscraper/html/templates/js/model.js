@@ -39,11 +39,26 @@ document.addEventListener('DOMContentLoaded', function() {
          * Initialize image viewer functionality
          */
         function initializeImageViewer() {
-            // Function to decode base64 encoded JSON data
+            // Function to decode base64 encoded JSON data with Unicode support
             function decodeBase64Json(base64String) {
                 try {
-                    // Decode base64 string to JSON string
-                    const jsonString = atob(base64String);
+                    // Decode base64 to binary
+                    const binary = atob(base64String);
+
+                    // Convert binary to Uint8Array to properly handle UTF-8
+                    const bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) {
+                        bytes[i] = binary.charCodeAt(i);
+                    }
+
+                    // Use TextDecoder with explicit UTF-8 encoding
+                    const jsonString = new TextDecoder('utf-8').decode(bytes);
+
+                    console.log("Decoded JSON data sample:",
+                        jsonString.length > 100 ?
+                        jsonString.substring(0, 50) + "..." + jsonString.substring(jsonString.length - 50) :
+                        jsonString);
+
                     // Parse JSON string to object
                     return JSON.parse(jsonString);
                 } catch (e) {

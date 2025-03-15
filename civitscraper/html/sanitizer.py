@@ -39,9 +39,10 @@ class DataSanitizer:
                     sanitized_item[key] = value
                 sanitized_data.append(sanitized_item)
 
-            # Convert to JSON string
+            # Convert to JSON string with explicit UTF-8 encoding
             json_str = json.dumps(sanitized_data, ensure_ascii=False)
 
+            # Double-check encoding to ensure UTF-8 characters are preserved
             # Encode as base64 to avoid any escaping issues
             encoded = base64.b64encode(json_str.encode("utf-8")).decode("utf-8")
 

@@ -26,5 +26,5 @@
     <button id="next-image" class="nav-button next">❯</button>
 </div>
 
-<!-- Hidden div containing the encoded image data -->
-<div id="images-data" style="display: none;" data-images="{{ images_encoded }}"></div>
+<!-- Hidden div containing the encoded image data with UTF-8 support -->
+<div id="images-data" style="display: none;" data-images="{{ images_encoded|e }}"></div>

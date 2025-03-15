@@ -148,7 +148,7 @@ class MetadataManager:
             os.makedirs(os.path.dirname(metadata_path), exist_ok=True)
 
             # Save metadata - always overwrite if we reached this point
-            with open(metadata_path, "w") as f:
+            with open(metadata_path, "w", encoding="utf-8") as f:
                 json.dump(metadata, f, indent=2)
 
             logger.debug(f"Saved metadata to {metadata_path}")
@@ -168,7 +168,7 @@ class MetadataManager:
             Metadata dictionary or None if loading failed
         """
         try:
-            with open(metadata_path, "r") as f:
+            with open(metadata_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
             if not isinstance(data, dict):
