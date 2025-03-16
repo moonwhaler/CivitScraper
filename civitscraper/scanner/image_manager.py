@@ -89,22 +89,26 @@ class ImageManager:
                 f"Dry run or skipping existing: Would not remove old preview images for {file_path}"
             )
 
-        # If skip_existing is true and we have enough preview images, we can skip downloading
-        if skip_existing and not force_refresh:
-            existing_count = self._count_existing_previews(model_dir, model_name)
+        # Count existing preview images
+        existing_count = self._count_existing_previews(model_dir, model_name)
+
+        # Only skip if we have existing previews AND they meet the max_count requirement
+        if skip_existing and not force_refresh and existing_count > 0:
             if max_count is not None and existing_count >= max_count:
                 logger.info(
                     f"Skipping image downloads - already have {existing_count} preview images"
                 )
                 return self._get_existing_image_info(file_path, model_dir, model_name, max_count)
+            logger.debug(
+                f"Found {existing_count} existing previews, but less than max_count ({max_count})"
+            )
 
         # Get all available images
         all_images = metadata.get("images", [])
         logger.debug(f"Found {len(all_images)} images")
 
-        # Get current number of preview images
-        existing_count = self._count_existing_previews(model_dir, model_name)
-        logger.debug(f"Found {existing_count} existing preview images")
+        # We already counted existing previews above, no need to count again
+        logger.debug(f"Working with {existing_count} existing preview images")
 
         # Handle different scenarios based on max_count
         if max_count is not None:
@@ -114,7 +118,12 @@ class ImageManager:
                     self._clean_up_old_previews(model_dir, model_name, max_count)
                 existing_count = max_count
 
-            if existing_count < max_count and not (skip_existing and not force_refresh):
+            # For new models (no existing previews), always download regardless of skip_existing
+            if existing_count == 0:
+                images = all_images[:max_count]
+                logger.debug(f"New model - will download {len(images)} images")
+            # For existing models, check if we need more images
+            elif existing_count < max_count and (force_refresh or not skip_existing):
                 # Calculate how many more images we need
                 remaining = max_count - existing_count
                 # Get the next batch of images to download

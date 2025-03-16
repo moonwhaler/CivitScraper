@@ -134,6 +134,7 @@ class ModelProcessor:
 
             # Download images if configured
             if self.config.get("output", {}).get("images", {}).get("save", True):
+                # Always pass dry_run flag to ensure consistent behavior
                 self.image_manager.download_images(file_path, metadata, force_refresh=force_refresh)
 
             # Generate HTML if configured
