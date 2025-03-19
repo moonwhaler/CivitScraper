@@ -432,6 +432,29 @@ class ContextBuilder:
                 # Use remote URL as last resort
                 is_video = preview_url.lower().endswith(".mp4")
                 if preview_url:
+                    # For CivitAI URLs, handle width parameter
+                    if "image.civitai.com" in preview_url:
+                        # Extract the width parameter if it exists
+                        import re
+
+                        width_match = re.search(r"width=(\d+)", preview_url)
+                        width = width_match.group(1) if width_match else "450"
+
+                        # Reconstruct URL based on file type
+                        base_url = preview_url.split("width=")[0]
+                        if is_video:
+                            # For videos, only add width parameter
+                            preview_url = (
+                                f"{base_url}width={width}/" f"{os.path.basename(preview_url)}"
+                            )
+                        else:
+                            # For images, include format=preview
+                            preview_url = (
+                                f"{base_url}format=preview/"
+                                f"width={width}/"
+                                f"{os.path.basename(preview_url)}"
+                            )
+
                     remote_result: PreviewImageDict = {"path": preview_url, "is_video": is_video}
                     return remote_result
                 return None
