@@ -418,45 +418,79 @@ class ContextBuilder:
         for image in metadata["images"]:
             if "url" in image and image["url"]:
                 preview_url = image["url"]
-                image_filename = os.path.basename(preview_url)
-                local_path = os.path.join(os.path.dirname(file_path), image_filename)
+                is_video = preview_url.lower().endswith(".mp4")
+                ext = ".mp4" if is_video else ".jpg"
 
-                if os.path.isfile(local_path):
-                    is_video = local_path.lower().endswith(".mp4")
-                    local_result: PreviewImageDict = {
-                        "path": os.path.relpath(local_path, output_dir),
-                        "is_video": is_video,
-                    }
-                    return local_result
+                # Try to find local file using preview index pattern
+                logger.debug(f"Searching for preview files with indices 0-4 for {file_path}")
+
+                # Check both original and organized locations
+                paths_to_check = [file_path]
+                if "/organized/" not in file_path:
+                    # If we're in the original location, also check organized
+                    organized_path = self._find_organized_version(file_path)
+                    if organized_path:
+                        paths_to_check.append(organized_path)
+                        logger.debug(f"Also checking organized path: {organized_path}")
+
+                for check_path in paths_to_check:
+                    # Try preview index pattern
+                    for i in range(5):  # Check first 5 preview indices
+                        preview_path = self.path_manager.get_image_path(
+                            check_path, f"preview{i}", ext
+                        )
+                        logger.debug(f"Checking for local file ({i}): {preview_path}")
+
+                        if os.path.isfile(preview_path):
+                            logger.debug(f"Found local preview file: {preview_path}")
+                            preview_result: PreviewImageDict = {
+                                "path": os.path.relpath(preview_path, output_dir),
+                                "is_video": is_video,
+                            }
+                            return preview_result
+
+                    # Try the original downloaded file name
+                    image_filename = os.path.basename(preview_url)
+                    local_path = os.path.join(os.path.dirname(check_path), image_filename)
+                    logger.debug(f"Checking for original file: {local_path}")
+
+                    if os.path.isfile(local_path):
+                        logger.debug(f"Found original file: {local_path}")
+                        original_result: PreviewImageDict = {
+                            "path": os.path.relpath(local_path, output_dir),
+                            "is_video": is_video,
+                        }
+                        return original_result
+
+                logger.debug("No local files found in original or organized locations")
 
                 # Use remote URL as last resort
-                is_video = preview_url.lower().endswith(".mp4")
-                if preview_url:
-                    # For CivitAI URLs, handle width parameter
-                    if "image.civitai.com" in preview_url:
-                        # Extract the width parameter if it exists
-                        import re
+                logger.debug(f"No local file found, using remote URL: {preview_url}")
+                logger.debug(f"Checking file_path directory: {os.path.dirname(file_path)}")
+                logger.debug(f"Directory contents: {os.listdir(os.path.dirname(file_path))}")
 
-                        width_match = re.search(r"width=(\d+)", preview_url)
-                        width = width_match.group(1) if width_match else "450"
+                # For CivitAI URLs, handle width parameter
+                if preview_url and "image.civitai.com" in preview_url:
+                    # Extract the width parameter if it exists
+                    import re
 
-                        # Reconstruct URL based on file type
-                        base_url = preview_url.split("width=")[0]
-                        if is_video:
-                            # For videos, only add width parameter
-                            preview_url = (
-                                f"{base_url}width={width}/" f"{os.path.basename(preview_url)}"
-                            )
-                        else:
-                            # For images, include format=preview
-                            preview_url = (
-                                f"{base_url}format=preview/"
-                                f"width={width}/"
-                                f"{os.path.basename(preview_url)}"
-                            )
+                    width_match = re.search(r"width=(\d+)", preview_url)
+                    width = width_match.group(1) if width_match else "450"
 
-                    remote_result: PreviewImageDict = {"path": preview_url, "is_video": is_video}
-                    return remote_result
-                return None
+                    # Reconstruct URL based on file type
+                    base_url = preview_url.split("width=")[0]
+                    if is_video:
+                        # For videos, only add width parameter
+                        preview_url = f"{base_url}width={width}/" f"{os.path.basename(preview_url)}"
+                    else:
+                        # For images, include format=preview
+                        preview_url = (
+                            f"{base_url}format=preview/"
+                            f"width={width}/"
+                            f"{os.path.basename(preview_url)}"
+                        )
+
+                remote_result: PreviewImageDict = {"path": preview_url, "is_video": is_video}
+                return remote_result
 
         return None
