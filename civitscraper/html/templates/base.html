@@ -7,16 +7,10 @@
 
     <!-- CSS includes -->
     {% block css %}
-    <!-- base.css -->
-    <style>
-        {{ read_file('css/base.css') }}
-    </style>
-
-    <!-- components.css -->
-    <style>
-        {{ read_file('css/components.css') }}
-    </style>
-
+    <!-- Base CSS -->
+    <link rel="stylesheet" href="{{ css_base_path }}">
+    <!-- Components CSS -->
+    <link rel="stylesheet" href="{{ css_components_path }}">
     <!-- Additional page-specific styles -->
     {% block page_styles %}{% endblock %}
     {% endblock %}
@@ -34,11 +28,8 @@
 
     <!-- JS includes -->
     {% block js %}
-    <!-- base.js -->
-    <script>
-        {{ read_file('js/base.js') }}
-    </script>
-
+    <!-- Base JS -->
+    <script src="{{ js_base_path }}"></script>
     <!-- Additional page-specific scripts -->
     {% block page_scripts %}{% endblock %}
     {% endblock %}

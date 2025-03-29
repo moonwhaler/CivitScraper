@@ -4,8 +4,10 @@ HTML generator for CivitScraper.
 This module handles generating HTML pages for models using Jinja templates.
 """
 
+import json
 import logging
 import os
+import shutil
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..scanner.discovery import find_html_files
@@ -149,8 +151,80 @@ class HTMLGenerator:
         all_file_paths = [path for path, _ in unique_models.values()]
         logger.info(f"Processing {len(all_file_paths)} unique models")
 
-        # Build context with output path for relative path calculation
-        context = self.context_builder.build_gallery_context(all_file_paths, title, output_path)
+        # Determine output directory and asset directories
+        output_dir = os.path.dirname(output_path)
+        css_output_dir = os.path.join(output_dir, "css")
+        js_output_dir = os.path.join(output_dir, "js")
+        os.makedirs(css_output_dir, exist_ok=True)
+        os.makedirs(js_output_dir, exist_ok=True)
+
+        # Define source template directory
+        template_dir = os.path.dirname(self.renderer.gallery_template.filename)
+        css_source_dir = os.path.join(template_dir, "css")
+        js_source_dir = os.path.join(template_dir, "js")
+
+        # List of assets to copy
+        assets_to_copy = {
+            "css": ["base.css", "components.css", "gallery.css"],
+            "js": ["base.js", "gallery.js"],  # Assuming gallery.js will be created
+        }
+
+        # Copy assets
+        logger.debug(f"Copying assets to {output_dir}")
+        asset_paths_context = {}
+        try:
+            for asset_type, filenames in assets_to_copy.items():
+                source_dir = css_source_dir if asset_type == "css" else js_source_dir
+                dest_dir = css_output_dir if asset_type == "css" else js_output_dir
+                for filename in filenames:
+                    source_path = os.path.join(source_dir, filename)
+                    dest_path = os.path.join(dest_dir, filename)
+                    if os.path.exists(source_path):
+                        shutil.copy2(source_path, dest_path)
+                        # Store relative path for context
+                        relative_path = os.path.join(asset_type, filename)
+                        context_key = f"{asset_type}_{filename.split('.')[0]}_path"
+                        asset_paths_context[context_key] = relative_path
+                        logger.debug(f"Copied {source_path} to {dest_path}")
+                    else:
+                        logger.warning(f"Asset file not found, skipping copy: {source_path}")
+        except Exception as e:
+            logger.error(f"Error copying assets: {e}")
+            # Decide if we should raise or continue with potentially broken links
+            # raise # Option 1: Stop generation
+            # Option 2: Continue, links might be broken
+
+        # Build model data list using ContextBuilder (which now returns raw data)
+        # Note: build_gallery_context might need adjustment if its internal processing
+        # relies heavily on output_path for relative paths *within* the model data itself.
+        # For now, assume it returns the necessary data per model.
+        models_data = []
+        for file_path in all_file_paths:
+            model_data = self.context_builder._process_gallery_model(file_path, output_path)
+            if model_data:
+                models_data.append(model_data)
+
+        # Serialize model data to JSON string for embedding
+        gallery_data_json_escaped = "[]"  # Default to empty array string
+        try:
+            # Use compact encoding to save space
+            raw_json_string = json.dumps(models_data, separators=(",", ":"))
+            # Escape characters that would break the JS single-quoted string literal
+            # Primarily escape single quotes (') and backslashes (\)
+            gallery_data_json_escaped = raw_json_string.replace("\\", "\\\\").replace("'", "\\'")
+            logger.debug(f"Serialized and escaped {len(models_data)} models for embedding.")
+        except Exception as e:
+            logger.error(f"Error serializing/escaping gallery data: {e}")
+            # Continue with empty data if serialization fails
+
+        # Prepare context for the HTML template shell
+        # Pass the *escaped* JSON string
+        context = {
+            "title": title,
+            "gallery_data_json": gallery_data_json_escaped,  # Embed escaped JSON string
+            # Add asset paths back
+            **asset_paths_context,
+        }
 
         # Render template
         html = self.renderer.render_gallery(context)

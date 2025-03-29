@@ -1,347 +1,634 @@
-// Gallery page functionality
-document.addEventListener('DOMContentLoaded', function() {
-    // Store DOM elements
-    const searchInput = document.getElementById('gallery-search');
-    const clearSearchBtn = document.getElementById('clear-search');
-    const gridViewBtn = document.getElementById('grid-view');
-    const listViewBtn = document.getElementById('list-view');
-    const sortBySelect = document.getElementById('sort-by');
-    const sortDirectionBtn = document.getElementById('sort-direction');
-    const noResultsEl = document.getElementById('no-results');
-    const modelsGrid = document.querySelector('.models-grid');
-    const modelsList = document.querySelector('.models-list');
+// Immediately executing function for gallery functionality
+(function() {
+  console.log("Gallery functionality script starting");
 
-    // Get all model elements (cards and list items)
-    const modelCards = document.querySelectorAll('.model-card');
-    const modelListItems = document.querySelectorAll('.model-list-item');
+  // --- Configuration ---
+  const DEBOUNCE_DELAY = 300; // ms for search input
 
-    // Initialize the gallery components
-    initViewToggle();
-    initSearchFunctionality();
-    initSortingFunctionality();
-    formatDates();
+  // --- DOM Elements ---
+  const galleryContainer = document.querySelector('.gallery-container');
+  const gridViewBtn = document.getElementById('grid-view');
+  const listViewBtn = document.getElementById('list-view');
+  const modelsGridContainer = document.querySelector('.models-grid');
+  const modelsListContainer = document.querySelector('.models-list');
+  const searchInput = document.getElementById('gallery-search');
+  const clearSearchBtn = document.getElementById('clear-search');
+  const sortBySelect = document.getElementById('sort-by');
+  const sortDirectionBtn = document.getElementById('sort-direction');
+  const noResultsEl = document.getElementById('no-results');
+  const emptyGalleryEl = document.querySelector('.empty-gallery');
+  const directoryTree = document.getElementById('directory-tree');
+  const toggleDirectoryTreeBtn = document.getElementById('toggle-directory-tree');
+  const closeDirectoryTreeBtn = document.getElementById('close-directory-tree');
+  const directoryTreeContent = document.querySelector('.directory-tree-content');
 
-    /**
-     * Initialize view toggle functionality between grid and list views
-     */
-    function initViewToggle() {
-        // Store user preferences in localStorage if available
-        const storePreference = (key, value) => {
-            try {
-                localStorage.setItem('gallery_' + key, value);
-            } catch (e) {
-                console.warn('localStorage not available:', e);
-            }
-        };
+  // --- State ---
+  let allModelsData = []; // Holds the raw data fetched from JSON
+  let currentSortBy = 'name';
+  let currentSortDir = 'desc';
+  let currentSearchText = '';
+  let currentFilterType = null;
+  let currentFilterValue = null;
+  let currentViewMode = 'grid'; // 'grid' or 'list'
 
-        const getPreference = (key, defaultValue) => {
-            try {
-                const value = localStorage.getItem('gallery_' + key);
-                return value !== null ? value : defaultValue;
-            } catch (e) {
-                console.warn('localStorage not available:', e);
-                return defaultValue;
-            }
-        };
+  // --- Helper Functions ---
 
-        // Load saved preferences
-        const savedView = getPreference('view', 'grid');
-        const savedSortBy = getPreference('sortBy', 'name');
-        const savedSortDir = getPreference('sortDir', 'desc');
+  function storePreference(key, value) {
+    try {
+      localStorage.setItem('gallery_' + key, value);
+    } catch (e) {
+      console.warn('localStorage not available:', e);
+    }
+  }
 
-        // Initialize with saved preferences
-        if (savedView === 'list') {
-            setViewMode('list');
-        }
-        sortBySelect.value = savedSortBy;
-        sortDirectionBtn.setAttribute('data-direction', savedSortDir);
-        if (savedSortDir === 'asc') {
-            sortDirectionBtn.querySelector('svg').style.transform = 'rotate(180deg)';
-        }
+  function getPreference(key, defaultValue) {
+    try {
+      const value = localStorage.getItem('gallery_' + key);
+      return value !== null ? value : defaultValue;
+    } catch (e) {
+      console.warn('localStorage not available:', e);
+      return defaultValue;
+    }
+  }
 
-        // Apply initial sorting
-        sortModels(savedSortBy, savedSortDir);
+  function escapeHTML(str) {
+    if (str === null || str === undefined) return '';
+    // Ensure proper escaping for HTML attributes and content
+    return String(str).replace(/[&<>"']/g, function (match) {
+      return {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;' // Keep single quote escaped as it's often used in attributes
+      }[match];
+    });
+  }
 
-        // View toggle functionality
-        function setViewMode(mode) {
-            if (mode === 'grid') {
-                modelsGrid.classList.add('view-active');
-                modelsList.classList.remove('view-active');
-                gridViewBtn.classList.add('active');
-                listViewBtn.classList.remove('active');
-                storePreference('view', 'grid');
-            } else {
-                modelsList.classList.add('view-active');
-                modelsGrid.classList.remove('view-active');
-                listViewBtn.classList.add('active');
-                gridViewBtn.classList.remove('active');
-                storePreference('view', 'list');
-            }
-        }
+  function formatDate(dateString) {
+      if (!dateString) return '';
+      try {
+          const date = new Date(dateString);
+          if (isNaN(date.getTime())) return dateString; // Return original if invalid
+          return date.toISOString().split('T')[0]; // YYYY-MM-DD
+      } catch (e) {
+          console.warn('Error formatting date:', dateString, e);
+          return dateString; // Return original on error
+      }
+  }
 
-        // Attach event listeners
-        gridViewBtn.addEventListener('click', () => setViewMode('grid'));
-        listViewBtn.addEventListener('click', () => setViewMode('list'));
+  // --- Rendering Functions ---
+
+  function renderModelCard(model) {
+    const rating = model.stats?.rating ? parseFloat(model.stats.rating).toFixed(1) : '0';
+    const ratingCount = model.stats?.rating_count || 0;
+    const downloads = model.stats?.downloads || 0;
+
+    // Basic structure, escaping user-generated content like names, descriptions
+    // Paths are assumed safe as they are generated by the script or from API
+    return `
+      <div class="model-card"
+          data-model-id="${escapeHTML(model.model_id)}"
+          data-version-id="${escapeHTML(model.version_id)}"
+          data-name="${escapeHTML(model.name?.toLowerCase())}"
+          data-type="${escapeHTML(model.type?.toLowerCase())}"
+          data-base-model="${escapeHTML(model.base_model?.toLowerCase())}"
+          data-description="${escapeHTML(model.description?.toLowerCase())}"
+          data-created-at="${escapeHTML(model.created_at || '')}"
+          data-updated-at="${escapeHTML(model.updated_at || '')}"
+          data-downloads="${downloads}"
+          data-rating="${rating}">
+          <a href="${model.html_path}" class="model-link">
+              ${model.preview_image_path
+                  ? `<div class="model-preview">
+                      ${model.is_video
+                          ? `<video src="${model.preview_image_path}" preload="metadata" class="preview-video" controls muted loop playsinline></video><div class="video-indicator">VIDEO</div>`
+                          : `<img src="${model.preview_image_path}" alt="${escapeHTML(model.name)}" loading="lazy">`
+                      }
+                    </div>`
+                  : `<div class="model-preview no-image"><div class="no-image-text">No Preview</div></div>`
+              }
+              <div class="model-info">
+                  <h3 class="model-name">${escapeHTML(model.name)}</h3>
+                  <div class="model-meta">
+                      <span class="model-type">${escapeHTML(model.type)}</span>
+                      <span class="model-base">${escapeHTML(model.base_model)}</span>
+                  </div>
+                  <div class="model-stats">
+                      ${downloads > 0 ? `
+                      <span class="stat-item downloads" title="Downloads">
+                          <span class="stat-icon">⬇️</span>
+                          <span class="stat-value">${downloads}</span>
+                      </span>` : ''}
+                      ${parseFloat(rating) > 0 ? `
+                      <span class="stat-item rating" title="Rating">
+                          <span class="stat-icon">⭐</span>
+                          <span class="stat-value">${rating}</span>
+                          ${ratingCount > 0 ? `<span class="stat-count">(${ratingCount})</span>` : ''}
+                      </span>` : ''}
+                  </div>
+                  ${model.version ? `<div class="model-version">v${escapeHTML(model.version)}</div>` : ''}
+              </div>
+          </a>
+      </div>`;
+  }
+
+ function renderModelListItem(model) {
+    const rating = model.stats?.rating ? parseFloat(model.stats.rating).toFixed(1) : '0';
+    const ratingCount = model.stats?.rating_count || 0;
+    const downloads = model.stats?.downloads || 0;
+
+    return `
+      <div class="model-list-item"
+          data-model-id="${escapeHTML(model.model_id)}"
+          data-version-id="${escapeHTML(model.version_id)}"
+          data-name="${escapeHTML(model.name?.toLowerCase())}"
+          data-type="${escapeHTML(model.type?.toLowerCase())}"
+          data-base-model="${escapeHTML(model.base_model?.toLowerCase())}"
+          data-description="${escapeHTML(model.description?.toLowerCase())}"
+          data-created-at="${escapeHTML(model.created_at || '')}"
+          data-updated-at="${escapeHTML(model.updated_at || '')}"
+          data-downloads="${downloads}"
+          data-rating="${rating}">
+          <a href="${model.html_path}" class="model-link">
+              <div class="model-list-preview">
+                  ${model.preview_image_path
+                      ? `${model.is_video
+                          ? `<video src="${model.preview_image_path}" preload="metadata" class="preview-video"></video><div class="video-indicator mini">VIDEO</div>`
+                          : `<img src="${model.preview_image_path}" alt="${escapeHTML(model.name)}" loading="lazy">`
+                        }`
+                      : `<div class="no-image-text">No Preview</div>`
+                  }
+              </div>
+              <div class="model-list-info">
+                  <h3 class="model-name">${escapeHTML(model.name)}</h3>
+                  <div class="model-meta">
+                      <span class="model-type">${escapeHTML(model.type)}</span>
+                      <span class="model-base">${escapeHTML(model.base_model)}</span>
+                      ${model.version ? `<span class="model-version">v${escapeHTML(model.version)}</span>` : ''}
+                  </div>
+              </div>
+              <div class="model-list-stats">
+                  ${downloads > 0 ? `
+                  <span class="stat-item downloads" title="Downloads">
+                      <span class="stat-icon">⬇️</span>
+                      <span class="stat-value">${downloads}</span>
+                  </span>` : ''}
+                  ${parseFloat(rating) > 0 ? `
+                  <span class="stat-item rating" title="Rating">
+                      <span class="stat-icon">⭐</span>
+                      <span class="stat-value">${rating}</span>
+                      ${ratingCount > 0 ? `<span class="stat-count">(${ratingCount})</span>` : ''}
+                  </span>` : ''}
+                  ${model.created_at ? `
+                  <span class="stat-item date" title="Created">
+                      <span class="stat-icon">📅</span>
+                      <span class="stat-value date-value">${formatDate(model.created_at)}</span>
+                  </span>` : ''}
+              </div>
+          </a>
+      </div>`;
+  }
+
+  function renderGallery(modelsToRender) {
+    console.log(`Rendering ${modelsToRender.length} models`);
+    // Clear existing content
+    modelsGridContainer.innerHTML = '';
+    modelsListContainer.innerHTML = '';
+
+    if (modelsToRender.length === 0) {
+        noResultsEl.style.display = 'block';
+        return;
     }
 
-    /**
-     * Initialize search functionality for models
-     */
-    function initSearchFunctionality() {
-        let debounceTimeout;
+    noResultsEl.style.display = 'none';
 
-        function debounce(fn, delay) {
-            return function(...args) {
-                clearTimeout(debounceTimeout);
-                debounceTimeout = setTimeout(() => fn.apply(this, args), delay);
-            };
-        }
+    // Use DocumentFragment for performance
+    const gridFragment = document.createDocumentFragment();
+    const listFragment = document.createDocumentFragment();
 
-        function escapeRegExp(string) {
-            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        }
+    modelsToRender.forEach(model => {
+      const cardHTML = renderModelCard(model);
+      const itemHTML = renderModelListItem(model);
 
-        function highlightText(element, searchText) {
-            if (!searchText.trim()) return;
+      // Create elements from HTML strings
+      const cardTemplate = document.createElement('template');
+      cardTemplate.innerHTML = cardHTML.trim();
+      gridFragment.appendChild(cardTemplate.content.firstChild);
 
-            const allTextNodes = [];
-            const walker = document.createTreeWalker(
-                element,
-                NodeFilter.SHOW_TEXT,
-                { acceptNode: node => node.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT },
-                false
-            );
+      const itemTemplate = document.createElement('template');
+      itemTemplate.innerHTML = itemHTML.trim();
+      listFragment.appendChild(itemTemplate.content.firstChild);
+    });
 
-            let node;
-            while (node = walker.nextNode()) {
-                allTextNodes.push(node);
-            }
+    modelsGridContainer.appendChild(gridFragment);
+    modelsListContainer.appendChild(listFragment);
 
-            const regex = new RegExp(`(${escapeRegExp(searchText)})`, 'gi');
-            allTextNodes.forEach(textNode => {
-                const parent = textNode.parentNode;
-                if (parent.nodeName === 'SCRIPT' || parent.closest('.highlight')) return;
+    // Apply highlighting if needed
+    if (currentSearchText) {
+        highlightSearchResults(currentSearchText);
+    }
+    console.log("Render complete");
+  }
 
-                const matches = textNode.nodeValue.match(regex);
-                if (!matches) return;
+  // --- Data Processing Functions ---
 
-                const fragment = document.createDocumentFragment();
-                const parts = textNode.nodeValue.split(regex);
+  function filterAndSortModels() {
+    let filteredModels = [...allModelsData]; // Start with all models
 
-                parts.forEach((part, i) => {
-                    if (i % 2 === 0) {
-                        // Regular text
-                        fragment.appendChild(document.createTextNode(part));
-                    } else {
-                        // Matched text to highlight
-                        const highlightSpan = document.createElement('span');
-                        highlightSpan.className = 'highlight';
-                        highlightSpan.appendChild(document.createTextNode(part));
-                        fragment.appendChild(highlightSpan);
-                    }
-                });
-
-                parent.replaceChild(fragment, textNode);
-            });
-        }
-
-        function removeHighlights(element) {
-            const highlights = element.querySelectorAll('.highlight');
-            highlights.forEach(highlight => {
-                const parent = highlight.parentNode;
-                const textNode = document.createTextNode(highlight.textContent);
-                parent.replaceChild(textNode, highlight);
-                parent.normalize(); // Combine adjacent text nodes
-            });
-        }
-
-        function searchModels(searchText) {
-            searchText = searchText.trim().toLowerCase();
-            let matchCount = 0;
-
-            // Process all model cards
-            modelCards.forEach(card => {
-                removeHighlights(card);
-
-                const name = card.dataset.name || '';
-                const type = card.dataset.type || '';
-                const baseModel = card.dataset.baseModel || '';
-                const description = card.dataset.description || '';
-
-                const isMatch = !searchText ||
-                    name.includes(searchText) ||
-                    type.includes(searchText) ||
-                    baseModel.includes(searchText) ||
-                    description.includes(searchText);
-
-                card.style.display = isMatch ? '' : 'none';
-
-                if (isMatch) {
-                    matchCount++;
-                    highlightText(card, searchText);
-                }
-            });
-
-            // Process all model list items
-            modelListItems.forEach(item => {
-                removeHighlights(item);
-
-                const name = item.dataset.name || '';
-                const type = item.dataset.type || '';
-                const baseModel = item.dataset.baseModel || '';
-                const description = item.dataset.description || '';
-
-                const isMatch = !searchText ||
-                    name.includes(searchText) ||
-                    type.includes(searchText) ||
-                    baseModel.includes(searchText) ||
-                    description.includes(searchText);
-
-                item.style.display = isMatch ? '' : 'none';
-
-                if (isMatch) {
-                    highlightText(item, searchText);
-                }
-            });
-
-            // Show/hide no results message
-            noResultsEl.style.display = matchCount === 0 ? 'block' : 'none';
-
-            return matchCount;
-        }
-
-        const debouncedSearch = debounce(searchModels, 300);
-
-        // Attach event listeners
-        searchInput.addEventListener('input', function() {
-            debouncedSearch(this.value);
-        });
-
-        clearSearchBtn.addEventListener('click', function() {
-            searchInput.value = '';
-            searchModels('');
-            searchInput.focus();
-        });
+    // 1. Apply Directory Filter
+    if (currentFilterType && currentFilterValue) {
+      filteredModels = filteredModels.filter(model => {
+        const modelValue = model[currentFilterType === 'base-model' ? 'base_model' : 'type'] || '';
+        return modelValue.toLowerCase() === currentFilterValue;
+      });
     }
 
-    /**
-     * Initialize sorting functionality for models
-     */
-    function initSortingFunctionality() {
-        // Store preferences function is defined in initViewToggle
-        const storePreference = (key, value) => {
-            try {
-                localStorage.setItem('gallery_' + key, value);
-            } catch (e) {
-                console.warn('localStorage not available:', e);
-            }
-        };
-
-        // Attach event listeners
-        sortBySelect.addEventListener('change', function() {
-            const sortBy = this.value;
-            const direction = sortDirectionBtn.getAttribute('data-direction');
-            sortModels(sortBy, direction);
-        });
-
-        sortDirectionBtn.addEventListener('click', function() {
-            const currentDirection = this.getAttribute('data-direction');
-            const newDirection = currentDirection === 'desc' ? 'asc' : 'desc';
-
-            this.setAttribute('data-direction', newDirection);
-
-            // Toggle the arrow direction
-            if (newDirection === 'asc') {
-                this.querySelector('svg').style.transform = 'rotate(180deg)';
-            } else {
-                this.querySelector('svg').style.transform = '';
-            }
-
-            sortModels(sortBySelect.value, newDirection);
-        });
+    // 2. Apply Search Filter
+    if (currentSearchText) {
+      const searchLower = currentSearchText.toLowerCase();
+      filteredModels = filteredModels.filter(model =>
+        (model.name || '').toLowerCase().includes(searchLower) ||
+        (model.type || '').toLowerCase().includes(searchLower) ||
+        (model.base_model || '').toLowerCase().includes(searchLower) ||
+        (model.description || '').toLowerCase().includes(searchLower)
+      );
     }
 
-    /**
-     * Sort models based on criteria and direction
-     */
-    function sortModels(sortBy, direction) {
-        // Store preferences function is defined in initViewToggle
-        const storePreference = (key, value) => {
-            try {
-                localStorage.setItem('gallery_' + key, value);
-            } catch (e) {
-                console.warn('localStorage not available:', e);
-            }
-        };
+    // 3. Apply Sorting
+    const multiplier = currentSortDir === 'asc' ? 1 : -1;
+    filteredModels.sort((a, b) => {
+      let valueA, valueB;
 
-        // Store preferences
-        storePreference('sortBy', sortBy);
-        storePreference('sortDir', direction);
+      switch (currentSortBy) {
+        case 'name':
+          valueA = a.name || '';
+          valueB = b.name || '';
+          return multiplier * valueA.localeCompare(valueB);
+        case 'rating':
+          valueA = parseFloat(a.stats?.rating) || 0;
+          valueB = parseFloat(b.stats?.rating) || 0;
+          break;
+        case 'downloads':
+          valueA = parseInt(a.stats?.downloads) || 0;
+          valueB = parseInt(b.stats?.downloads) || 0;
+          break;
+        case 'created_at':
+        case 'updated_at':
+          valueA = a[currentSortBy] ? new Date(a[currentSortBy]).getTime() : 0;
+          valueB = b[currentSortBy] ? new Date(b[currentSortBy]).getTime() : 0;
+          break;
+        default:
+          return 0; // Should not happen
+      }
 
-        const multiplier = direction === 'asc' ? 1 : -1;
+      if (valueA === valueB) {
+        // Secondary sort by name if primary values are equal
+        return (a.name || '').localeCompare(b.name || '');
+      }
+      return multiplier * (valueA - valueB);
+    });
 
-        // Sort function for different data types
-        function compareValues(a, b) {
-            let valueA, valueB;
+    return filteredModels;
+  }
 
-            if (sortBy === 'name') {
-                valueA = a.dataset.name || '';
-                valueB = b.dataset.name || '';
-                return multiplier * valueA.localeCompare(valueB);
-            }
-            else if (sortBy === 'rating') {
-                valueA = parseFloat(a.dataset.rating) || 0;
-                valueB = parseFloat(b.dataset.rating) || 0;
-            }
-            else if (sortBy === 'downloads') {
-                valueA = parseInt(a.dataset.downloads) || 0;
-                valueB = parseInt(b.dataset.downloads) || 0;
-            }
-            else if (sortBy === 'created_at' || sortBy === 'updated_at') {
-                // Parse dates and handle empty values
-                valueA = a.dataset[sortBy] ? new Date(a.dataset[sortBy]).getTime() : 0;
-                valueB = b.dataset[sortBy] ? new Date(b.dataset[sortBy]).getTime() : 0;
-            }
+  function updateGallery() {
+    const modelsToRender = filterAndSortModels();
+    renderGallery(modelsToRender);
+  }
 
-            // For numeric values
-            if (valueA === valueB) {
-                // Secondary sort by name if values are equal
-                return multiplier * (a.dataset.name || '').localeCompare(b.dataset.name || '');
-            }
-            return multiplier * (valueA - valueB);
+
+  // --- Highlighting ---
+  function highlightText(element, searchText) {
+      if (!searchText.trim()) return;
+
+      const allTextNodes = [];
+      const walker = document.createTreeWalker(
+          element,
+          NodeFilter.SHOW_TEXT,
+          // Filter out empty/whitespace nodes and nodes already inside a highlight
+          { acceptNode: node => (node.nodeValue.trim() && !node.parentNode.closest('.highlight')) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT },
+          false
+      );
+
+      let node;
+      while (node = walker.nextNode()) {
+          allTextNodes.push(node);
+      }
+
+      // Escape regex special characters in search text
+      const escapedSearchText = searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${escapedSearchText})`, 'gi');
+
+      allTextNodes.forEach(textNode => {
+          const parent = textNode.parentNode;
+          // Avoid highlighting inside script/style tags or links
+          if (parent.nodeName === 'SCRIPT' || parent.nodeName === 'STYLE' || parent.nodeName === 'A') return;
+
+          const matches = textNode.nodeValue.match(regex);
+          if (!matches) return;
+
+          const fragment = document.createDocumentFragment();
+          const parts = textNode.nodeValue.split(regex);
+
+          parts.forEach((part, i) => {
+              if (i % 2 === 0) {
+                  // Regular text
+                  if (part) fragment.appendChild(document.createTextNode(part));
+              } else {
+                  // Matched text to highlight
+                  const highlightSpan = document.createElement('span');
+                  highlightSpan.className = 'highlight';
+                  highlightSpan.textContent = part; // Use textContent for safety
+                  fragment.appendChild(highlightSpan);
+              }
+          });
+          parent.replaceChild(fragment, textNode);
+      });
+  }
+
+  function removeHighlights(container) {
+      const highlights = container.querySelectorAll('.highlight');
+      highlights.forEach(highlight => {
+          const parent = highlight.parentNode;
+          if (parent) {
+              parent.replaceChild(document.createTextNode(highlight.textContent), highlight);
+              parent.normalize(); // Combine adjacent text nodes
+          }
+      });
+  }
+
+  function highlightSearchResults(searchText) {
+      // Remove previous highlights first
+      removeHighlights(modelsGridContainer);
+      removeHighlights(modelsListContainer);
+
+      if (!searchText.trim()) return;
+
+      // Apply highlights to the currently visible elements
+      modelsGridContainer.querySelectorAll('.model-card').forEach(card => highlightText(card, searchText));
+      modelsListContainer.querySelectorAll('.model-list-item').forEach(item => highlightText(item, searchText));
+  }
+
+
+  // --- Event Handlers ---
+
+  function handleViewToggle(mode) {
+    console.log(`Setting view mode to: ${mode}`);
+    currentViewMode = mode;
+    if (mode === 'grid') {
+      modelsGridContainer.classList.add('view-active');
+      modelsListContainer.classList.remove('view-active');
+      gridViewBtn.classList.add('active');
+      listViewBtn.classList.remove('active');
+    } else {
+      modelsListContainer.classList.add('view-active');
+      modelsGridContainer.classList.remove('view-active');
+      listViewBtn.classList.add('active');
+      gridViewBtn.classList.remove('active');
+    }
+    storePreference('view', mode);
+  }
+
+  function handleSortChange() {
+    currentSortBy = sortBySelect.value;
+    storePreference('sortBy', currentSortBy);
+    console.log("Sort by changed:", currentSortBy);
+    updateGallery();
+  }
+
+  function handleSortDirectionToggle() {
+    currentSortDir = currentSortDir === 'desc' ? 'asc' : 'desc';
+    sortDirectionBtn.setAttribute('data-direction', currentSortDir);
+    sortDirectionBtn.querySelector('svg').style.transform = currentSortDir === 'asc' ? 'rotate(180deg)' : '';
+    storePreference('sortDir', currentSortDir);
+    console.log("Sort direction changed:", currentSortDir);
+    updateGallery();
+  }
+
+  let searchDebounceTimeout;
+  function handleSearchInput() {
+      clearTimeout(searchDebounceTimeout);
+      searchDebounceTimeout = setTimeout(() => {
+          currentSearchText = searchInput.value.trim();
+          console.log("Searching for:", currentSearchText);
+          // Reset directory filter when searching
+          currentFilterType = null;
+          currentFilterValue = null;
+          setActiveDirectoryItem(null); // Visually reset tree selection
+          updateGallery(); // This will re-render and apply highlights
+      }, DEBOUNCE_DELAY);
+  }
+
+  function handleClearSearch() {
+    searchInput.value = '';
+    currentSearchText = '';
+    searchInput.focus();
+    // Reset directory filter as well? Maybe not, user might want to clear search within a category.
+    // Let's keep the directory filter active if set.
+    updateGallery();
+  }
+
+  function handleDirectoryFilter(filterType, filterValue, targetElement) {
+      console.log(`Filtering by ${filterType}: ${filterValue}`);
+      currentFilterType = filterType;
+      currentFilterValue = filterValue;
+      currentSearchText = ''; // Clear search when applying directory filter
+      searchInput.value = '';
+      setActiveDirectoryItem(targetElement);
+      updateGallery();
+  }
+
+  function handleDirectoryReset(targetElement) {
+      console.log("Resetting directory filters");
+      currentFilterType = null;
+      currentFilterValue = null;
+      currentSearchText = ''; // Clear search as well
+      searchInput.value = '';
+      setActiveDirectoryItem(targetElement);
+      updateGallery();
+  }
+
+  function setActiveDirectoryItem(activeElement) {
+      // Remove active class from all headers and items
+      directoryTree.querySelectorAll('.directory-category-header, .directory-item').forEach(el => el.classList.remove('active'));
+      // Add active class to the clicked element
+      if (activeElement) {
+          activeElement.classList.add('active');
+      }
+  }
+
+  function toggleDirectoryTree() {
+      const isVisible = directoryTree.classList.toggle('visible');
+      storePreference('directoryTreeVisible', isVisible);
+  }
+
+  // --- Directory Tree Generation ---
+  function generateDirectoryTree() {
+      if (!directoryTreeContent || allModelsData.length === 0) {
+          console.warn("Directory tree content area not found or no model data.");
+          return;
+      }
+
+      const modelTypes = new Map();
+      const baseModels = new Map();
+
+      allModelsData.forEach(model => {
+          const type = model.type || 'Unknown';
+          const baseModel = model.base_model || 'Unknown';
+
+          modelTypes.set(type, (modelTypes.get(type) || 0) + 1);
+          baseModels.set(baseModel, (baseModels.get(baseModel) || 0) + 1);
+      });
+
+      // Sort categories alphabetically
+      const sortedTypes = Array.from(modelTypes.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+      const sortedBaseModels = Array.from(baseModels.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+      const treeHtml = `
+          <div class="directory-category">
+              <div class="directory-category-header active" data-category="all">
+                  <span class="directory-icon">📂</span>
+                  <span class="directory-label">All Models</span>
+                  <span class="directory-count">${allModelsData.length}</span>
+              </div>
+          </div>
+
+          <div class="directory-category">
+              <div class="directory-category-header" data-category="type">
+                  <span class="directory-icon">📂</span>
+                  <span class="directory-label">By Type</span>
+                  <span class="directory-toggle">+</span>
+              </div>
+              <div class="directory-items" style="display: none;">
+                  ${sortedTypes.map(([type, count]) => `
+                      <div class="directory-item" data-filter-type="type" data-filter-value="${escapeHTML(type.toLowerCase())}">
+                          <span class="directory-icon">🏷️</span>
+                          <span class="directory-label">${escapeHTML(type)}</span>
+                          <span class="directory-count">${count}</span>
+                      </div>`).join('')}
+              </div>
+          </div>
+
+          <div class="directory-category">
+              <div class="directory-category-header" data-category="base-model">
+                  <span class="directory-icon">📂</span>
+                  <span class="directory-label">By Base Model</span>
+                  <span class="directory-toggle">+</span>
+              </div>
+              <div class="directory-items" style="display: none;">
+                  ${sortedBaseModels.map(([baseModel, count]) => `
+                      <div class="directory-item" data-filter-type="base-model" data-filter-value="${escapeHTML(baseModel.toLowerCase())}">
+                          <span class="directory-icon">🧩</span>
+                          <span class="directory-label">${escapeHTML(baseModel)}</span>
+                          <span class="directory-count">${count}</span>
+                      </div>`).join('')}
+              </div>
+          </div>
+      `;
+
+      directoryTreeContent.innerHTML = treeHtml;
+
+      // Add event listeners after generating HTML
+      directoryTreeContent.querySelectorAll('.directory-category-header').forEach(header => {
+          header.addEventListener('click', function() {
+              const category = this.getAttribute('data-category');
+              if (category === 'all') {
+                  handleDirectoryReset(this);
+              } else {
+                  const itemsContainer = this.nextElementSibling;
+                  const isExpanded = itemsContainer.style.display !== 'none';
+                  this.querySelector('.directory-toggle').textContent = isExpanded ? '+' : '-';
+                  itemsContainer.style.display = isExpanded ? 'none' : 'block';
+              }
+          });
+      });
+
+      directoryTreeContent.querySelectorAll('.directory-item').forEach(item => {
+          item.addEventListener('click', function(e) {
+              e.stopPropagation();
+              const filterType = this.getAttribute('data-filter-type');
+              const filterValue = this.getAttribute('data-filter-value');
+              handleDirectoryFilter(filterType, filterValue, this);
+          });
+      });
+      console.log("Directory tree generated");
+  }
+
+
+  // --- Initialization ---
+  async function initializeGallery() {
+    console.log("Initializing gallery...");
+
+    // Check for essential elements
+    if (!galleryContainer || !modelsGridContainer || !modelsListContainer) {
+        console.error("Essential gallery containers not found. Aborting initialization.");
+        if (emptyGalleryEl) emptyGalleryEl.textContent = "Error: Gallery failed to initialize (missing elements).";
+        return;
+    }
+
+    // 1. Load Preferences
+    currentViewMode = getPreference('view', 'grid');
+    currentSortBy = getPreference('sortBy', 'name');
+    currentSortDir = getPreference('sortDir', 'desc');
+    const savedDirectoryTreeVisible = getPreference('directoryTreeVisible', 'false') === 'true';
+
+    // 2. Set Initial UI State from Preferences
+    handleViewToggle(currentViewMode); // Set initial view
+    sortBySelect.value = currentSortBy;
+    sortDirectionBtn.setAttribute('data-direction', currentSortDir);
+    sortDirectionBtn.querySelector('svg').style.transform = currentSortDir === 'asc' ? 'rotate(180deg)' : '';
+    if (savedDirectoryTreeVisible) {
+        directoryTree.classList.add('visible');
+    }
+
+    // 3. Get Embedded Data
+    if (typeof window.__GALLERY_DATA__ !== 'undefined' && Array.isArray(window.__GALLERY_DATA__)) {
+        allModelsData = window.__GALLERY_DATA__;
+        console.log(`Successfully loaded ${allModelsData.length} models from embedded data.`);
+        // Clear the global variable after loading it, maybe? Optional.
+        // delete window.__GALLERY_DATA__;
+    } else {
+        console.error("Embedded gallery data (__GALLERY_DATA__) not found or not an array.");
+        if (emptyGalleryEl) {
+            emptyGalleryEl.textContent = "Error: Embedded gallery data is missing or invalid.";
+            emptyGalleryEl.style.display = 'block';
         }
-
-        // Convert collections to arrays for sorting
-        const gridItems = Array.from(modelCards);
-        const listItems = Array.from(modelListItems);
-
-        // Sort grid items
-        gridItems.sort(compareValues);
-        gridItems.forEach(item => modelsGrid.appendChild(item));
-
-        // Sort list items
-        listItems.sort(compareValues);
-        listItems.forEach(item => modelsList.appendChild(item));
+        modelsGridContainer.innerHTML = ''; // Clear any potential placeholders
+        modelsListContainer.innerHTML = '';
+        return; // Stop initialization if data is missing
     }
 
-    /**
-     * Format dates to be more readable
-     */
-    function formatDates() {
-        document.querySelectorAll('.date-value').forEach(dateEl => {
-            const dateStr = dateEl.textContent;
-            if (!dateStr) return;
-
-            try {
-                const date = new Date(dateStr);
-                if (isNaN(date.getTime())) return;
-
-                // Format: YYYY-MM-DD
-                const formatted = date.toISOString().split('T')[0];
-                dateEl.textContent = formatted;
-            } catch (e) {
-                console.warn('Error formatting date:', e);
-            }
-        });
+    // 4. Initial Render & Tree Generation (only if data loaded)
+    if (allModelsData.length > 0) {
+        if (emptyGalleryEl) emptyGalleryEl.style.display = 'none';
+        generateDirectoryTree();
+        updateGallery(); // Perform initial sort and render
+    } else {
+        console.log("No models found in data.");
+        if (emptyGalleryEl) emptyGalleryEl.style.display = 'block';
+        generateDirectoryTree(); // Generate tree even if empty, shows categories
     }
-});
+
+    // 5. Attach Event Listeners
+    gridViewBtn?.addEventListener('click', () => handleViewToggle('grid'));
+    listViewBtn?.addEventListener('click', () => handleViewToggle('list'));
+    sortBySelect?.addEventListener('change', handleSortChange);
+    sortDirectionBtn?.addEventListener('click', handleSortDirectionToggle);
+    searchInput?.addEventListener('input', handleSearchInput);
+    clearSearchBtn?.addEventListener('click', handleClearSearch);
+    toggleDirectoryTreeBtn?.addEventListener('click', toggleDirectoryTree);
+    closeDirectoryTreeBtn?.addEventListener('click', toggleDirectoryTree);
+
+    console.log("Gallery initialization complete.");
+  }
+
+  // --- Start Initialization ---
+  // Use DOMContentLoaded to ensure the DOM is ready, although script is likely at end of body
+  if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeGallery);
+  } else {
+      initializeGallery();
+  }
+
+})();
