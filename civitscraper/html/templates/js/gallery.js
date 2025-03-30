@@ -582,19 +582,20 @@
         directoryTree.classList.add('visible');
     }
 
-    // 3. Get Embedded Data
-    if (typeof window.__GALLERY_DATA__ !== 'undefined' && Array.isArray(window.__GALLERY_DATA__)) {
-        allModelsData = window.__GALLERY_DATA__;
-        console.log(`Successfully loaded ${allModelsData.length} models from embedded data.`);
-        // Clear the global variable after loading it, maybe? Optional.
-        // delete window.__GALLERY_DATA__;
+    // 3. Get Data from External Script (Global Scope)
+    if (typeof window.allModelsData !== 'undefined' && Array.isArray(window.allModelsData)) {
+        // Assign the global data to the local variable within the IIFE scope
+        allModelsData = window.allModelsData; // Assign global to local
+        console.log(`Successfully loaded ${allModelsData.length} models from external data script.`);
+        // Optional: Clean up global scope if desired
+        // try { delete window.allModelsData; } catch(e) {}
     } else {
-        console.error("Embedded gallery data (__GALLERY_DATA__) not found or not an array.");
+        console.error("External models data (window.allModelsData) not found or not an array.");
         if (emptyGalleryEl) {
-            emptyGalleryEl.textContent = "Error: Embedded gallery data is missing or invalid.";
+            emptyGalleryEl.textContent = "Error: Model data script is missing or invalid.";
             emptyGalleryEl.style.display = 'block';
         }
-        modelsGridContainer.innerHTML = ''; // Clear any potential placeholders
+        modelsGridContainer.innerHTML = '';
         modelsListContainer.innerHTML = '';
         return; // Stop initialization if data is missing
     }

@@ -80,10 +80,8 @@
 {% endblock %}
 
 {% block page_scripts %}
-<!-- Embed gallery data -->
-<script>
-  window.__GALLERY_DATA__ = JSON.parse('{{ gallery_data_json | safe }}');
-</script>
+<!-- Load model data from external JS file -->
+<script src="{{ models_data_js_path }}" defer></script> <!-- Added defer -->
 <!-- Main gallery script -->
-<script src="{{ js_gallery_path }}"></script>
+<script src="{{ js_gallery_path }}" defer></script> <!-- Added defer -->
 {% endblock %}

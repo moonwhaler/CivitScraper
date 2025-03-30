@@ -155,8 +155,10 @@ class HTMLGenerator:
         output_dir = os.path.dirname(output_path)
         css_output_dir = os.path.join(output_dir, "css")
         js_output_dir = os.path.join(output_dir, "js")
+        data_output_dir = os.path.join(output_dir, "data")  # Create data directory path
         os.makedirs(css_output_dir, exist_ok=True)
         os.makedirs(js_output_dir, exist_ok=True)
+        os.makedirs(data_output_dir, exist_ok=True)  # Ensure data directory exists
 
         # Define source template directory
         template_dir = os.path.dirname(self.renderer.gallery_template.filename)
@@ -204,24 +206,39 @@ class HTMLGenerator:
             if model_data:
                 models_data.append(model_data)
 
-        # Serialize model data to JSON string for embedding
-        gallery_data_json_escaped = "[]"  # Default to empty array string
+        # Write model data to external JS file
+        data_js_path = os.path.join(data_output_dir, "models_data.js")
+        # Default empty
+        js_content = "const allModelsData = [];"
         try:
-            # Use compact encoding to save space
-            raw_json_string = json.dumps(models_data, separators=(",", ":"))
-            # Escape characters that would break the JS single-quoted string literal
-            # Primarily escape single quotes (') and backslashes (\)
-            gallery_data_json_escaped = raw_json_string.replace("\\", "\\\\").replace("'", "\\'")
-            logger.debug(f"Serialized and escaped {len(models_data)} models for embedding.")
+            # Serialize directly to JSON, no special escaping needed for JS file
+            json_string = json.dumps(models_data, separators=(",", ":"))
+            # Explicitly assign to window object and update log message
+            js_content = (
+                f"window.allModelsData = {json_string}"
+                + ";\nconsole.log('models_data.js executed and "
+                + "window.allModelsData should be defined.');"
+            )
+            logger.debug(f"Serialized {len(models_data)} models for JS file.")
         except Exception as e:
-            logger.error(f"Error serializing/escaping gallery data: {e}")
-            # Continue with empty data if serialization fails
+            logger.error(f"Error serializing gallery data for JS file: {e}")
+            # js_content remains "const allModelsData = [];"
+
+        try:
+            with open(data_js_path, "w", encoding="utf-8") as f:
+                f.write(js_content)
+            logger.debug(f"Wrote models data to {data_js_path}")
+        except Exception as e:
+            logger.error(f"Error writing models data JS file {data_js_path}: {e}")
+            # Decide if we should raise or continue with potentially missing data file
+            # raise # Option 1: Stop generation
+            # Option 2: Continue, gallery will likely show an error
 
         # Prepare context for the HTML template shell
-        # Pass the *escaped* JSON string
+        # Pass the relative path to the data JS file
         context = {
             "title": title,
-            "gallery_data_json": gallery_data_json_escaped,  # Embed escaped JSON string
+            "models_data_js_path": "data/models_data.js",  # Relative path for HTML
             # Add asset paths back
             **asset_paths_context,
         }
