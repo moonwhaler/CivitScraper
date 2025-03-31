@@ -124,9 +124,6 @@ class ModelProcessor:
             Metadata or None if processing failed
         """
         try:
-            # Get skip_existing configuration
-            skip_existing = self.config.get("skip_existing", False)
-
             # Save metadata to disk - skip_existing is handled inside the method
             if not self.metadata_manager.save_metadata(file_path, metadata, self.dry_run):
                 self.failures.append((file_path, "Failed to save metadata"))
@@ -145,18 +142,8 @@ class ModelProcessor:
                 .get("enabled", True)
             )
 
-            generate_gallery = (
-                self.config.get("output", {})
-                .get("metadata", {})
-                .get("html", {})
-                .get("generate_gallery", False)
-            )
-
-            # Always generate HTML if enabled and either:
-            # 1. force_refresh is true
-            # 2. skip_existing is false
-            # 3. generate_gallery is true
-            if html_enabled and (force_refresh or not skip_existing or generate_gallery):
+            # Generate HTML if enabled. html_manager handles skip/refresh logic.
+            if html_enabled:
                 self.html_manager.generate_html(file_path, metadata, force_refresh=force_refresh)
 
             return metadata

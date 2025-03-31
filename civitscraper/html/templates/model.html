@@ -3,8 +3,16 @@
 {% block title %}{{ model_name }} - CivitAI Model{% endblock %}
 
 {% block css %}
-{{ super() }}
-<!-- model.css -->
+{# Do NOT call super() here to avoid inheriting linked CSS from base.html #}
+<!-- Base CSS (Inlined) -->
+<style>
+{{ read_file('css/base.css') }}
+</style>
+<!-- Components CSS (Inlined) -->
+<style>
+{{ read_file('css/components.css') }}
+</style>
+<!-- model.css (Inlined) -->
 <style>
 {{ read_file('css/model.css') }}
 </style>
