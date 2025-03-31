@@ -1,920 +1,417 @@
-# CivitScraper - make it local again.
+# CivitScraper - Organize Your AI Models
 
-CivitScraper is your AI model collection's digital curator, transforming raw files into a structured, searchable archive with rich metadata and visual previews. It seamlessly connects to CivitAI to fetch critical information while keeping your creative assets organized locally—empowering you to manage your growing model library with professional precision.
+Tired of messy AI model folders? CivitScraper is your digital curator, transforming raw files into a structured, searchable archive. It automatically organizes your models, fetches metadata and images from CivitAI, and creates browsable HTML previews.
+
+![Example of a generated HTML file](civiscraper_html_example.png)
+
+**Key Benefits:**
+
+*   **Automatic Organization**: Structure your model files logically based on metadata (type, creator, base model, etc.).
+*   **Rich Metadata**: Fetch comprehensive details from CivitAI (tags, descriptions, trigger words, ratings).
+*   **Visual Previews**: Generate HTML pages for each model with preview images and key info.
+*   **Gallery View**: Create a single HTML gallery page to browse your entire collection.
+*   **Automation**: Process large collections efficiently with batching and flexible job definitions.
 
 ## Table of Contents
-- [Overview](#overview)
-- [Installation](#installation)
-- [Configuration](#configuration)
-  - [Global Settings](#global-settings)
-  - [API Configuration](#api-configuration)
-  - [Input Paths](#input-paths)
-  - [Jobs](#jobs)
-  - [Organization Settings](#organization-settings)
-  - [Scanner Settings](#scanner-settings)
-  - [Logging Configuration](#logging-configuration)
-- [Command-Line Usage](#command-line-usage)
-  - [Basic Usage](#basic-usage)
-  - [Command-Line Arguments](#command-line-arguments)
-  - [Examples](#examples)
-- [Core Features](#core-features)
-  - [Scanning and Processing Model Files](#scanning-and-processing-model-files)
-  - [Metadata Retrieval](#metadata-retrieval)
-  - [Image Downloading](#image-downloading)
-  - [HTML Preview Generation](#html-preview-generation)
-  - [File Organization](#file-organization)
-- [Job System](#job-system)
-  - [Understanding Jobs](#understanding-jobs)
-  - [Creating Custom Jobs](#creating-custom-jobs)
-- [Advanced Usage](#advanced-usage)
-  - [Batch Processing](#batch-processing)
-  - [Custom Organization Templates](#custom-organization-templates)
-  - [API Rate Limiting and Circuit Breaker](#api-rate-limiting-and-circuit-breaker)
-  - [Caching](#caching)
-- [Troubleshooting](#troubleshooting)
-  - [Common Issues](#common-issues)
-  - [Logging](#logging)
 
-## Overview
+-   [Quick Start Guide](#quick-start-guide)
+-   [Core Concepts](#core-concepts)
+-   [Installation](#installation)
+-   [Basic Configuration](#basic-configuration)
+-   [Running CivitScraper](#running-civitscraper)
+-   [Key Features (In Detail)](#key-features-in-detail)
+    -   [Scanning & Identification](#scanning--identification)
+    -   [Metadata Retrieval](#metadata-retrieval)
+    -   [Image Downloading](#image-downloading)
+    -   [HTML Preview Generation](#html-preview-generation)
+    -   [File Organization](#file-organization)
+    -   [Job System](#job-system)
+    -   [Krita AI Diffusion Integration](#krita-ai-diffusion-integration)
+    -   [API Handling (Batching, Caching, etc.)](#api-handling-batching-caching-etc)
+-   [Advanced Configuration](#advanced-configuration)
+-   [Troubleshooting](#troubleshooting)
+-   [Development](#development)
+-   [License](#license)
 
-### Key Features
+## Quick Start Guide
 
-- **Metadata Retrieval**: Automatically fetch detailed metadata for your model files from the CivitAI API
-- **File Organization**: Organize your model files based on metadata (type, creator, base model, etc.)
-- **HTML Preview Generation**: Create HTML preview pages for your models with images and metadata
-- **Image Downloading**: Download preview images for your models
-- **Batch Processing**: Process large collections of models efficiently with configurable concurrency
-- **Flexible Configuration**: Customize behavior through a comprehensive configuration system
-- **Job System**: Define and run specific tasks through a flexible job system
+Get up and running in a few steps:
 
-### How It Works
+1.  **Install:**
+    ```bash
+    git clone https://github.com/moonwhaler/civitscraper.git
+    cd civitscraper
+    python -m venv venv
+    # Activate: venv\Scripts\activate (Windows) or source venv/bin/activate (macOS/Linux)
+    pip install -e .
+    ```
 
-CivitScraper works by:
+2.  **Configure:**
+    *   Copy `config/default.yaml.example` or `config/default.yaml.minimal` to `config/default.yaml`.
+    *   Edit `config/default.yaml` and set **at least**:
+        *   Your CivitAI API key: `api.key: "YOUR_API_KEY"`
+        *   One input path, e.g., for your LORA models:
+          ```yaml
+          input_paths:
+            lora:
+              path: "/path/to/your/lora/models" # <-- Change this path!
+              type: LORA
+              patterns: ["*.safetensors", "*.pt"]
+          ```
 
-1. Scanning directories for model files (LORA, checkpoints, embeddings, etc.)
-2. Computing file hashes to identify models
-3. Querying the CivitAI API to retrieve metadata
-4. Saving metadata as JSON files
-5. Downloading preview images (optional)
-6. Generating HTML preview pages (optional)
-7. Organizing files based on metadata (optional)
+3.  **Run:**
+    ```bash
+    civitscraper
+    ```
+    This runs the default job defined in your configuration.
 
-## Processing Flow
+4.  **Check Output:** Look in your model directories (e.g., `/path/to/your/lora/models`) for generated `.json` metadata files and potentially `.html` preview pages and images, depending on your configuration.
 
-CivitScraper processes model files in multiple phases, ensuring efficient and organized handling:
+## Core Concepts
 
-### Phase 1: Metadata Fetching
-- Scans directories for model files based on configured patterns
-- Computes file hashes for model identification
-- Fetches metadata from CivitAI API for all files in a batch
-- Builds a complete metadata dictionary before proceeding
+Understand how CivitScraper works:
 
-### Phase 2: File Organization (if enabled)
-- Uses the metadata to organize files according to the configured template
-- Creates the organization structure (directories) as needed
-- Performs the file operation (copy/move/symlink) based on configured mode
-- Maintains a mapping between original files and their organized versions
-
-### Phase 3: Processing Organized Files
-- Processes the organized files (or original files if organization disabled)
-- Generates JSON metadata files
-- Creates HTML model card pages
-- Downloads preview images
-
-### Phase 4: Gallery Generation (if enabled)
-- Scans for model card HTML files
-- Prioritizes organized versions when duplicates exist
-- Optionally includes pre-existing model cards
-- Generates a unified gallery of all models
+*   **Scanning & Identification**: Finds model files in your specified `input_paths` based on file `patterns`. It calculates a unique hash for each file to identify it on CivitAI.
+*   **Metadata**: Fetches detailed information (name, creator, type, base model, tags, ratings, trained words, image URLs, etc.) from the CivitAI API using the file hash. This data is saved locally as `.json` files.
+*   **File Organization**: Optionally rearranges your model files (and their associated metadata/images) into a structured directory tree based on metadata. You can choose templates (e.g., organize by type, then creator) or define custom structures. Uses safe `symlink` or `copy` modes by default, or `move` (use with caution!). Includes a `--dry-run` flag for safe testing.
+*   **HTML Previews & Gallery**: Generates individual HTML pages for each model, displaying metadata and preview images. Can also create a single `gallery.html` file linking to all individual model pages for easy browsing. It intelligently finds associated images and prioritizes organized files if they exist.
+*   **Jobs**: Defines specific tasks in the configuration file (under the `jobs:` section). You can run different jobs to perform different actions (e.g., only fetch metadata, organize files, sync Krita triggers).
 
 ## Installation
 
 ### Requirements
 
-- Python 3.8 or higher
-- Internet connection for API access
+-   Python 3.8 or higher
+-   Internet connection for API access
 
-### Installation Steps
-#### Using Virtual Environment (venv)
+### Installation Steps (Using Virtual Environment - Recommended)
 
-For isolated dependencies and cleaner package management, you can install CivitScraper in a Python virtual environment:
+Using a virtual environment keeps dependencies isolated and avoids conflicts with other Python projects.
 
 ```bash
-# Install CivitScraper in the virtual environment
+# 1. Clone the repository
 git clone https://github.com/moonwhaler/civitscraper.git
 cd civitscraper
 
-# Create a virtual environment
+# 2. Create a virtual environment named 'venv'
 python -m venv venv
 
-# Activate the virtual environment
-
-# On Windows:
+# 3. Activate the virtual environment
+# On Windows (cmd/powershell):
 venv\Scripts\activate
-# On macOS/Linux:
+# On macOS/Linux (bash/zsh):
 source venv/bin/activate
 
+# (Your terminal prompt should now show '(venv)' at the beginning)
+
+# 4. Install CivitScraper and its dependencies in editable mode
 pip install -e .
 
-# Now you can use CivitScraper
+# 5. Verify installation
 civitscraper --help
 
-# When finished, deactivate the virtual environment
+# 6. When finished using CivitScraper, deactivate the environment
 deactivate
 ```
 
-This approach keeps CivitScraper's dependencies isolated from your system Python installation.
+## Basic Configuration
 
-## Configuration
+CivitScraper uses a YAML configuration file (default: `config/default.yaml`). Start by copying `config/default.yaml.example` or `config/default.yaml.minimal` to `config/default.yaml`.
 
-CivitScraper uses a YAML configuration file to control its behavior. The default configuration file is located at `config/default.yaml`.
+Here are the essential sections to configure for basic use:
 
-### Global Settings
+### API Key
 
-The configuration includes global settings for various aspects of the application:
-
-```yaml
-# Scanner settings
-scanner:
-  cache_dir: ".civitscraper_cache"  # Where to store cache files
-  cache_validity: 86400            # [seconds] Cache lifetime (24 hours)
-  force_refresh: false             # Ignore cache and force refresh
-
-# Logging settings
-logging:
-  level: DEBUG                     # Main log level
-  console:
-    enabled: true                  # Log to console
-    level: INFO                    # Console log level
-```
-
-### API Configuration
-
-The `api` section configures the connection to the CivitAI API:
+You **must** provide your CivitAI API key.
 
 ```yaml
 api:
-  key: "your_api_key"                # Your CivitAI API key
-  base_url: "https://civitai.com/api/v1"  # API endpoint
-  timeout: 30             # [seconds] API request timeout
-  max_retries: 3         # Number of times to retry failed requests
-  user_agent: "CivitScraper/0.2.0"  # User agent string
-
-  # Batch processing settings
-  batch:
-    enabled: true         # Enable batch processing
-    max_concurrent: 4     # Maximum parallel requests
-    rate_limit: 100      # Requests/minute
-    retry_delay: 1000    # Base delay (ms) for exponential backoff
-    cache_size: 100      # LRU cache size
-
-    # Circuit breaker prevents API abuse during outages
-    circuit_breaker:
-      failure_threshold: 5    # Number of failures before blocking requests
-      reset_timeout: 60       # Seconds to wait before auto-recovery
+  key: "YOUR_API_KEY_HERE" # Get this from your CivitAI account settings
 ```
 
 ### Input Paths
 
-The `input_paths` section defines where to look for different types of model files:
+Tell CivitScraper where to find your models. Define one entry under `input_paths` for each type/location.
 
 ```yaml
 input_paths:
-  # LORA models directory
+  # Example for LORA models
   lora:
-    path: "/path/to/lora/models"     # Directory containing LORA models
-    type: LORA                       # Model type identifier
-    patterns: ["*.safetensors"]      # File patterns to match
+    path: "/mnt/models/Stable-diffusion/loras"  # <--- CHANGE THIS PATH
+    type: LORA                         # Identifier used in organization/logging
+    patterns: ["*.safetensors", "*.pt"] # File extensions to scan for
 
-  # Stable Diffusion checkpoints
+  # Example for Checkpoints
   checkpoints:
-    path: "/path/to/checkpoints"     # Directory containing checkpoints
-    type: Checkpoint                 # Model type identifier
-    patterns: ["*.safetensors"]      # File patterns to match
+    path: "/mnt/models/Stable-diffusion/checkpoints" # <--- CHANGE THIS PATH
+    type: Checkpoint
+    patterns: ["*.safetensors", "*.ckpt"]
 
-  # Textual Inversion embeddings
-  embeddings:
-    path: "/path/to/embeddings"      # Directory containing embeddings
-    type: TextualInversion           # Model type identifier
-    patterns: ["*.pt", "*.safetensors"]  # File patterns to match
+  # Add more entries for embeddings, VAEs, etc. as needed
+  # embeddings:
+  #   path: "/path/to/embeddings"
+  #   type: TextualInversion
+  #   patterns: ["*.pt", "*.safetensors"]
 ```
 
-### Jobs
+### Output Settings (within a Job)
 
-The `jobs` section defines specific tasks to run. Each job is self-contained with all necessary settings:
+Control what gets generated. These settings are usually defined *within a specific job* (see [Job System](#job-system)).
 
 ```yaml
-# Default job to run when no job is specified
-default_job: "fetch-all"
-
+# Example within a job definition (e.g., 'fetch-all' job)
 jobs:
-  # Process all model types with full settings
   fetch-all:
     type: scan-paths
-    recursive: true      # Search in subdirectories
-    skip_existing: true  # Skip files that already have metadata
-    verify_hashes: true  # Verify file hashes against CivitAI data
-    paths: ["lora"]      # Process these path types
+    # ... other job settings ...
     output:
       metadata:
-        format: "json"
-        path: "{model_dir}"     # Where to save metadata
-        filename: "{model_name}.json"  # Metadata filename
+        format: "json"                 # Format for metadata files (only json supported)
+        path: "{model_dir}"            # Save metadata in the same directory as the model
+        filename: "{model_name}.json"  # Filename pattern for metadata
         html:
-          enabled: true         # Generate HTML preview pages
-          filename: "{model_name}.html"  # HTML filename
+          enabled: true                # Generate HTML preview pages?
+          filename: "{model_name}.html" # Filename pattern for HTML pages
+          generate_gallery: true       # Generate a main gallery.html?
+          gallery_path: "gallery.html" # Path for the main gallery file (relative to CWD or absolute)
+          gallery_title: "Model Gallery" # Title for the gallery page
+          include_existing_in_gallery: true # Scan for and include pre-existing HTML cards in the gallery?
       images:
-        save: true             # Download preview images
-        path: "{model_dir}"    # Where to save images
-        max_count: 4           # Maximum number of images to download
+        save: true                     # Download preview images?
+        path: "{model_dir}"            # Save images in the same directory as the model
+        max_count: 4                   # Max number of images to download per model
         filenames:
-          preview: "{model_name}.preview{ext}"  # Preview image filename pattern
-    organization:
-      enabled: false            # Enable model organization
-      dry_run: false            # Simulate file operations without making changes
-      template: "by_type_and_basemodel"  # Organization template to use
-      custom_template: ""       # Custom organization path template
-      output_dir: "{model_dir}/organized"  # Where to put organized files
-      operation_mode: "move"    # [copy/move/symlink] How to organize files
+          preview: "{model_name}.preview{ext}" # Filename pattern for downloaded images
+```
 
-  # Metadata-only job (no images)
-  metadata-only:
+### Organization Settings (within a Job)
+
+Configure how files are organized. Also defined *within a specific job*.
+
+```yaml
+# Example within a job definition
+jobs:
+  fetch-all:
     type: scan-paths
-    recursive: true
-    skip_existing: true
-    verify_hashes: true
-    paths: ["lora"]
-    output:
-      metadata:
-        format: "json"
-        path: "{model_dir}"
-        filename: "{model_name}.json"
-        html:
-          enabled: true
-          filename: "{model_name}.html"
-      images:
-        save: false             # Don't download images
-
-  # Synchronize LoRA trigger words
-  sync-triggers:
-    type: sync-lora-triggers
-    description: "Synchronize LoRA trigger words"
-    recursive: true
-    loras_file: "loras.json"
-    paths: ["lora"]
+    # ... other job settings ...
+    organization:
+      enabled: false            # Enable file organization? (Default: false)
+      dry_run: false            # Set to true to simulate without moving/copying files
+      template: "by_type_and_basemodel" # Choose a predefined structure (see below)
+      # custom_template: ""     # Or define your own structure (see Advanced Config)
+      output_dir: "{model_dir}/organized" # Base directory for organized files
+      operation_mode: "symlink" # How to organize: 'symlink' (recommended), 'copy', or 'move' (use with caution!)
 ```
 
-### Organization Settings
+> **⚠️ WARNING**: The `move` operation mode permanently changes your original file locations. Use `symlink` or `copy`, or test thoroughly with `dry_run: true` first. Back up your models before enabling organization.
 
-The organization settings control how files are organized based on metadata:
+**Common Predefined Templates (`template` setting):**
 
-```yaml
-organization:
-  enabled: false            # Enable model organization
-  dry_run: false            # Simulate file operations without making changes
-  template: "by_type_and_basemodel"  # Organization template to use
-  custom_template: ""       # Custom organization path template
-  output_dir: "{model_dir}/organized"  # Where to put organized files
-  operation_mode: "move"    # [copy/move/symlink] How to organize files
-```
+*   `by_type`: `organized/{type}/...`
+*   `by_creator`: `organized/{creator}/...`
+*   `by_type_and_creator`: `organized/{type}/{creator}/...`
+*   `by_type_and_basemodel`: `organized/{type}/{base_model}/...`
+*   *(See [Advanced Configuration](CONFIGURATION.md) for more templates and custom options)*
 
-Available organization templates:
-- `by_type`: Organize by model type
-- `by_creator`: Organize by creator
-- `by_type_and_creator`: Organize by type and creator
-- `by_type_and_basemodel`: Organize by type and base model
-- `by_base_model`: Organize by base model and type
-- `by_nsfw`: Organize by NSFW status and type
-- `by_type_basemodel_nsfw`: Organize by type, base model, and NSFW status
-- `by_date`: Organize by year, month, and type
-- `by_model_info`: Organize by model type and name
+## Running CivitScraper
 
-### Scanner Settings
-
-The scanner settings control how the scanner operates and caches data:
-
-```yaml
-scanner:
-  cache_dir: ".civitscraper_cache"  # Where to store cache files
-  cache_validity: 86400            # [seconds] Cache lifetime (24 hours)
-  force_refresh: false             # Ignore cache and force refresh
-```
-
-### Logging Configuration
-
-The logging settings control how the application logs information:
-
-```yaml
-logging:
-  level: DEBUG                     # Main log level
-
-  # Console output settings
-  console:
-    enabled: true                  # Log to console
-    level: INFO                    # Console log level
-    simple: false                  # Use detailed format for debugging
-
-  # File logging settings
-  file:
-    enabled: true                  # Log to file
-    level: DEBUG                   # File log level
-    directory: logs                # Log file directory
-    max_size: 10                   # [MB] Max log file size
-    backup_count: 5                # Number of backup files to keep
-```
-
-## Command-Line Usage
+Execute CivitScraper from your terminal within the activated virtual environment (`venv`).
 
 ### Basic Usage
 
 ```bash
-# Run the default job
+# Run the job specified by 'default_job' in your config
 civitscraper
 
-# Run a specific job
+# Run a specific job defined in your config
+civitscraper --job <job_name>
+# Example:
 civitscraper -j fetch-all
 
-# Run with a custom configuration file
-civitscraper -c my_config.yaml
+# Run all defined jobs sequentially
+civitscraper --all-jobs
+
+# Use a specific configuration file
+civitscraper --config /path/to/your/custom_config.yaml
+# Example:
+civitscraper -c config/my_settings.yaml
 ```
 
-### Command-Line Arguments
+### Key Command-Line Arguments
 
-- `-c, --config`: Path to configuration file
-- `-j, --job`: Execute a specific job
-- `--all-jobs`: Execute all jobs
-- `--dry-run`: Simulate file operations without making changes
-- `--force-refresh`: Ignore cache and force refresh metadata
-- `--debug`: Enable debug logging
-- `--quiet`: Suppress console output
+*   `-c, --config FILE`: Path to configuration file (default: `config/default.yaml`).
+*   `-j, --job NAME`: Execute only the specified job.
+*   `--all-jobs`: Execute all jobs defined in the configuration.
+*   `--dry-run`: Simulate file organization (`copy`/`move`/`symlink`) without actually performing the operations. Useful for testing organization templates.
+*   `--force-refresh`: Ignore cached API responses and fetch fresh data from CivitAI.
+*   `--debug`: Enable verbose debug logging for troubleshooting.
+*   `--quiet`: Suppress normal console output (only show errors).
 
 ### Examples
 
 ```bash
-# Run the default job with debug logging
+# Run the default job with verbose logging
 civitscraper --debug
 
-# Run a specific job with a custom configuration file
-civitscraper -c my_config.yaml -j fetch-loras
+# Test organization for the 'fetch-loras' job without moving files
+civitscraper -j fetch-loras --dry-run
 
-# Run all jobs in dry-run mode
-civitscraper --all-jobs --dry-run
-
-# Force refresh metadata
-civitscraper --force-refresh
+# Force update metadata for all models defined in the 'fetch-all' job
+civitscraper -j fetch-all --force-refresh
 ```
 
-## Core Features
+## Key Features (In Detail)
 
-### Scanning and Processing Model Files
+### Scanning & Identification
 
-CivitScraper scans directories for model files based on the configured input paths. It uses file patterns to identify model files and can search recursively in subdirectories.
-
-The scanner can be configured to:
-- Skip files that already have metadata
-- Verify file hashes against CivitAI data
-- Force refresh metadata
-
-```yaml
-# In a job configuration:
-recursive: true      # Search in subdirectories
-skip_existing: true  # Skip files that already have metadata
-verify_hashes: true  # Verify file hashes against CivitAI data
-```
+-   **Discovery**: Finds model files in directories specified in `input_paths` using `patterns`. Can search `recursive`ly.
+-   **Hashing**: Computes a BLAKE3 hash for each file to uniquely identify it for CivitAI API lookups.
+-   **Filtering**: Can `skip_existing` files that already have a corresponding `.json` metadata file. Can `verify_hashes` against CivitAI data (requires API call).
 
 ### Metadata Retrieval
 
-CivitScraper retrieves metadata from the CivitAI API based on file hashes. The metadata includes:
-- Model name and description
-- Creator information
-- Tags
-- Model type
-- Base model
-- NSFW status
-- Creation date
-- Statistics (downloads, favorites)
-- Rating metrics:
-  - Raw rating (1-5 scale from CivitAI)
-  - Weighted rating (confidence-adjusted based on rating/download ratio)
-  - Weighted thumbs-up (1-5 rating based on thumbs-up/download ratio)
-- Trained words (for LORA models)
-- Preview images
-
-#### Rating Metrics
-
-CivitScraper provides three rating metrics for each model:
-
-- **Raw Rating**: The original 1-5 scale rating from CivitAI
-- **Weighted Rating**: A confidence-adjusted rating that scales toward neutral (3.0) based on the ratio of ratings to downloads. This helps account for models with few ratings relative to their download count.
-- **Weighted Thumbs-up**: A 1-5 rating calculated from the ratio of thumbs-up to downloads using 5% steps:
-  - 0% thumbs-up ratio = 1.0 rating
-  - 5% thumbs-up ratio = 2.0 rating
-  - 10% thumbs-up ratio = 3.0 rating
-  - 15% thumbs-up ratio = 4.0 rating
-  - 20% thumbs-up ratio = 5.0 rating
-
-The metadata is saved as JSON files in the configured location:
-
-```yaml
-# In a job configuration:
-output:
-  metadata:
-    format: "json"
-    path: "{model_dir}"     # Where to save metadata
-    filename: "{model_name}.json"  # Metadata filename
-```
+-   Fetches comprehensive data from CivitAI API based on file hash.
+-   Includes model details, creator, tags, type, base model, NSFW status, dates, stats (downloads, favorites, ratings), trained words (triggers), and image URLs.
+-   **Rating Metrics**: Calculates and stores additional rating metrics:
+    -   **`rawRating`**: The original 1-5 rating from CivitAI.
+    -   **`weightedRating`**: Confidence-adjusted rating (scales towards neutral 3.0 based on rating/download ratio). Helps balance ratings with low counts.
+    -   **`weightedThumbsUp`**: 1-5 rating based on thumbs-up/download ratio (0%=1.0, 5%=2.0, 10%=3.0, 15%=4.0, 20%+=5.0).
+-   Saves data as `.json` files alongside models (configurable path/filename).
 
 ### Image Downloading
 
-CivitScraper can download preview images for models from the CivitAI API. The images are saved in the configured location:
-
-```yaml
-# In a job configuration:
-output:
-  images:
-    save: true             # Download preview images
-    path: "{model_dir}"    # Where to save images
-    max_count: 4           # Maximum number of images to download
-    filenames:
-      preview: "{model_name}.preview{ext}"  # Preview image filename pattern
-```
+-   Downloads preview images listed in the model's metadata from CivitAI.
+-   Configurable via `output.images` within a job:
+    -   `save: true` enables downloading.
+    -   `path` specifies where to save images (can use placeholders).
+    -   `max_count` limits the number of images per model.
+    -   `filenames.preview` defines the naming pattern (e.g., `{model_name}.preview{ext}`).
 
 ### HTML Preview Generation
 
-CivitScraper can generate HTML preview pages for models. The HTML pages include:
-- Model name and description
-- Creator information
-- Tags
-- Model type
-- Base model
-- NSFW status
-- Creation date
-- Statistics (downloads, favorites, ratings)
-- Trained words (for LORA models)
-- Preview images
-- Generation parameters (if available)
-
-![Example of a generated HTML file](civiscraper_html_example.png)
-
-The HTML pages are saved in the configured location:
-
-```yaml
-# In a job configuration:
-output:
-  metadata:
-    html:
-      enabled: true         # Generate HTML preview pages
-      filename: "{model_name}.html"  # HTML filename
-      generate_gallery: true         # Generate a gallery of all models
-      gallery_path: "gallery.html"   # Path to gallery HTML file
-      gallery_title: "Model Gallery" # Gallery title
-      include_existing_in_gallery: true # Include existing model cards in gallery
-```
-
-#### Gallery Generation
-
-CivitScraper can generate a comprehensive gallery view that showcases all your models in a single HTML page. This feature:
-
-- Creates a unified view of all your model cards
-- Intelligently prioritizes organized model versions
-- Can include both newly processed and existing model cards
-- Supports custom titles and output paths
-- Provides easy navigation between models
-
-The gallery is automatically generated during the model processing phase when enabled in the configuration:
-
-```yaml
-output:
-  metadata:
-    html:
-      generate_gallery: true                       # Enable gallery generation
-      gallery_path: "/path/to/model_gallery.html"  # Output path for gallery
-      gallery_title: "My AI Model Collection"      # Custom gallery title
-      include_existing_in_gallery: true            # Include existing model cards
-```
-
-##### The include_existing_in_gallery Option
-
-The `include_existing_in_gallery` option controls whether previously generated HTML model cards should be included in a new gallery generation:
-
-- When set to `true` (default), the system will scan for existing HTML model cards across your configured directories and include them in the gallery, alongside any newly processed models
-- When set to `false`, the gallery will only contain model cards for files that were processed in the current job run
-
-**Implications:**
-
-With `include_existing_in_gallery: true`:
-- **Comprehensive gallery**: Your gallery will include ALL model cards that exist in your directories, providing a complete view of your entire collection
-- **Persistence**: Models processed in previous runs will remain in the gallery even if you're only processing a few new models in the current run
-- **Organization awareness**: The system prioritizes organized versions of model cards when duplicates exist (if you have both original and organized versions of the same model)
-
-With `include_existing_in_gallery: false`:
-- **Partial gallery**: The gallery will only show models processed in the current job run
-- **Isolation**: Each job run creates an independent gallery that doesn't reflect your entire collection
-- **Faster generation**: No need to scan directories for existing HTML files, which could be faster for very large collections
-
-**Example scenario:**
-If you have 500 models with existing HTML cards and add 10 new models:
-- With `true`: Your gallery will show all 510 models
-- With `false`: Your gallery will only show the 10 new models
-
-Most users would want this set to `true` (the default) to maintain a complete gallery of their entire collection, but the `false` option can be useful for creating separate galleries for specific subsets of models.
-
-The gallery provides a convenient overview of your entire model collection, making it easier to browse and find models without having to navigate through directories.
+-   Generates individual HTML pages for models using Jinja templates.
+-   Configurable via `output.metadata.html` within a job:
+    -   `enabled: true` turns on generation.
+    -   `filename` sets the HTML file name pattern.
+-   **Context Building**: The generator gathers necessary data:
+    -   Loads metadata from the `.json` file.
+    -   Finds associated preview images (looks for downloaded images matching the pattern, checks `images` subdirectories, and potentially uses URLs from metadata if images weren't downloaded).
+    -   Includes model details, stats, trained words, generation parameters (if in metadata), etc.
+-   **Gallery Generation**:
+    -   If `generate_gallery: true`, creates a main gallery page (e.g., `gallery.html`).
+    -   `gallery_path` and `gallery_title` configure the gallery file.
+    -   If `include_existing_in_gallery: true` (default), it scans configured paths for *any* existing model `.html` files and includes them, providing a view of the entire collection found.
+    -   **Organization Awareness**: When building the gallery, if both an original and an organized version of a model's HTML file exist, it prioritizes the organized version.
 
 ### File Organization
 
-CivitScraper can organize model files based on metadata. The organization is controlled by the organization settings:
+-   Organizes model files and their associated `.json`, `.html`, and image files based on metadata.
+-   Configurable via `organization` within a job:
+    -   `enabled: true` activates the feature.
+    -   `dry_run: true` simulates changes.
+    -   `template` selects a predefined structure (e.g., `by_type_and_basemodel`).
+    -   `custom_template` allows defining a custom path structure using placeholders (see [Advanced Configuration](CONFIGURATION.md#available-placeholders)). Placeholders support default values (e.g., `{creator|Unknown}`).
+    -   `output_dir` sets the base directory for organized files.
+    -   `operation_mode`: `symlink` (creates links, preserves originals), `copy` (duplicates files), `move` (relocates originals - **use carefully!**).
 
-> **⚠️ WARNING**: The file organization feature will change file locations (in "move" mode) or create new files (in "copy" or "symlink" mode). The author takes no responsibility for any unexpected outcomes when using this feature. Always back up your files before using the organization functionality - and test it before production run!
+### Job System
 
-```yaml
-# In a job configuration:
-organization:
-  enabled: true             # Enable model organization
-  dry_run: false            # Simulate file operations without making changes
-  template: "by_type_and_basemodel"  # Organization template to use
-  custom_template: ""       # Custom organization path template
-  output_dir: "{model_dir}/organized"  # Where to put organized files
-  operation_mode: "symlink"    # [copy/move/symlink] How to organize files
-```
+-   Define specific tasks (jobs) under the `jobs:` key in the configuration.
+-   Each job has a `type` and its own set of configurations (paths, output, organization, etc.).
+-   **`scan-paths` type**: The most common type. Scans specified `paths` (referencing keys under `input_paths`), fetches metadata, downloads images, generates HTML, and organizes files based on the job's settings.
+-   **`sync-lora-triggers` type**: Specialized job for Krita integration (see below).
+-   Run jobs using `civitscraper -j <job_name>` or run the `default_job` with just `civitscraper`.
 
-The organization can be performed using different operation modes:
-- `copy`: Copy files to the organized location
-- `move`: Move files to the organized location (warning: changes your original file locations)
-- `symlink`: Create symbolic links in the organized location (safest option, preserves originals)
+### Krita AI Diffusion Integration
 
-The `symlink` mode is especially useful as it allows you to maintain the original file structure while creating an organized view, without duplicating files or risking file moves.
-
-## Job System
-
-### Understanding Jobs
-
-Jobs are specific tasks that CivitScraper can execute. Each job has a type and contains all the settings needed for that specific task.
-
-The main job types are:
-- `scan-paths`: Scan directories for model files and process them
-- `sync-lora-triggers`: Synchronize LORA trigger words with a Krita AI Diffusion (loras.json) file
-
-Each job is self-contained with all necessary settings. Here are examples of different job types:
-
-#### Scan-Paths Job
+-   The `sync-lora-triggers` job type helps integrate with Krita AI Diffusion.
+-   It scans specified LoRA `paths`, reads their `.json` metadata, and extracts trigger words (`trainedWords` or `activation text`).
+-   It then updates Krita's `loras.json` file (path specified by `loras_file` in the job config), matching LoRAs by filename and adding/overwriting their trigger words.
+-   This ensures Krita has the correct triggers without manual entry.
 
 ```yaml
-fetch-all:
-  type: scan-paths
-  recursive: false     # Search in top level directory only
-  skip_existing: true  # Skip files that already have metadata
-  verify_hashes: true  # Verify file hashes against CivitAI data
-  paths: ["lora"]      # Process these path types
-  output:
-    metadata:
-      format: "json"
-      path: "{model_dir}"
-      filename: "{model_name}.json"
-      html:
-        enabled: true
-        filename: "{model_name}.html"
-        generate_gallery: true
-        gallery_path: "gallery.html"
-        gallery_title: "Model Gallery"
-    images:
-      save: true
-      path: "{model_dir}"
-      max_count: 2     # Maximum number of images to download
-      filenames:
-        preview: "{model_name}.preview{ext}"
-  organization:
-    enabled: true             # Enable model organization
-    dry_run: false            # Simulate file operations without making changes
-    template: "by_type_and_basemodel"  # Organization template to use
-    output_dir: "{model_dir}/organized"  # Where to put organized files
-    operation_mode: "symlink"    # [copy/move/symlink] How to organize files
-```
-
-## Krita AI Diffusion Integration
-
-CivitScraper includes specialized functionality for integration with Krita AI Diffusion, a popular AI painting tool.
-
-### Synchronizing LoRA Trigger Words
-
-The `sync-lora-triggers` job type allows you to synchronize LoRA trigger words with Krita AI Diffusion's `loras.json` file:
-
-```yaml
-sync-triggers:
-  type: sync-lora-triggers
-  description: "Synchronize LoRA trigger words"
-  recursive: true
-  loras_file: "loras.json"
-  paths: ["lora"]
-```
-
-This functionality:
-- Scans your LoRA model files and their associated metadata
-- Matches LoRAs by filename (ignoring directory structure)
-- Extracts trigger words from either "trainedWords" or "activation text" in the metadata
-- Updates the Krita AI Diffusion `loras.json` file with these trigger words
-- Always overwrites existing triggers if found
-- Provides detailed logging of the sync process, including when existing triggers are replaced
-
-The integration ensures that your LoRA models work correctly in Krita AI Diffusion without manual configuration of trigger words. When running with --debug, you'll see detailed information about which triggers are being updated and any pre-existing triggers that are being replaced.
-
-### Creating Custom Jobs
-
-You can create custom jobs by defining them in the `jobs` section of the configuration file. Each job should be self-contained with all necessary settings:
-
-```yaml
+# Example Job for Krita Sync
 jobs:
-  my_custom_job:
-    type: scan-paths
-    recursive: true
-    skip_existing: true
-    verify_hashes: true
-    paths: ["lora", "checkpoints"]  # Process specific paths
-    output:
-      metadata:
-        format: "json"
-        path: "{model_dir}"
-        filename: "{model_name}.json"
-        html:
-          enabled: true
-          filename: "{model_name}.html"
-          generate_gallery: true
-          gallery_path: "custom_gallery.html"
-      images:
-        save: true
-        path: "{model_dir}"
-        max_count: 2               # Limit to 2 images
+  sync-triggers:
+    type: sync-lora-triggers
+    description: "Update Krita loras.json with trigger words"
+    recursive: true             # Scan subdirectories for LoRAs?
+    loras_file: "/path/to/krita/pykrita/ai_diffusion/loras.json" # <--- CHANGE THIS PATH
+    paths: ["lora"]             # Which input_paths entry contains your LoRAs
 ```
 
-You can create multiple jobs with different configurations to handle different tasks:
+### API Handling (Batching, Caching, etc.)
 
-```yaml
-jobs:
-  # Process LORA models
-  process-loras:
-    type: scan-paths
-    recursive: true
-    skip_existing: true
-    verify_hashes: true
-    paths: ["lora"]
-    # ... other settings ...
+-   **Batch Processing**: Fetches metadata for multiple files concurrently (`api.batch.max_concurrent`) to speed up processing.
+-   **Rate Limiting**: Automatically limits requests per minute (`api.batch.rate_limit`) to avoid hitting CivitAI API limits. Uses a token bucket approach and retries with backoff if limited.
+-   **Circuit Breaker**: Temporarily stops requests to specific API endpoints if they repeatedly fail (`api.batch.circuit_breaker`), preventing excessive errors during API outages.
+-   **Caching**: Stores API responses locally (`scanner.cache_dir`) to avoid refetching data unnecessarily. Cache duration is configurable (`scanner.cache_validity`). Use `--force-refresh` to bypass the cache.
 
-  # Process checkpoints
-  process-checkpoints:
-    type: scan-paths
-    recursive: true
-    skip_existing: true
-    verify_hashes: true
-    paths: ["checkpoints"]
-    # ... other settings ...
+## Advanced Configuration
 
-  # Metadata only (no images)
-  metadata-only:
-    type: scan-paths
-    recursive: true
-    skip_existing: true
-    verify_hashes: true
-    paths: ["lora"]
-    output:
-      metadata:
-        format: "json"
-        path: "{model_dir}"
-        filename: "{model_name}.json"
-        html:
-          enabled: true
-          filename: "{model_name}.html"
-      images:
-        save: false             # Don't download images
-```
-
-## Advanced Usage
-
-### Batch Processing
-
-CivitScraper supports batch processing for efficient handling of large collections. The batch processing settings control concurrency and rate limiting:
-
-```yaml
-api:
-  batch:
-    enabled: true         # Enable batch processing
-    max_concurrent: 4     # Maximum parallel requests using thread-safe semaphore
-    rate_limit: 100       # Requests/minute (uses token bucket with per-endpoint tracking)
-    retry_delay: 1000     # Base delay (ms) for exponential backoff when rate limited
-    cache_size: 100       # LRU cache size - evicts least recently used entries when full
-
-    # Advanced batch settings
-    # Circuit breaker prevents API abuse during outages by tracking failures per endpoint
-    circuit_breaker:
-      failure_threshold: 5    # Number of failures before blocking requests to an endpoint
-      reset_timeout: 60       # Seconds to wait before auto-recovery after blocking
-```
-
-### File Discovery and Path Management
-
-CivitScraper provides sophisticated file discovery and path management capabilities:
-
-```yaml
-# In a job configuration:
-recursive: true      # Enable recursive directory scanning
-skip_existing: true  # Skip files that already have metadata
-verify_hashes: true  # Verify file hashes against CivitAI data
-```
-
-The file discovery system:
-- Recursively scans directories for model files based on patterns
-- Identifies model types automatically based on directory configuration
-- Skips files that already have metadata if configured
-- Prioritizes organized model versions over original versions
-
-The path management system handles file paths using templates with placeholders:
-
-```yaml
-output:
-  metadata:
-    path: "{model_dir}"
-    filename: "{model_name}.json"
-  images:
-    path: "{model_dir}"
-    filenames:
-      preview: "{model_name}.preview{ext}"
-```
-
-### Custom Organization Templates
-
-You can create custom organization templates using the `custom_template` setting:
-
-```yaml
-organization:
-  custom_template: "{type}/{creator}/{base_model}"
-```
-
-Available placeholders:
-- `{model_name}`: Model name
-- `{model_type}`: Model type
-- `{type}`: Model type (alias for model_type)
-- `{creator}`: Creator username
-- `{base_model}`: Base model
-- `{nsfw}`: NSFW status (nsfw/sfw)
-- `{year}`: Creation year
-- `{month}`: Creation month
-
-The organization system intelligently creates the directory structure and formats file paths using these placeholders, ensuring a consistent and logical organization scheme.
-
-### API Rate Limiting and Circuit Breaker
-
-CivitScraper includes rate limiting and circuit breaker protection to prevent API abuse:
-
-```yaml
-api:
-  batch:
-    rate_limit: 100       # Requests/minute
-    circuit_breaker:
-      failure_threshold: 5    # Number of failures before blocking requests
-      reset_timeout: 60       # Seconds to wait before auto-recovery
-```
-
-### Caching
-
-CivitScraper caches API responses to reduce API usage and improve performance:
-
-```yaml
-scanner:
-  cache_dir: ".civitscraper_cache"  # Where to store cache files
-  cache_validity: 86400            # [seconds] Cache lifetime (24 hours)
-  force_refresh: false             # Ignore cache and force refresh
-```
+For details on advanced settings like API tuning (timeouts, retries, batch controls, circuit breaker), custom organization templates and placeholders, caching specifics, and detailed logging options, please refer to the dedicated **[CONFIGURATION.md](CONFIGURATION.md)** file.
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### API Key Issues
-
-If you encounter API key issues, make sure your API key is correctly set in the configuration file or as an environment variable:
-
-```yaml
-api:
-  key: "your_api_key"
-```
-
-Or set the environment variable:
-
-```bash
-export CIVITAI_API_KEY="your_api_key"
-```
-
-#### Rate Limiting
-
-If you encounter rate limiting issues, try reducing the `rate_limit` setting:
-
-```yaml
-api:
-  batch:
-    rate_limit: 50        # Reduce from 100 to 50
-```
-
-#### File Organization Issues
-
-If file organization is not working as expected, check the organization settings:
-
-```yaml
-organization:
-  enabled: true           # Make sure this is true
-  template: "by_type_and_basemodel"
-  output_dir: "{model_dir}/organized"
-  operation_mode: "copy"  # Try "copy" instead of "move" for testing
-```
+*   **API Key Issues**: Ensure `api.key` in your config is correct and valid. Check for typos.
+*   **Rate Limiting Errors (429)**: If you see frequent rate limit errors in the logs, try reducing `api.batch.rate_limit` (e.g., to `50`) in your config.
+*   **File Not Found Errors**: Double-check the `path` settings under `input_paths` in your config. Ensure they point to the correct directories where your models are stored. Check permissions.
+*   **Organization Not Working**:
+    *   Verify `organization.enabled: true` within the specific job you are running.
+    *   Check the `organization.template` or `custom_template` for correctness.
+    *   Run with `--dry-run` first to see the planned operations without modifying files. Check the log output.
+    *   Ensure the `organization.output_dir` is writable.
 
 ### Logging
 
-CivitScraper provides detailed logging to help diagnose issues:
-
-```yaml
-logging:
-  level: DEBUG            # Set to DEBUG for more detailed logs
-  console:
-    enabled: true
-    level: DEBUG          # Set to DEBUG for more detailed console logs
-  file:
-    enabled: true
-    level: DEBUG
-    directory: logs
-```
-
-You can also enable debug logging from the command line:
-
-```bash
-civitscraper --debug
-```
-
-Log files are stored in the configured log directory (default: `logs`).
+-   For detailed troubleshooting, run with the `--debug` flag: `civitscraper --debug`
+-   Check log files in the directory specified by `logging.file.directory` (default: `logs`). Debug logs provide much more detail about API calls, file processing, and errors.
+-   Adjust logging levels in the configuration file (`logging` section) for more or less verbose output to console or file.
 
 ## Development
 
 ### Testing
 
-CivitScraper uses pytest for testing. To run the tests:
+CivitScraper uses `pytest`.
 
 ```bash
-# Install development dependencies
+# Install development dependencies (includes pytest, coverage, etc.)
 pip install -r requirements-dev.txt
 
 # Run tests
 pytest
-```
 
-For more detailed test output with coverage information:
-
-```bash
+# Run tests with coverage report
 pytest --cov=civitscraper --cov-report=term --cov-report=html
+# (HTML report generated in 'htmlcov' directory)
 ```
-
-This will generate a coverage report in the terminal and an HTML report in the `htmlcov` directory.
 
 ### Pre-commit Hooks
 
-CivitScraper uses pre-commit hooks to ensure code quality. To set up pre-commit:
+Uses `pre-commit` for code formatting (black, isort), linting (flake8), and type checking (mypy).
 
 ```bash
 # Install pre-commit
 pip install pre-commit
 
-# Install the git hooks
+# Set up the git hooks
 pre-commit install
-```
 
-The pre-commit hooks will run automatically when you commit changes. They include:
-- Code formatting with black and isort
-- Linting with flake8
-- Type checking with mypy
-- Running tests with pytest
-
-You can also run the hooks manually:
-
-```bash
+# Run hooks manually on all files
 pre-commit run --all-files
 ```
+Hooks will run automatically on `git commit`.
 
 ## License
 
-CivitScraper is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](https://www.gnu.org/licenses/agpl-3.0.en.html). This is a strong copyleft license that requires anyone who distributes the code or a derivative work to make the source available under the same terms.
+CivitScraper is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
 
-### What this means:
-- You can use, copy, modify, and distribute this software.
-- If you modify the software and distribute it (including running it on a server that others can interact with), you must make your modifications available under the AGPL-3.0.
-- You must include the original copyright notice and license.
+See the [LICENSE](LICENSE) file for the full text.
 
-### Dependencies
+**Key implications:**
+- You can use, modify, and distribute the software freely.
+- If you distribute modified versions (or provide network access to a modified version), you **must** make the modified source code available under the same AGPL-3.0 license.
 
-CivitScraper uses the following open-source libraries, each with their own licenses:
-
-- [requests](https://github.com/psf/requests): Apache License 2.0
-- [pyyaml](https://github.com/yaml/pyyaml): MIT License
-- [jinja2](https://github.com/pallets/jinja): BSD License
-- [blake3](https://github.com/oconnor663/blake3-py): Apache License 2.0 or MIT License
-- [setuptools](https://github.com/pypa/setuptools): MIT License
-- [wheel](https://github.com/pypa/wheel): MIT License
-
-These dependencies all have permissive licenses that are compatible with the AGPL-3.0 license of CivitScraper.
-
-For the full license text, see the [GNU Affero General Public License v3.0](https://www.gnu.org/licenses/agpl-3.0.en.html).
+This project relies on several open-source libraries with compatible licenses (MIT, Apache 2.0, BSD). See the original `readme.md` or `pyproject.toml` for a list.
