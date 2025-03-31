@@ -49,10 +49,19 @@ Get up and running in a few steps:
 2.  **Configure:**
     *   Copy `config/default.yaml.example` or `config/default.yaml.minimal` to `config/default.yaml`.
     *   Edit `config/default.yaml` and set **at least**:
-        *   Your CivitAI API key: `api.key: "YOUR_API_KEY"`
         *   One input path, e.g., for your LORA models:
           ```yaml
           input_paths:
+            lora:
+              path: "/path/to/your/lora/models" # <-- Change this path!
+              type: LORA
+              patterns: ["*.safetensors", "*.pt"]
+          ```
+        *   Your CivitAI API key (Optional, but recommended for better rate limits): `api.key: "YOUR_API_KEY"`
+          ```yaml
+          api:
+            key: "YOUR_API_KEY_HERE" # Optional: Get from CivitAI account settings
+          ```
             lora:
               path: "/path/to/your/lora/models" # <-- Change this path!
               type: LORA
@@ -120,13 +129,13 @@ CivitScraper uses a YAML configuration file (default: `config/default.yaml`). St
 
 Here are the essential sections to configure for basic use:
 
-### API Key
+### API Key (Optional)
 
-You **must** provide your CivitAI API key.
+Providing your CivitAI API key is **optional** for fetching public model data, but **recommended**. Using a key may grant you higher rate limits from the CivitAI API compared to unauthenticated requests.
 
 ```yaml
 api:
-  key: "YOUR_API_KEY_HERE" # Get this from your CivitAI account settings
+  key: "YOUR_API_KEY_HERE" # Optional: Get from CivitAI account settings
 ```
 
 ### Input Paths
@@ -259,6 +268,22 @@ civitscraper -j fetch-loras --dry-run
 # Force update metadata for all models defined in the 'fetch-all' job
 civitscraper -j fetch-all --force-refresh
 ```
+
+### Convenience Scripts
+
+The project includes wrapper scripts for common actions:
+
+*   **`civitscraper.sh` / `civitscraper.bat`**:
+    *   Activates the `venv` virtual environment.
+    *   Installs the package (`pip install -e .`) if not already present.
+    *   Runs `civitscraper --debug --all-jobs` (executes all configured jobs with debug logging).
+*   **`civitscraper-dev.sh` / `civitscraper-dev.bat`**:
+    *   Activates the `venv`.
+    *   Runs pre-commit checks (`pre-commit run --all-files`).
+    *   If checks pass, installs the package and runs `civitscraper --debug --all-jobs`.
+    *   If checks fail, it exits with an error.
+
+These scripts provide a quick way to run the scraper or development checks, especially after cloning or pulling updates.
 
 ## Key Features (In Detail)
 

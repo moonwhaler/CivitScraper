@@ -15,7 +15,7 @@ The `api` section configures the connection to the CivitAI API, including perfor
 
 ```yaml
 api:
-  key: "your_api_key"                # Your CivitAI API key (Required)
+  key: "your_api_key"                # Your CivitAI API key (Optional, but recommended)
   base_url: "https://civitai.com/api/v1"  # API endpoint
   timeout: 30             # [seconds] API request timeout
   max_retries: 3         # Number of times to retry failed requests (excluding rate limits)
@@ -38,6 +38,7 @@ api:
 -   **`timeout`**: How long to wait for a response from the CivitAI API before giving up.
 -   **`max_retries`**: How many times to retry a request if it fails due to network issues or server errors (5xx). Does not apply to rate limit errors (429).
 -   **`user_agent`**: Identifies CivitScraper to the CivitAI API.
+-   **`key`**: Your CivitAI API key. While optional for fetching public data, providing a key is recommended as it may grant higher rate limits from the CivitAI API.
 -   **`batch`**: Settings related to processing multiple files concurrently. See [Batch Processing Details](#batch-processing-details).
 -   **`circuit_breaker`**: Settings for automatically stopping requests to specific API endpoints if they consistently fail. See [Batch Processing Details](#batch-processing-details).
 
