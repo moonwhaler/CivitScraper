@@ -141,7 +141,8 @@ class ContextBuilder:
 
         # Calculate paths
         output_dir = os.path.dirname(output_path) if output_path else os.path.dirname(file_path)
-        html_rel_path = os.path.relpath(html_path, output_dir)
+        # Use absolute path for the model's HTML file
+        html_abs_path = os.path.abspath(html_path)
 
         # Find preview image
         preview_image = self._find_preview_image(file_path, metadata, output_dir, is_html_file)
@@ -166,7 +167,7 @@ class ContextBuilder:
             "type": metadata.get("model", {}).get("type", "Unknown"),
             "base_model": metadata.get("baseModel", "Unknown"),
             "description": metadata.get("description", ""),
-            "html_path": html_rel_path,
+            "html_path": html_abs_path,  # Use absolute path
             "preview_image_path": preview_data.get("path"),
             "is_video": preview_data.get("is_video", False),
             "stats": model_stats,
@@ -341,7 +342,7 @@ class ContextBuilder:
             if os.path.isfile(preview_path):
                 is_video = ext.lower() == ".mp4"
                 result: PreviewImageDict = {
-                    "path": os.path.relpath(preview_path, output_dir),
+                    "path": os.path.abspath(preview_path),  # Use absolute path
                     "is_video": is_video,
                 }
                 return result
@@ -380,7 +381,7 @@ class ContextBuilder:
                 if os.path.isfile(preview_path):
                     is_video = ext.lower() == ".mp4"
                     result: PreviewImageDict = {
-                        "path": os.path.relpath(preview_path, output_dir),
+                        "path": os.path.abspath(preview_path),  # Use absolute path
                         "is_video": is_video,
                     }
                     return result
@@ -399,7 +400,7 @@ class ContextBuilder:
                     preview_path = os.path.join(images_dir, filename)
                     is_video = filename.lower().endswith(".mp4")
                     result: PreviewImageDict = {
-                        "path": os.path.relpath(preview_path, output_dir),
+                        "path": os.path.abspath(preview_path),  # Use absolute path
                         "is_video": is_video,
                     }
                     return result
@@ -444,7 +445,7 @@ class ContextBuilder:
                         if os.path.isfile(preview_path):
                             logger.debug(f"Found local preview file: {preview_path}")
                             preview_result: PreviewImageDict = {
-                                "path": os.path.relpath(preview_path, output_dir),
+                                "path": os.path.abspath(preview_path),  # Use absolute path
                                 "is_video": is_video,
                             }
                             return preview_result
@@ -457,7 +458,7 @@ class ContextBuilder:
                     if os.path.isfile(local_path):
                         logger.debug(f"Found original file: {local_path}")
                         original_result: PreviewImageDict = {
-                            "path": os.path.relpath(local_path, output_dir),
+                            "path": os.path.abspath(local_path),  # Use absolute path
                             "is_video": is_video,
                         }
                         return original_result
