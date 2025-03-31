@@ -1,77 +1,98 @@
-# Basic CivitScraper Configuration
+# Basic CivitScraper Configuration (Updated)
 
+# =============================================================================
 # API Configuration
+# =============================================================================
 api:
-  key: "YOUR_API_KEY"
-  base_url: "https://civitai.com/api/v1"
-  timeout: 30
-  max_retries: 3
-  user_agent: "CivitScraper/0.2.0"
+  key: "YOUR_API_KEY"                # Your CivitAI API key (Set via CIVITAI_API_KEY environment variable)
+  base_url: "https://civitai.com/api/v1"  # API endpoint
+  timeout: 30             # [seconds] API request timeout
+  max_retries: 3         # Number of times to retry failed requests
+  user_agent: "CivitScraper/0.2.0"  # User agent string
 
+  # Batch processing settings
+  batch:
+    enabled: false        # [true/false] Enable batch processing (minimal default: false)
+    max_concurrent: 1     # Maximum parallel requests (minimal default: 1)
+    rate_limit: 50       # Requests/minute (minimal default: 50)
+    retry_delay: 1000    # Base delay (ms) for exponential backoff
+    cache_size: 50       # LRU cache size (minimal default: 50)
+    circuit_breaker:
+      failure_threshold: 5    # Number of failures before blocking
+      reset_timeout: 60       # Seconds to wait before auto-recovery
+
+# =============================================================================
 # Input Paths
+# =============================================================================
 input_paths:
   lora:
-    path: "path/to/loras"
-    type: LORA
-    patterns: ["*.safetensors"]
+    path: "path/to/loras"           # Directory containing LORA models
+    type: LORA                      # Model type identifier
+    patterns: ["*.safetensors"]  # File patterns to match
 
+# =============================================================================
 # Default Job
+# =============================================================================
 default_job: "basic-scan"
 
+# =============================================================================
 # Jobs
+# =============================================================================
 jobs:
   basic-scan:
     type: scan-paths
-    recursive: false
-    skip_existing: false
-    verify_hashes: true
-    paths: ["lora"]
+    recursive: false      # Search in subdirectories
+    skip_existing: false  # Skip files that already have metadata
+    verify_hashes: true  # Verify file hashes against CivitAI data
+    paths: ["lora"]      # Process these path types
     output:
       metadata:
         format: "json"
-        path: "{model_dir}"
-        filename: "{model_name}.json"
+        path: "{model_dir}"     # Where to save metadata
+        filename: "{model_name}.json"  # Metadata filename
         html:
-          enabled: true
-          filename: "{model_name}.html"
-          generate_gallery: true
+          enabled: false        # Generate HTML preview pages (minimal default: false)
+          filename: "{model_name}.html"  # HTML filename
+          generate_gallery: false # Generate gallery (minimal default: false)
           gallery_path: "path/to/html-output/model_gallery.html"
           gallery_title: "Model Gallery"
       images:
-        save: true
-        path: "{model_dir}"
-        max_count: 2
+        save: false             # Download preview images (minimal default: false)
+        path: "{model_dir}"    # Where to save images
+        max_count: 1        # Maximum number of images (minimal default: 1)
         filenames:
-          preview: "{model_name}.preview{ext}"
-
-  organize-basic:
-    type: scan-paths
-    recursive: false
-    paths: ["lora"]
-    output:
-      metadata:
-        format: "json"
-        path: "{model_dir}"
+          preview: "{model_name}.preview{ext}"  # Preview image filename pattern
     organization:
-      enabled: true
-      template: "by_type"
-      output_dir: "path/to/organized"
-      operation_mode: "symlink"
+      enabled: false            # Enable model organization (minimal default: false)
+      template: "by_type"       # Default minimal template
+      custom_template: ""       # Custom organization path template
+      output_dir: "{model_dir}/organized"  # Where to put organized files
+      operation_mode: "copy"    # [copy/move/symlink] (minimal default: copy)
 
-  sync-loras:
-    type: sync-lora-triggers
-    description: "Sync LoRA trigger words"
-    recursive: false
-    loras_file: "path/to/loras.json"
-    paths: ["lora"]
+# =============================================================================
+# Scanner Settings
+# =============================================================================
+scanner:
+  cache_dir: ".civitscraper_cache"  # Where to store cache files
+  cache_validity: 86400            # [seconds] Cache lifetime (24 hours)
+  force_refresh: false             # [true/false] Ignore cache and force refresh
 
-# Logging
+# =============================================================================
+# Logging Configuration
+# =============================================================================
 logging:
-  level: INFO
+  level: INFO                     # [DEBUG/INFO/WARNING/ERROR/CRITICAL] Main log level
+
+  # Console output settings
   console:
-    enabled: true
-    level: INFO
+    enabled: true                  # [true/false] Log to console
+    level: INFO                # Console log level
+    simple: true                   # Use simple format (minimal default: true)
+
+  # File logging settings
   file:
-    enabled: true
-    level: DEBUG
-    directory: logs
+    enabled: false                 # [true/false] Log to file (minimal default: false)
+    level: WARNING                 # File log level (minimal default: WARNING)
+    directory: logs                # Log file directory
+    max_size: 1                   # [MB] Max log file size (minimal default: 1)
+    backup_count: 1                # Number of backup files (minimal default: 1)

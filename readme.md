@@ -62,11 +62,6 @@ Get up and running in a few steps:
           api:
             key: "YOUR_API_KEY_HERE" # Optional: Get from CivitAI account settings
           ```
-            lora:
-              path: "/path/to/your/lora/models" # <-- Change this path!
-              type: LORA
-              patterns: ["*.safetensors", "*.pt"]
-          ```
 
 3.  **Run:**
     ```bash
