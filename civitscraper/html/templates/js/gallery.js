@@ -4,6 +4,8 @@
 
   // --- Configuration ---
   const DEBOUNCE_DELAY = 300; // ms for search input
+  const BATCH_SIZE = 50; // Number of models to render per batch
+  const PLACEHOLDER_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"; // 1x1 transparent pixel
 
   // --- DOM Elements ---
   const galleryContainer = document.querySelector('.gallery-container');
@@ -21,9 +23,12 @@
   const toggleDirectoryTreeBtn = document.getElementById('toggle-directory-tree');
   const closeDirectoryTreeBtn = document.getElementById('close-directory-tree');
   const directoryTreeContent = document.querySelector('.directory-tree-content');
+  const infiniteScrollSentinel = document.getElementById('infinite-scroll-sentinel'); // Added sentinel
 
   // --- State ---
   let allModelsData = []; // Holds the raw data fetched from JSON
+  let currentFilteredSortedModels = []; // Holds the currently filtered and sorted list
+  let renderedModelCount = 0; // Tracks how many models have been rendered
   let currentSortBy = 'name';
   let currentSortDir = 'desc';
   let currentSearchText = '';
@@ -79,6 +84,51 @@
 
   // --- Rendering Functions ---
 
+  // Renamed from renderGallery, now renders a specific batch and appends
+  function renderBatch(modelsToRender) {
+    console.log(`Rendering batch of ${modelsToRender.length} models`);
+
+    if (modelsToRender.length === 0) {
+        // This case should ideally be handled by updateGallery before calling renderBatch
+        console.warn("renderBatch called with empty array");
+        return;
+    }
+
+    // Use DocumentFragment for performance
+    const gridFragment = document.createDocumentFragment();
+    const listFragment = document.createDocumentFragment();
+
+    modelsToRender.forEach(model => {
+      const cardHTML = renderModelCard(model);
+      const itemHTML = renderModelListItem(model);
+
+      // Create elements from HTML strings
+      const cardTemplate = document.createElement('template');
+      cardTemplate.innerHTML = cardHTML.trim();
+      gridFragment.appendChild(cardTemplate.content.firstChild);
+
+      const itemTemplate = document.createElement('template');
+      itemTemplate.innerHTML = itemHTML.trim();
+      listFragment.appendChild(itemTemplate.content.firstChild);
+    });
+
+    // Apply highlighting if needed to the newly added elements *within the fragments*
+    if (currentSearchText) {
+        highlightTextInContainer(gridFragment, currentSearchText); // Highlight within the fragment
+        highlightTextInContainer(listFragment, currentSearchText); // Highlight within the fragment
+    }
+
+    // Append the fragments to the DOM
+    modelsGridContainer.appendChild(gridFragment);
+    modelsListContainer.appendChild(listFragment);
+
+    // Observe newly added images for lazy loading *after* they are in the DOM
+    observeImages(modelsGridContainer); // Re-check container for new images
+    observeImages(modelsListContainer); // Re-check container for new images
+
+    console.log(`Appended batch of ${modelsToRender.length} models.`);
+  }
+
   function renderModelCard(model) {
     const rating = model.stats?.rating ? parseFloat(model.stats.rating).toFixed(1) : '0';
     const ratingCount = model.stats?.rating_count || 0;
@@ -103,7 +153,8 @@
                   ? `<div class="model-preview">
                       ${model.is_video
                           ? `<video src="${model.preview_image_path}" preload="metadata" class="preview-video" controls muted loop playsinline></video><div class="video-indicator">VIDEO</div>`
-                          : `<img src="${model.preview_image_path}" alt="${escapeHTML(model.name)}" loading="lazy">`
+                          // Use placeholder, data-src, and lazy-load class for images
+                          : `<img src="${PLACEHOLDER_IMAGE}" data-src="${model.preview_image_path}" alt="${escapeHTML(model.name)}" class="lazy-load-image">`
                       }
                     </div>`
                   : `<div class="model-preview no-image"><div class="no-image-text">No Preview</div></div>`
@@ -155,7 +206,8 @@
                   ${model.preview_image_path
                       ? `${model.is_video
                           ? `<video src="${model.preview_image_path}" preload="metadata" class="preview-video"></video><div class="video-indicator mini">VIDEO</div>`
-                          : `<img src="${model.preview_image_path}" alt="${escapeHTML(model.name)}" loading="lazy">`
+                          // Use placeholder, data-src, and lazy-load class for images
+                          : `<img src="${PLACEHOLDER_IMAGE}" data-src="${model.preview_image_path}" alt="${escapeHTML(model.name)}" class="lazy-load-image">`
                         }`
                       : `<div class="no-image-text">No Preview</div>`
                   }
@@ -190,46 +242,35 @@
       </div>`;
   }
 
-  function renderGallery(modelsToRender) {
-    console.log(`Rendering ${modelsToRender.length} models`);
-    // Clear existing content
-    modelsGridContainer.innerHTML = '';
-    modelsListContainer.innerHTML = '';
+  // Removed the old renderGallery function as its logic is now in renderBatch and updateGallery
 
-    if (modelsToRender.length === 0) {
-        noResultsEl.style.display = 'block';
-        return;
+  function renderNextBatch() {
+    console.log(`Attempting to render next batch. Rendered: ${renderedModelCount}, Total: ${currentFilteredSortedModels.length}`);
+    if (renderedModelCount >= currentFilteredSortedModels.length) {
+      console.log("All models rendered.");
+      // Optionally hide sentinel or disconnect observer here if needed
+      return; // All models are rendered
     }
 
-    noResultsEl.style.display = 'none';
-
-    // Use DocumentFragment for performance
-    const gridFragment = document.createDocumentFragment();
-    const listFragment = document.createDocumentFragment();
-
-    modelsToRender.forEach(model => {
-      const cardHTML = renderModelCard(model);
-      const itemHTML = renderModelListItem(model);
-
-      // Create elements from HTML strings
-      const cardTemplate = document.createElement('template');
-      cardTemplate.innerHTML = cardHTML.trim();
-      gridFragment.appendChild(cardTemplate.content.firstChild);
-
-      const itemTemplate = document.createElement('template');
-      itemTemplate.innerHTML = itemHTML.trim();
-      listFragment.appendChild(itemTemplate.content.firstChild);
-    });
-
-    modelsGridContainer.appendChild(gridFragment);
-    modelsListContainer.appendChild(listFragment);
-
-    // Apply highlighting if needed
-    if (currentSearchText) {
-        highlightSearchResults(currentSearchText);
+    const nextBatch = currentFilteredSortedModels.slice(renderedModelCount, renderedModelCount + BATCH_SIZE);
+    if (nextBatch.length > 0) {
+      renderBatch(nextBatch);
+      renderedModelCount += nextBatch.length;
+    } else {
+      console.log("No more models in the next batch slice.");
     }
-    console.log("Render complete");
+
+    // Re-check if all models are now rendered after this batch
+    if (renderedModelCount >= currentFilteredSortedModels.length) {
+        console.log("All models have been rendered after this batch.");
+        // Disconnect scroll observer if all models are loaded
+        if (scrollObserver && infiniteScrollSentinel) {
+            scrollObserver.unobserve(infiniteScrollSentinel);
+            console.log("Infinite scroll observer disconnected.");
+        }
+    }
   }
+
 
   // --- Data Processing Functions ---
 
@@ -293,8 +334,37 @@
   }
 
   function updateGallery() {
-    const modelsToRender = filterAndSortModels();
-    renderGallery(modelsToRender);
+    // 1. Filter and sort the entire dataset
+    currentFilteredSortedModels = filterAndSortModels();
+    console.log(`Updating gallery. Found ${currentFilteredSortedModels.length} models after filtering/sorting.`);
+
+    // 2. Clear existing content from containers
+    modelsGridContainer.innerHTML = '';
+    modelsListContainer.innerHTML = '';
+    renderedModelCount = 0; // Reset rendered count
+
+    // 3. Handle empty results
+    if (currentFilteredSortedModels.length === 0) {
+      noResultsEl.style.display = 'block';
+      // Disconnect scroll observer if no results
+      if (scrollObserver && infiniteScrollSentinel) {
+          scrollObserver.unobserve(infiniteScrollSentinel);
+          console.log("Infinite scroll observer disconnected (no results).");
+      }
+      return;
+    } else {
+      noResultsEl.style.display = 'none';
+    }
+
+    // 4. Render the first batch
+    renderNextBatch();
+
+    // 5. Ensure the infinite scroll observer is watching the sentinel
+    // (It might have been disconnected if previous state had 0 results or all items loaded)
+    if (scrollObserver && infiniteScrollSentinel && renderedModelCount < currentFilteredSortedModels.length) {
+        scrollObserver.observe(infiniteScrollSentinel);
+        console.log("Infinite scroll observer (re)activated.");
+    }
   }
 
 
@@ -358,17 +428,28 @@
       });
   }
 
-  function highlightSearchResults(searchText) {
-      // Remove previous highlights first
-      removeHighlights(modelsGridContainer);
-      removeHighlights(modelsListContainer);
+  // Combined highlightSearchResults function
+  function highlightSearchResults(searchText, container = document) {
+      // If container is document, remove highlights globally first
+      if (container === document) {
+          removeHighlights(modelsGridContainer);
+          removeHighlights(modelsListContainer);
+      }
 
       if (!searchText.trim()) return;
 
-      // Apply highlights to the currently visible elements
-      modelsGridContainer.querySelectorAll('.model-card').forEach(card => highlightText(card, searchText));
-      modelsListContainer.querySelectorAll('.model-list-item').forEach(item => highlightText(item, searchText));
+      // Apply highlights to the elements within the specified container (could be document or a fragment)
+      highlightTextInContainer(container, searchText);
   }
+
+  // Helper function to apply highlightText to relevant elements within a container
+  function highlightTextInContainer(container, searchText) {
+      // Select both potential elements within the container
+      container.querySelectorAll('.model-card .model-info, .model-list-item .model-list-info').forEach(infoElement => {
+          highlightText(infoElement, searchText);
+      });
+  }
+
 
 
   // --- Event Handlers ---
@@ -556,6 +637,66 @@
   }
 
 
+  // --- Intersection Observers ---
+  let imageObserver = null;
+  let scrollObserver = null;
+
+  function initializeImageObserver() {
+    const observerOptions = {
+      root: null, // Use the viewport
+      rootMargin: '0px',
+      threshold: 0.1 // Trigger when 10% of the image is visible
+    };
+
+    imageObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const img = entry.target;
+          const src = img.getAttribute('data-src');
+          if (src) {
+            img.src = src;
+            img.classList.remove('lazy-load-image'); // Optional: remove class after loading
+            console.log(`Lazy loading image: ${src.substring(0, 50)}...`);
+          }
+          observer.unobserve(img); // Stop observing once loaded
+        }
+      });
+    }, observerOptions);
+    console.log("Image lazy load observer initialized.");
+  }
+
+  function observeImages(container) {
+      if (!imageObserver) return;
+      const images = container.querySelectorAll('img.lazy-load-image');
+      images.forEach(img => imageObserver.observe(img));
+      console.log(`Observing ${images.length} new images for lazy loading.`);
+  }
+
+
+  function initializeInfiniteScrollObserver() {
+      if (!infiniteScrollSentinel) {
+          console.warn("Infinite scroll sentinel not found.");
+          return;
+      }
+
+      const observerOptions = {
+          root: null, // Use the viewport
+          rootMargin: '200px', // Load next batch when sentinel is 200px away from viewport bottom
+          threshold: 0
+      };
+
+      scrollObserver = new IntersectionObserver((entries, observer) => {
+          entries.forEach(entry => {
+              if (entry.isIntersecting && renderedModelCount < currentFilteredSortedModels.length) {
+                  console.log("Infinite scroll sentinel intersected, loading next batch.");
+                  renderNextBatch();
+              }
+          });
+      }, observerOptions);
+      console.log("Infinite scroll observer initialized.");
+  }
+
+
   // --- Initialization ---
   async function initializeGallery() {
     console.log("Initializing gallery...");
@@ -604,7 +745,11 @@
     if (allModelsData.length > 0) {
         if (emptyGalleryEl) emptyGalleryEl.style.display = 'none';
         generateDirectoryTree();
-        updateGallery(); // Perform initial sort and render
+        initializeImageObserver(); // Init image observer
+        initializeInfiniteScrollObserver(); // Init scroll observer
+        updateGallery(); // Perform initial filter, sort, and render first batch
+        // Start observing the sentinel *after* the first batch is potentially rendered
+        // updateGallery ensures observer is started if needed
     } else {
         console.log("No models found in data.");
         if (emptyGalleryEl) emptyGalleryEl.style.display = 'block';
