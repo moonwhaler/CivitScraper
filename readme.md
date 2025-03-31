@@ -117,8 +117,6 @@ That's it! You've successfully scanned your models and created visual previews.
 
 ### Steps
 
-While `pip install civitscraper` (shown in the Quick Start) is the easiest, if you want to modify the code or contribute, you'll want to clone the repository:
-
 ```bash
 # 1. Clone the repository (if you haven't already)
 git clone https://github.com/moonwhaler/civitscraper.git
