@@ -121,9 +121,15 @@ class FileOrganizer:
             if self.should_process_file(file_path):
                 # Perform file operation
                 success = self.file_handler.perform_operation(
-                    file_path, target_path, self.org_config.operation_mode, self.dry_run
+                    source_path=file_path,
+                    target_path=target_path,
+                    operation_type=self.org_config.operation_mode,
+                    on_collision=self.org_config.on_collision,
+                    dry_run=self.dry_run,
                 )
                 if not success:
+                    # If the main file operation failed (e.g., skipped, failed on collision),
+                    # we don't proceed with related files and return None for the target path.
                     return None
 
                 # Process related files that exist
@@ -140,13 +146,19 @@ class FileOrganizer:
                         )
 
                         # Perform operation for related file
+                        # We don't need to check the return value here as the main file succeeded.
+                        # If a related file fails (e.g. collision with skip/fail), it's logged,
+                        # but the overall organization for the main file is considered successful.
                         self.file_handler.perform_operation(
-                            related_path,
-                            related_target_path,
-                            self.org_config.operation_mode,
-                            self.dry_run,
+                            source_path=related_path,
+                            target_path=related_target_path,
+                            operation_type=self.org_config.operation_mode,
+                            on_collision=self.org_config.on_collision,
+                            dry_run=self.dry_run,
                         )
 
+            # Return the target path even if related files were skipped/failed,
+            # as the main file operation was successful or handled appropriately.
             return target_path
 
         except Exception as e:

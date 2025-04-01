@@ -192,9 +192,6 @@ class HTMLGenerator:
                         logger.warning(f"Asset file not found, skipping copy: {source_path}")
         except Exception as e:
             logger.error(f"Error copying assets: {e}")
-            # Decide if we should raise or continue with potentially broken links
-            # raise # Option 1: Stop generation
-            # Option 2: Continue, links might be broken
 
         # Build model data list using ContextBuilder (which now returns raw data)
         # Note: build_gallery_context might need adjustment if its internal processing
@@ -213,12 +210,8 @@ class HTMLGenerator:
         try:
             # Serialize directly to JSON, no special escaping needed for JS file
             json_string = json.dumps(models_data, separators=(",", ":"))
-            # Explicitly assign to window object and update log message
-            js_content = (
-                f"window.allModelsData = {json_string}"
-                + ";\nconsole.log('models_data.js executed and "
-                + "window.allModelsData should be defined.');"
-            )
+            # Explicitly assign to window object
+            js_content = f"window.allModelsData = {json_string}" + ";"
             logger.debug(f"Serialized {len(models_data)} models for JS file.")
         except Exception as e:
             logger.error(f"Error serializing gallery data for JS file: {e}")
@@ -230,9 +223,6 @@ class HTMLGenerator:
             logger.debug(f"Wrote models data to {data_js_path}")
         except Exception as e:
             logger.error(f"Error writing models data JS file {data_js_path}: {e}")
-            # Decide if we should raise or continue with potentially missing data file
-            # raise # Option 1: Stop generation
-            # Option 2: Continue, gallery will likely show an error
 
         # Prepare context for the HTML template shell
         # Pass the relative path to the data JS file

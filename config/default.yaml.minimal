@@ -68,6 +68,7 @@ jobs:
       custom_template: ""       # Custom organization path template
       output_dir: "{model_dir}/organized"  # Where to put organized files
       operation_mode: "copy"    # [copy/move/symlink] (minimal default: copy)
+      on_collision: skip        # Choose 'skip', 'overwrite', or 'fail'
 
 # =============================================================================
 # Scanner Settings

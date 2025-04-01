@@ -121,6 +121,13 @@ jobs:
       output_dir: "{model_dir}/organized"  # Where to put organized files
       operation_mode: "symlink"    # [copy/move/symlink] How to organize files
 
+      # Controls behavior when the target file already exists:
+      # 'skip': (Default) Does not move/copy/link the file, logs a message.
+      # 'overwrite': Removes the existing file first, then proceeds. Fails if removal fails.
+      # 'fail': Stops processing for that specific file and logs an error.
+      on_collision: skip # Choose 'skip', 'overwrite', or 'fail'
+
+
   # Organize by rating example
   organize-by-rating:
     type: scan-paths
