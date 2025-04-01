@@ -158,7 +158,6 @@ def get_metadata_path(file_path: str, config: Dict[str, Any]) -> str:
     # Get model name
     model_name = os.path.splitext(os.path.basename(file_path))[0]
 
-    # Get model type (explicitly cast to str to satisfy mypy)
     model_type: str = get_model_type(file_path, config)
 
     # Format path
@@ -320,7 +319,6 @@ def get_image_path(
     filename = filename.replace("{ext}", ext)
 
     # Insert the index number before the extension
-    # This ensures each image gets a unique filename regardless of the template
     if index_number:
         # Find the position of the extension in the filename
         ext_pos = filename.rfind(ext)

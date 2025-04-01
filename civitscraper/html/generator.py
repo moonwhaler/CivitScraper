@@ -41,7 +41,6 @@ class HTMLGenerator:
         self.config = config
         self.dry_run = config.get("dry_run", False)
 
-        # Initialize components
         self.path_manager = PathManager(config)
         self.renderer = TemplateRenderer(template_dir)
         self.context_builder = ContextBuilder(config, model_processor)
@@ -57,24 +56,18 @@ class HTMLGenerator:
         Returns:
             Path to generated HTML file
         """
-        # Get HTML path
         html_path = self.path_manager.get_html_path(file_path)
 
-        # Check if in dry run mode
         if self.dry_run:
             logger.info(f"Dry run: Would generate HTML for {file_path} at {html_path}")
             return html_path
 
-        # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(html_path), exist_ok=True)
 
-        # Build context
         context = self.context_builder.build_model_context(file_path, metadata)
 
-        # Render template
         html = self.renderer.render_model(context)
 
-        # Write HTML file
         with open(html_path, "w", encoding="utf-8") as f:
             f.write(html)
 
@@ -101,19 +94,16 @@ class HTMLGenerator:
         Returns:
             Path to generated HTML file
         """
-        # Check if in dry run mode
         if self.dry_run:
             logger.info(f"Dry run: Would generate gallery at {output_path}")
             return output_path
 
-        # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         # Dictionary to store unique models, keyed by model name
         # Value is a tuple of (file_path, is_organized)
         unique_models: Dict[str, Tuple[str, bool]] = {}
 
-        # Process input file paths first
         for file_path in file_paths:
             model_name = os.path.splitext(os.path.basename(file_path))[0]
             is_organized = "/organized/" in file_path
@@ -122,7 +112,6 @@ class HTMLGenerator:
             ):
                 unique_models[model_name] = (file_path, is_organized)
 
-        # Add existing HTML files if requested
         if include_existing:
             logger.info(
                 "Scanning for existing model card HTML files (including in organized directories)"
@@ -131,12 +120,10 @@ class HTMLGenerator:
             # Get path IDs from job configuration if available
             path_ids = self.config.get("gallery_path_ids")  # Use the path_ids from job config
 
-            # Find existing HTML files
             html_files = find_html_files(self.config, path_ids)
 
             if html_files:
                 logger.info(f"Found {len(html_files)} existing model card HTML files")
-                # Process each HTML file
                 for html_path in html_files:
                     model_name = os.path.splitext(os.path.basename(html_path))[0]
                     is_organized = "/organized/" in html_path
@@ -147,31 +134,26 @@ class HTMLGenerator:
             else:
                 logger.info("No existing model card HTML files found")
 
-        # Extract final list of unique file paths
         all_file_paths = [path for path, _ in unique_models.values()]
         logger.info(f"Processing {len(all_file_paths)} unique models")
 
-        # Determine output directory and asset directories
         output_dir = os.path.dirname(output_path)
         css_output_dir = os.path.join(output_dir, "css")
         js_output_dir = os.path.join(output_dir, "js")
-        data_output_dir = os.path.join(output_dir, "data")  # Create data directory path
+        data_output_dir = os.path.join(output_dir, "data")
         os.makedirs(css_output_dir, exist_ok=True)
         os.makedirs(js_output_dir, exist_ok=True)
-        os.makedirs(data_output_dir, exist_ok=True)  # Ensure data directory exists
+        os.makedirs(data_output_dir, exist_ok=True)
 
-        # Define source template directory
         template_dir = os.path.dirname(self.renderer.gallery_template.filename)
         css_source_dir = os.path.join(template_dir, "css")
         js_source_dir = os.path.join(template_dir, "js")
 
-        # List of assets to copy
         assets_to_copy = {
             "css": ["base.css", "components.css", "gallery.css"],
             "js": ["base.js", "gallery.js"],  # Assuming gallery.js will be created
         }
 
-        # Copy assets
         logger.debug(f"Copying assets to {output_dir}")
         asset_paths_context = {}
         try:
@@ -183,7 +165,6 @@ class HTMLGenerator:
                     dest_path = os.path.join(dest_dir, filename)
                     if os.path.exists(source_path):
                         shutil.copy2(source_path, dest_path)
-                        # Store relative path for context
                         relative_path = os.path.join(asset_type, filename)
                         context_key = f"{asset_type}_{filename.split('.')[0]}_path"
                         asset_paths_context[context_key] = relative_path
@@ -203,10 +184,9 @@ class HTMLGenerator:
             if model_data:
                 models_data.append(model_data)
 
-        # Write model data to external JS file
-        data_js_path = os.path.join(data_output_dir, "models_data.js")
-        # Default empty
-        js_content = "const allModelsData = [];"
+            data_js_path = os.path.join(data_output_dir, "models_data.js")
+            # Default empty
+            js_content = "const allModelsData = [];"
         try:
             # Serialize directly to JSON, no special escaping needed for JS file
             json_string = json.dumps(models_data, separators=(",", ":"))
@@ -224,19 +204,14 @@ class HTMLGenerator:
         except Exception as e:
             logger.error(f"Error writing models data JS file {data_js_path}: {e}")
 
-        # Prepare context for the HTML template shell
-        # Pass the relative path to the data JS file
         context = {
             "title": title,
             "models_data_js_path": "data/models_data.js",  # Relative path for HTML
-            # Add asset paths back
             **asset_paths_context,
         }
 
-        # Render template
         html = self.renderer.render_gallery(context)
 
-        # Write HTML file
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(html)
 

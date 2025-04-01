@@ -47,12 +47,10 @@ class FileOrganizer:
             Target path or None if calculation failed
         """
         try:
-            # Get template
             template = self.path_formatter.get_template(
                 self.org_config.template, self.org_config.custom_template
             )
 
-            # Get output directory
             output_dir = self.org_config.output_dir
             if not output_dir:
                 # Use default output directory
@@ -61,13 +59,10 @@ class FileOrganizer:
                     f"Using default output directory '{output_dir}' because none was specified"
                 )
 
-            # Replace {model_dir} with model directory
             output_dir = output_dir.replace("{model_dir}", os.path.dirname(file_path))
 
-            # Format path using metadata
             relative_path = self.path_formatter.format_path(template, metadata)
 
-            # Create target path
             target_dir = os.path.join(output_dir, relative_path)
             target_path = os.path.join(target_dir, os.path.basename(file_path))
 
@@ -100,13 +95,11 @@ class FileOrganizer:
         Returns:
             Path to organized file or None if organization failed
         """
-        # Check if organization is enabled
         if not self.org_config.enabled:
             logger.debug("Organization is disabled")
             return None
 
         try:
-            # Get target path
             target_path = self.get_target_path(file_path, metadata)
             if not target_path:
                 return None
@@ -119,7 +112,6 @@ class FileOrganizer:
 
             # Only process pre-existing files
             if self.should_process_file(file_path):
-                # Perform file operation
                 success = self.file_handler.perform_operation(
                     source_path=file_path,
                     target_path=target_path,
@@ -136,7 +128,6 @@ class FileOrganizer:
                 related_files = self.file_handler.get_related_files(file_path)
                 for related_path, file_type in related_files:
                     if self.should_process_file(related_path):
-                        # Create target path for related file
                         related_target_path = (
                             os.path.splitext(target_path)[0]
                             + os.path.splitext(related_path)[0].replace(
@@ -145,7 +136,6 @@ class FileOrganizer:
                             + os.path.splitext(related_path)[1]
                         )
 
-                        # Perform operation for related file
                         # We don't need to check the return value here as the main file succeeded.
                         # If a related file fails (e.g. collision with skip/fail), it's logged,
                         # but the overall organization for the main file is considered successful.
@@ -180,22 +170,18 @@ class FileOrganizer:
         Returns:
             Dictionary mapping source paths to target paths
         """
-        # Check if organization is enabled
         if not self.org_config.enabled:
             logger.debug("Organization is disabled")
             return {}
 
-        # Calculate target paths
         target_paths = {}
 
         for file_path in file_paths:
-            # Get metadata
             metadata = metadata_dict.get(file_path)
             if not metadata:
                 logger.warning(f"No metadata found for {file_path}")
                 continue
 
-            # Get target path
             target_path = self.get_target_path(file_path, metadata)
             if target_path:
                 target_paths[file_path] = target_path
@@ -217,26 +203,21 @@ class FileOrganizer:
         Returns:
             List of (file_path, target_path) tuples
         """
-        # Check if organization is enabled
         if not self.org_config.enabled:
             logger.debug("Organization is disabled")
             return [(file_path, None) for file_path in file_paths]
 
-        # Organize files
         results: List[Tuple[str, Optional[str]]] = []
 
         for file_path in file_paths:
-            # Get metadata
             metadata = metadata_dict.get(file_path)
             if not metadata:
                 logger.warning(f"No metadata found for {file_path}")
                 results.append((file_path, None))
                 continue
 
-            # Organize file
             target_path = self.organize_file(file_path, metadata)
 
-            # Add to results
             results.append((file_path, target_path))
 
         return results

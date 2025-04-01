@@ -57,7 +57,6 @@ class ModelsEndpoint(BaseEndpoint):
             response_type=response_type,
         )
 
-        # Extract first item from response
         if isinstance(response, SearchResult) and len(response.items) > 0:
             return response.items[0]
         if isinstance(response, dict):

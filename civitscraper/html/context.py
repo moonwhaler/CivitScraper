@@ -53,37 +53,21 @@ class ContextBuilder:
             file_path: Path to model file
             metadata: Model metadata
 
-        Returns:
+            Returns:
             Template context
         """
-        # Get model information
         model_info = metadata.get("model", {})
-
-        # Get model name - use the model name from metadata
         model_name = model_info.get("name", metadata.get("name", "Unknown"))
-
-        # Get model type
         model_type = model_info.get("type", "Unknown")
-
-        # Get model creator
         creator = model_info.get("creator", {}).get("username", "Unknown")
-
-        # Get model description
         description = metadata.get("description", "")
-
-        # Get model tags
         tags = model_info.get("tags", [])
-
-        # Get model stats
         stats = metadata.get("stats", {})
-
-        # Get image paths
         image_paths = self.image_handler.get_image_paths(file_path, metadata)
 
         # Sanitize and encode image data to avoid JSON parsing issues
         encoded_images = self.sanitizer.sanitize_json_data(image_paths)
 
-        # Create context
         context = {
             "title": model_name,
             "model_name": model_name,
@@ -134,24 +118,20 @@ class ContextBuilder:
         metadata_path = os.path.splitext(file_path)[0] + ".json"
         html_path = file_path if is_html_file else self.path_manager.get_html_path(file_path)
 
-        # Check and load metadata
         metadata = self._load_metadata(metadata_path)
         if not metadata:
             return None
 
-        # Calculate paths
         output_dir = os.path.dirname(output_path) if output_path else os.path.dirname(file_path)
         # Use absolute path for the model's HTML file
         html_abs_path = os.path.abspath(html_path)
 
-        # Find preview image
         preview_image = self._find_preview_image(file_path, metadata, output_dir, is_html_file)
         preview_data: Dict[str, Any] = {
             "path": preview_image["path"] if preview_image else None,
             "is_video": preview_image["is_video"] if preview_image else False,
         }
 
-        # Get model stats
         stats = metadata.get("stats", {})
         model_stats = {
             "downloads": stats.get("downloadCount", 0),
@@ -159,7 +139,6 @@ class ContextBuilder:
             "rating_count": stats.get("ratingCount", 0),
         }
 
-        # Get model name
         model_name = metadata.get("model", {}).get("name") or metadata.get("name", "Unknown")
 
         return {
@@ -193,16 +172,12 @@ class ContextBuilder:
         # If metadata not found at direct path, try alternative paths
         try:
             filename = os.path.basename(metadata_path)
-
-            # Check if this is an organized or original path
             is_in_organized_dir = "/organized/" in metadata_path
 
             if is_in_organized_dir:
                 # We're in an organized directory, try to find the original
-                # Extract path segments to reconstruct the original path
                 organized_idx = metadata_path.find("/organized/")
                 if organized_idx != -1:
-                    # Get the path prefix before "/organized/"
                     original_base = metadata_path[:organized_idx]
                     original_path = os.path.join(original_base, filename)
 
@@ -227,7 +202,6 @@ class ContextBuilder:
                     parent_dir = metadata_path[:organized_idx]
                     organized_dir = os.path.join(parent_dir, "organized")
 
-                    # Search for the file recursively in the organized directory
                     if os.path.isdir(organized_dir):
                         for root, _, files in os.walk(organized_dir):
                             organized_path = os.path.join(root, filename)
@@ -256,38 +230,32 @@ class ContextBuilder:
         self, file_path: str, metadata: Dict[str, Any], output_dir: str, is_html_file: bool
     ) -> PreviewImageResult:
         """Find preview image for a model."""
-        # Check if this is a file in an organized directory
         is_organized = "/organized/" in file_path
 
         # If this is an HTML file in the original location, try to find its organized version first
         if is_html_file and not is_organized:
             organized_path = self._find_organized_version(file_path)
             if organized_path:
-                # Try to find preview for the organized version
                 organized_preview = self._try_standard_preview_path(
                     organized_path, output_dir, is_html_file
                 )
                 if organized_preview is not None:
                     return organized_preview
 
-        # Try standard preview path
         preview_path = self._try_standard_preview_path(file_path, output_dir, is_html_file)
         if preview_path is not None:
             return preview_path
 
         # For HTML files, try additional locations
         if is_html_file:
-            # Try alternative patterns
             alt_preview_path = self._try_alternative_patterns(file_path, output_dir)
             if alt_preview_path is not None:
                 return alt_preview_path
 
-            # Try images directory
             dir_preview_path = self._try_images_directory(file_path, output_dir)
             if dir_preview_path is not None:
                 return dir_preview_path
 
-            # Try metadata URLs as last resort
             metadata_preview_path = self._try_metadata_urls(metadata, file_path, output_dir)
             if metadata_preview_path is not None:
                 return metadata_preview_path
@@ -296,7 +264,6 @@ class ContextBuilder:
 
     def _find_organized_version(self, file_path: str) -> Optional[str]:
         """Find organized version of a file."""
-        # Get the base directory (before the file path)
         base_dir = file_path
         while "/models/" in base_dir:
             base_dir = os.path.dirname(base_dir)
@@ -304,15 +271,12 @@ class ContextBuilder:
         if not base_dir:
             return None
 
-        # Get the model name
         model_name = os.path.splitext(os.path.basename(file_path))[0]
 
-        # Look for organized version recursively
         organized_base = os.path.join(base_dir, "organized")
         if not os.path.isdir(organized_base):
             return None
 
-        # Search for the file recursively
         for root, _, files in os.walk(organized_base):
             for filename in files:
                 if filename == f"{model_name}.html":
@@ -380,11 +344,11 @@ class ContextBuilder:
                 preview_path = os.path.join(html_dir, pattern + ext)
                 if os.path.isfile(preview_path):
                     is_video = ext.lower() == ".mp4"
-                    result: PreviewImageDict = {
-                        "path": os.path.abspath(preview_path),  # Use absolute path
-                        "is_video": is_video,
-                    }
-                    return result
+                result: PreviewImageDict = {
+                    "path": os.path.abspath(preview_path),  # Use absolute path
+                    "is_video": is_video,
+                }
+                return result
 
         return None
 
@@ -399,11 +363,11 @@ class ContextBuilder:
                 if model_name.lower() in filename.lower():
                     preview_path = os.path.join(images_dir, filename)
                     is_video = filename.lower().endswith(".mp4")
-                    result: PreviewImageDict = {
-                        "path": os.path.abspath(preview_path),  # Use absolute path
-                        "is_video": is_video,
-                    }
-                    return result
+                result: PreviewImageDict = {
+                    "path": os.path.abspath(preview_path),  # Use absolute path
+                    "is_video": is_video,
+                }
+                return result
 
         return None
 

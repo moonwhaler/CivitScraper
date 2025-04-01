@@ -64,9 +64,6 @@ class HTMLManager:
         # Check if we should skip existing HTML files
         skip_existing = self.config.get("skip_existing", False)
 
-        # If skip_existing is true and file exists
-        # and force_refresh is false and generate_gallery is false
-        # then we can skip generating the HTML
         if (
             skip_existing
             and os.path.exists(html_path)

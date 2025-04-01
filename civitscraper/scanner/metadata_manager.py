@@ -107,7 +107,6 @@ class MetadataManager:
                 logger.warning(f"No images found in metadata for hash {file_hash}")
                 return None
 
-            # Use cast to help mypy understand the type
             images = cast(List[Any], metadata.get("images", []))
             logger.debug(f"Processed hash: {file_hash}, found {len(images)} images")
             return metadata

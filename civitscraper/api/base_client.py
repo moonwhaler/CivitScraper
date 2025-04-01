@@ -35,14 +35,11 @@ class BaseClient:
         self.max_retries = config["api"].get("max_retries", 3)
         self.user_agent = config["api"].get("user_agent", "CivitScraper/0.1.0")
 
-        # Get dry run flag
         self.dry_run = config.get("dry_run", False)
 
-        # Set up rate limiting
         rate_limit = config["api"].get("batch", {}).get("rate_limit", 100)
         self.rate_limiter = RateLimiter(rate_limit)
 
-        # Set up circuit breaker
         failure_threshold = (
             config["api"].get("batch", {}).get("circuit_breaker", {}).get("failure_threshold", 5)
         )
@@ -51,23 +48,19 @@ class BaseClient:
         )
         self.circuit_breaker = CircuitBreaker(failure_threshold, reset_timeout)
 
-        # Set up retry delay (convert from ms to seconds)
+        # Convert ms to seconds
         self.base_retry_delay = config["api"].get("batch", {}).get("retry_delay", 2000) / 1000.0
 
-        # Set up cache
         self.cache_manager: CacheManager[Any] = CacheManager(config)
 
-        # Set up headers
         headers = {
             "User-Agent": self.user_agent,
             "Accept": "application/json",
         }
 
-        # Add API key if available
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
-        # Create request handler
         self.request_handler = RequestHandler(
             base_url=self.base_url,
             rate_limiter=self.rate_limiter,
@@ -79,7 +72,6 @@ class BaseClient:
             headers=headers,
         )
 
-        # Create response parser
         self.response_parser = ResponseParser()
 
         logger.debug(f"Initialized CivitAI API base client for {self.base_url}")
@@ -115,7 +107,6 @@ class BaseClient:
             force_refresh=force_refresh,
         )
 
-        # Parse response
         if response_type:
             return self.response_parser.parse_response(response_text, response_type)
         return self.response_parser.parse_json(response_text)

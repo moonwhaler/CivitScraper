@@ -28,13 +28,12 @@ class RateLimiter:
         self.last_refill = time.time()
         self.lock = threading.Lock()
 
-        # Calculate token refill rate
         if per_second:
-            self.refill_rate = float(rate_limit)  # tokens per second
-            self.refill_interval = 1.0  # seconds
+            self.refill_rate = float(rate_limit)
+            self.refill_interval = 1.0
         else:
-            self.refill_rate = float(rate_limit) / 60.0  # tokens per second
-            self.refill_interval = 60.0  # seconds
+            self.refill_rate = float(rate_limit) / 60.0
+            self.refill_interval = 60.0
 
         logger.debug(
             f"Initialized rate limiter with {rate_limit} requests per "
@@ -46,7 +45,6 @@ class RateLimiter:
         now = time.time()
         elapsed = now - self.last_refill
 
-        # Calculate tokens to add
         new_tokens = elapsed * self.refill_rate
         self.tokens = min(float(self.rate_limit), self.tokens + new_tokens)
         self.last_refill = now
@@ -72,15 +70,12 @@ class RateLimiter:
             if not block:
                 return False
 
-            # Calculate wait time
             wait_time = (tokens - self.tokens) / self.refill_rate
 
             logger.debug(f"Rate limit reached, waiting {wait_time: .2f} seconds for tokens")
 
-            # Wait for tokens to become available
             time.sleep(wait_time)
 
-            # Refill and acquire
             self._refill()
             self.tokens -= tokens
             return True

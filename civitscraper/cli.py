@@ -53,17 +53,13 @@ def parse_args():
 
 def main():
     """Run the main application."""
-    # Parse command-line arguments
     args = parse_args()
 
-    # Initialize logger with default configuration
     logger = logging.getLogger(__name__)
 
     try:
-        # Load configuration
         config = load_and_validate_config(args.config)
 
-        # Set up logging with configuration
         logger = setup_logging(config)
 
         # Override configuration with command-line arguments
@@ -95,22 +91,17 @@ def main():
                 config["logging"]["console"] = {}
             config["logging"]["console"]["enabled"] = False
 
-        # Set up logging
         logger = setup_logging(config)
 
-        # Log force refresh if enabled
         if args.force_refresh:
             logger.info("Force refresh enabled: Cache will be ignored")
 
-        # Create API client
         api_client = CivitAIClient(config)
 
-        # Create job executor
         job_executor = JobExecutor(config, api_client)
 
         # Execute jobs
         if args.job:
-            # Execute specific job
             logger.info(f"Executing job: {args.job}")
             success = job_executor.execute_job(args.job)
 
@@ -122,11 +113,9 @@ def main():
                 return 1
 
         elif args.all_jobs:
-            # Execute all jobs
             logger.info("Executing all jobs")
             results = job_executor.execute_all_jobs()
 
-            # Check if any job failed
             if all(results.values()):
                 logger.info("All jobs executed successfully")
                 return 0
@@ -136,7 +125,6 @@ def main():
                 return 1
 
         else:
-            # No job specified, execute default job
             default_job = config.get("default_job")
             if default_job:
                 logger.info(f"Executing default job: {default_job}")

@@ -23,14 +23,11 @@ class TemplateRenderer:
         Args:
             template_dir: Directory containing templates
         """
-        # Get template directory
         if template_dir is None:
-            # Use default template directory
             template_dir = os.path.join(os.path.dirname(__file__), "templates")
 
         logger.debug(f"Using template directory: {template_dir}")
 
-        # Create Jinja environment
         self.env = Environment(
             loader=FileSystemLoader(template_dir),
             autoescape=select_autoescape(["html", "xml"]),
@@ -39,7 +36,6 @@ class TemplateRenderer:
         # Add a function to read css/js files
         self.env.globals["read_file"] = self._read_file
 
-        # Load templates
         self.model_template = self.env.get_template("model.html")
         self.gallery_template = self.env.get_template("gallery.html")
 
@@ -77,7 +73,6 @@ class TemplateRenderer:
             Rendered HTML
         """
         try:
-            # Render template
             html = self.model_template.render(**context)
             logger.debug(f"Rendered model template with {len(context)} context variables")
             return str(html)
@@ -96,7 +91,6 @@ class TemplateRenderer:
             Rendered HTML
         """
         try:
-            # Render template
             html = self.gallery_template.render(**context)
             logger.debug(f"Rendered gallery template with {len(context)} context variables")
             return str(html)

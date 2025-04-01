@@ -66,10 +66,8 @@ class VersionsEndpoint(BaseEndpoint):
             True if download was successful, False otherwise
         """
         try:
-            # Get model version
             version_data = self.get(version_id)
 
-            # Get download URL
             if isinstance(version_data, dict):
                 download_url = version_data.get("downloadUrl")
             else:
@@ -78,7 +76,6 @@ class VersionsEndpoint(BaseEndpoint):
             if not download_url:
                 return False
 
-            # Download model and ensure boolean return
             result = self.client.download(download_url, output_path)
             return bool(result)
 

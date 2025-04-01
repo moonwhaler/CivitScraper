@@ -25,8 +25,8 @@ class CircuitBreaker:
         """
         self.failure_threshold = failure_threshold
         self.reset_timeout = reset_timeout
-        self.failures: Dict[str, int] = {}  # endpoint -> failure count
-        self.open_circuits: Dict[str, float] = {}  # endpoint -> open time
+        self.failures: Dict[str, int] = {}
+        self.open_circuits: Dict[str, float] = {}
         self.lock = threading.Lock()
 
         logger.debug(
@@ -45,13 +45,10 @@ class CircuitBreaker:
             True if circuit is open, False otherwise
         """
         with self.lock:
-            # Check if circuit is open
             if endpoint in self.open_circuits:
                 open_time = self.open_circuits[endpoint]
 
-                # Check if reset timeout has elapsed
                 if time.time() - open_time >= self.reset_timeout:
-                    # Reset circuit
                     del self.open_circuits[endpoint]
                     self.failures[endpoint] = 0
                     logger.info(f"Circuit breaker reset for endpoint: {endpoint}")
@@ -69,16 +66,12 @@ class CircuitBreaker:
             endpoint: API endpoint
         """
         with self.lock:
-            # Initialize failure count
             if endpoint not in self.failures:
                 self.failures[endpoint] = 0
 
-            # Increment failure count
             self.failures[endpoint] += 1
 
-            # Check if threshold is reached
             if self.failures[endpoint] >= self.failure_threshold:
-                # Open circuit
                 self.open_circuits[endpoint] = time.time()
                 logger.warning(f"Circuit breaker opened for endpoint: {endpoint}")
 
@@ -90,7 +83,6 @@ class CircuitBreaker:
             endpoint: API endpoint
         """
         with self.lock:
-            # Reset failure count
             if endpoint in self.failures:
                 self.failures[endpoint] = 0
 

@@ -61,17 +61,14 @@ class RequestHandler:
         self.max_retries = max_retries
         self.base_retry_delay = base_retry_delay
 
-        # Set up session
         self.session = requests.Session()
 
-        # Set default headers
         self.session.headers.update(
             {
                 "Accept": "application/json",
             }
         )
 
-        # Add additional headers
         if headers:
             self.session.headers.update(headers)
 
@@ -87,11 +84,9 @@ class RequestHandler:
         Returns:
             Endpoint name
         """
-        # Extract endpoint from URL
         path = url.replace(self.base_url, "").strip("/")
         parts = path.split("/")
 
-        # Use first part as endpoint name
         if parts:
             return parts[0]
 
@@ -164,11 +159,9 @@ class RequestHandler:
         url = self._get_full_url(endpoint)
         endpoint_name = self._get_endpoint_name(url)
 
-        # Check circuit breaker
         if self.circuit_breaker.is_open(endpoint_name):
             raise CircuitBreakerOpenError(endpoint_name)
 
-        # Check cache for GET requests
         cache_key = self._get_cache_key(method, url, params, data)
         if method.upper() == "GET" and not force_refresh and self.cache_manager:
             cached_response = self.cache_manager.get(cache_key)
@@ -176,10 +169,8 @@ class RequestHandler:
                 logger.debug(f"Cache hit for {url}")
                 return str(cached_response)
 
-        # Acquire rate limit token
         self.rate_limiter.acquire()
 
-        # Make request with retries
         retries = 0
         while retries <= self.max_retries:
             try:
@@ -191,52 +182,41 @@ class RequestHandler:
                     timeout=self.timeout,
                 )
 
-                # Check for rate limiting
                 if response.status_code == 429:
                     retry_after = int(response.headers.get("Retry-After", 1))
                     logger.warning(f"Rate limited, retrying after {retry_after} seconds")
 
-                    # Record failure
                     self.circuit_breaker.record_failure(endpoint_name)
 
-                    # If we've reached max retries, raise exception
                     if retries >= self.max_retries:
                         raise RateLimitError(retry_after)
 
-                    # Wait and retry
                     time.sleep(retry_after)
                     retries += 1
                     continue
 
-                # Check for server errors
                 if response.status_code >= 500:
                     self.circuit_breaker.record_failure(endpoint_name)
 
-                    # If we've reached max retries, raise exception
                     if retries >= self.max_retries:
                         raise ServerError(response.status_code, response.text)
 
-                    # Use exponential backoff
                     retry_delay = self.base_retry_delay * (2**retries)
                     logger.warning(
                         f"Server error {response.status_code}, "
                         f"retrying after {retry_delay: .2f} seconds"
                     )
 
-                    # Wait and retry
                     time.sleep(retry_delay)
                     retries += 1
                     continue
 
-                # Check for client errors
                 if response.status_code >= 400:
                     self.circuit_breaker.record_failure(endpoint_name)
                     raise ClientError(response.status_code, response.text)
 
-                # Record success
                 self.circuit_breaker.record_success(endpoint_name)
 
-                # Cache response for GET requests
                 if method.upper() == "GET" and self.cache_manager:
                     self.cache_manager.set(cache_key, response.text)
 
@@ -245,15 +225,12 @@ class RequestHandler:
             except (requests.RequestException, json.JSONDecodeError) as e:
                 self.circuit_breaker.record_failure(endpoint_name)
 
-                # If we've reached max retries, raise exception
                 if retries >= self.max_retries:
                     raise NetworkError(str(e))
 
-                # Use exponential backoff
                 retry_delay = self.base_retry_delay * (2**retries)
                 logger.warning(f"Request failed: {e}, retrying after {retry_delay: .2f} seconds")
 
-                # Wait and retry
                 time.sleep(retry_delay)
                 retries += 1
 
@@ -331,28 +308,22 @@ class RequestHandler:
             - success_status: True if download was successful, False otherwise
             - content_type: The Content-Type of the downloaded file, or None if not available
         """
-        # Check if in dry run mode
         if dry_run:
             logger.info(f"Dry run: Would download file from {url} to {output_path}")
             return True, None
 
         try:
-            # Acquire rate limit token
             self.rate_limiter.acquire()
 
-            # Make request
             response = self.session.get(url, timeout=self.timeout, stream=True)
             response.raise_for_status()
 
-            # Get content type (ensure it's a string)
             content_type_raw = response.headers.get("Content-Type")
             content_type = str(content_type_raw) if content_type_raw is not None else None
             logger.debug(f"Content-Type for {url}: {content_type}")
 
-            # Create directory if it doesn't exist
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-            # Save file
             with open(output_path, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)

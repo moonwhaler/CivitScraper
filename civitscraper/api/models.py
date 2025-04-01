@@ -34,13 +34,8 @@ class Stats:
         if rating_count == 0:
             return 1.0
 
-        # Calculate ratio of ratings to downloads
         rating_ratio = rating_count / max(download_count, 1)
-
-        # Confidence factor (0.0-1.0) based on rating ratio
         confidence = min(rating_ratio * 5, 1.0)
-
-        # Scale rating toward neutral (3.0) based on confidence
         weighted = 3.0 + (rating - 3.0) * confidence
 
         return weighted
@@ -52,12 +47,6 @@ class Stats:
             return 1.0
 
         ratio = thumbs_up_count / download_count
-        # Scale in 5% steps:
-        # ratio 0%  = 1.0 rating
-        # ratio 5%  = 2.0 rating
-        # ratio 10% = 3.0 rating
-        # ratio 15% = 4.0 rating
-        # ratio 20% = 5.0 rating
         scaled = 1.0 + min(ratio * 5, 1.0) * 4.0
         return scaled
 
@@ -183,10 +172,8 @@ class ModelVersion:
         Returns:
             ModelVersion instance
         """
-        # Parse created_at
         created_at = datetime.fromisoformat(data["createdAt"].replace("Z", "+00:00"))
 
-        # Parse files
         files = []
         for file_data in data.get("files", []):
             metadata = None
@@ -215,12 +202,10 @@ class ModelVersion:
                 )
             )
 
-        # Parse images
         images = []
         for image_data in data.get("images", []):
             images.append(Image.from_dict(image_data))
 
-        # Parse stats
         stats = None
         if data.get("stats"):
             download_count = data["stats"].get("downloadCount", 0)
@@ -280,7 +265,6 @@ class Model:
         Returns:
             Model instance
         """
-        # Parse creator
         creator = None
         if data.get("creator"):
             creator = Creator(
@@ -288,7 +272,6 @@ class Model:
                 image=data["creator"].get("image"),
             )
 
-        # Parse stats
         stats = None
         if data.get("stats"):
             download_count = data["stats"].get("downloadCount", 0)
@@ -309,7 +292,6 @@ class Model:
                 ),
             )
 
-        # Parse model versions
         model_versions = []
         for version_data in data.get("modelVersions", []):
             model_versions.append(ModelVersion.from_dict(version_data))

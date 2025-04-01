@@ -54,17 +54,14 @@ class ModelProcessor:
         self.config = config
         self.api_client = api_client
 
-        # Get dry run flag
         self.dry_run = config.get("dry_run", False)
 
-        # Initialize managers
         self.metadata_manager = MetadataManager(config, api_client)
         self.image_manager = ImageManager(config, api_client)
         self.html_manager = HTMLManager(config, html_generator)
         self.file_processor = ModelFileProcessor(config)
         self.batch_processor = BatchProcessor(config)
 
-        # Initialize failure tracking
         self.failures: List[Tuple[str, str]] = []
 
     def fetch_metadata(
@@ -82,18 +79,15 @@ class ModelProcessor:
             Metadata or None if fetching failed
         """
         try:
-            # Process the file to get hash
             result = self.file_processor.process(file_path, verify_hash)
             if not result.success:
                 self.failures.append((file_path, result.error or "Unknown error"))
                 return None
 
-            # Get metadata from API
             if result.file_hash is None:
                 self.failures.append((file_path, "No file hash available"))
                 return None
 
-            # Just fetch metadata without saving
             metadata = self.metadata_manager.fetch_metadata(
                 result.file_hash, force_refresh=force_refresh
             )
@@ -129,12 +123,10 @@ class ModelProcessor:
                 self.failures.append((file_path, "Failed to save metadata"))
                 return None
 
-            # Download images if configured
             if self.config.get("output", {}).get("images", {}).get("save", True):
                 # Always pass dry_run flag to ensure consistent behavior
                 self.image_manager.download_images(file_path, metadata, force_refresh=force_refresh)
 
-            # Generate HTML if configured
             html_enabled = (
                 self.config.get("output", {})
                 .get("metadata", {})
@@ -168,16 +160,11 @@ class ModelProcessor:
             Metadata or None if processing failed
         """
         try:
-            # Check if we should skip this file
             skip_existing = self.config.get("skip_existing", False)
 
-            # If skip_existing is true and not force_refresh and metadata exists,
-            # we still need to check if the max_count matches for preview images
-            # and update the HTML if necessary
             metadata_path = get_metadata_path(file_path, self.config)
             if skip_existing and not force_refresh and os.path.exists(metadata_path):
                 try:
-                    # Load existing metadata
                     with open(metadata_path, "r") as f:
                         metadata = json.load(f)
 
@@ -189,12 +176,10 @@ class ModelProcessor:
                     logger.error(f"Error loading existing metadata for {file_path}: {e}")
                     # Fall through to full processing
 
-            # Fetch metadata
             metadata = self.fetch_metadata(file_path, verify_hash, force_refresh)
             if not metadata:
                 return None
 
-            # Save and process with metadata
             return self.save_and_process_with_metadata(
                 file_path, metadata, force_refresh=force_refresh
             )
@@ -223,28 +208,21 @@ class ModelProcessor:
         Returns:
             List of (file_path, metadata) tuples
         """
-        # Clear failures
         self.failures = []
 
-        # Get batch processing configuration
         batch_config = self.config.get("api", {}).get("batch", {})
         batch_enabled = batch_config.get("enabled", True)
         max_concurrent = batch_config.get("max_concurrent", 4)
 
-        # Use default max_workers if not specified
         if max_workers is None:
             max_workers = max_concurrent if batch_enabled else 1
 
-        # Create progress logger
         progress_logger = ProgressLogger(logger, len(files), "Processing model files")
 
-        # Process files
         results = []
 
         if max_workers > 1:
-            # Process files in parallel
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # Submit tasks
                 future_to_file = {
                     executor.submit(
                         self.process_file, file_path, verify_hash, force_refresh
@@ -252,7 +230,6 @@ class ModelProcessor:
                     for file_path in files
                 }
 
-                # Process results as they complete
                 for future in concurrent.futures.as_completed(future_to_file):
                     file_path = future_to_file[future]
                     try:
@@ -263,18 +240,14 @@ class ModelProcessor:
                         self.failures.append((file_path, f"Error processing: {e}"))
                         results.append((file_path, None))
 
-                    # Update progress
                     progress_logger.update()
         else:
-            # Process files sequentially
             for file_path in files:
                 metadata = self.process_file(file_path, verify_hash, force_refresh)
                 results.append((file_path, metadata))
 
-                # Update progress
                 progress_logger.update()
 
-        # Log failures
         if self.failures:
             logger.warning(f"Failed to process {len(self.failures)} files")
             for file_path, error in self.failures:

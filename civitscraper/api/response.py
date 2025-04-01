@@ -133,10 +133,8 @@ class ResponseParser:
         Raises:
             ParseError: If parsing fails
         """
-        # Parse JSON
         data = self.parse_json(response_text)
 
-        # Parse into specified type
         if response_type == Model:
             return self.parse_model(data)  # type: ignore
         elif response_type == ModelVersion:
