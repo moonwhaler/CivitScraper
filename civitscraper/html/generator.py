@@ -137,6 +137,11 @@ class HTMLGenerator:
         all_file_paths = [path for path, _ in unique_models.values()]
         logger.info(f"Processing {len(all_file_paths)} unique models")
 
+        # Check if there are any models to process before creating directories/assets
+        if not all_file_paths:
+            logger.info("No models found to generate gallery. Skipping gallery creation.")
+            return output_path
+
         output_dir = os.path.dirname(output_path)
         css_output_dir = os.path.join(output_dir, "css")
         js_output_dir = os.path.join(output_dir, "js")

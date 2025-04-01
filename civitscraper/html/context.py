@@ -344,11 +344,11 @@ class ContextBuilder:
                 preview_path = os.path.join(html_dir, pattern + ext)
                 if os.path.isfile(preview_path):
                     is_video = ext.lower() == ".mp4"
-                result: PreviewImageDict = {
-                    "path": os.path.abspath(preview_path),  # Use absolute path
-                    "is_video": is_video,
-                }
-                return result
+                    result: PreviewImageDict = {
+                        "path": os.path.abspath(preview_path),  # Use absolute path
+                        "is_video": is_video,
+                    }
+                    return result
 
         return None
 
@@ -363,11 +363,11 @@ class ContextBuilder:
                 if model_name.lower() in filename.lower():
                     preview_path = os.path.join(images_dir, filename)
                     is_video = filename.lower().endswith(".mp4")
-                result: PreviewImageDict = {
-                    "path": os.path.abspath(preview_path),  # Use absolute path
-                    "is_video": is_video,
-                }
-                return result
+                    result: PreviewImageDict = {
+                        "path": os.path.abspath(preview_path),  # Use absolute path
+                        "is_video": is_video,
+                    }
+                    return result
 
         return None
 
