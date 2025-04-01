@@ -104,7 +104,6 @@ class FileOrganizer:
             if not target_path:
                 return None
 
-            # Check if target path exists - we will just warn but not handle collision
             if os.path.exists(target_path):
                 logger.warning(
                     f"Target path already exists: {target_path}. It will be overwritten if needed."
@@ -136,9 +135,6 @@ class FileOrganizer:
                             + os.path.splitext(related_path)[1]
                         )
 
-                        # We don't need to check the return value here as the main file succeeded.
-                        # If a related file fails (e.g. collision with skip/fail), it's logged,
-                        # but the overall organization for the main file is considered successful.
                         self.file_handler.perform_operation(
                             source_path=related_path,
                             target_path=related_target_path,
@@ -147,8 +143,6 @@ class FileOrganizer:
                             dry_run=self.dry_run,
                         )
 
-            # Return the target path even if related files were skipped/failed,
-            # as the main file operation was successful or handled appropriately.
             return target_path
 
         except Exception as e:

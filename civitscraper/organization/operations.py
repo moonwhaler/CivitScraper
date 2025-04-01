@@ -37,18 +37,14 @@ class FileOperationHandler:
         related_files = []
         base_path = os.path.splitext(file_path)[0]
 
-        # Add metadata file
         metadata_path = f"{base_path}.json"
         if os.path.isfile(metadata_path):
             related_files.append((metadata_path, "metadata"))
 
-        # Add HTML file
         html_path = f"{base_path}.html"
         if os.path.isfile(html_path):
             related_files.append((html_path, "html"))
 
-        # Add preview files using comprehensive pattern matching
-        # Support up to 10 preview images with various extensions
         for i in range(10):
             for ext in [".jpeg", ".jpg", ".png", ".webp", ".mp4"]:
                 preview_path = f"{base_path}.preview{i}{ext}"
@@ -155,8 +151,6 @@ class FileOperationHandler:
                     logger.info(f"Target exists, skipping {operation_type} for {source_path}")
                     return True
 
-            # If target doesn't exist, or it existed and overwrite was successful
-            # Create target directory if it doesn't exist
             os.makedirs(target_dir, exist_ok=True)
 
             # Perform the actual file operation

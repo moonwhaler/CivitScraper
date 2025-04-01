@@ -21,73 +21,46 @@ def setup_logging(config: Dict[str, Any]) -> logging.Logger:
     Returns:
         Root logger
     """
-    # Get logging configuration
     logging_config = config.get("logging", {})
-
-    # Get log level
     log_level_str = logging_config.get("level", "INFO")
     log_level = getattr(logging, log_level_str.upper(), logging.INFO)
 
-    # Create root logger
     logger = logging.getLogger()
     logger.setLevel(log_level)
 
-    # Remove existing handlers
     for handler in logger.handlers[:]:
         logger.removeHandler(handler)
 
-    # Configure console logging
     if logging_config.get("console", {}).get("enabled", True):
         console_level_str = logging_config.get("console", {}).get("level", log_level_str)
         console_level = getattr(logging, console_level_str.upper(), log_level)
-
-        # Create console handler
         console_handler = logging.StreamHandler()
         console_handler.setLevel(console_level)
 
-        # Create formatter
         if logging_config.get("console", {}).get("simple", False):
             formatter = logging.Formatter("%(message)s")
         else:
             formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-
         console_handler.setFormatter(formatter)
-
-        # Add handler to logger
         logger.addHandler(console_handler)
 
-    # Configure file logging
     if logging_config.get("file", {}).get("enabled", False):
         file_level_str = logging_config.get("file", {}).get("level", log_level_str)
         file_level = getattr(logging, file_level_str.upper(), log_level)
-
-        # Get log directory
         log_dir = logging_config.get("file", {}).get("directory", "logs")
-
-        # Create log directory if it doesn't exist
         os.makedirs(log_dir, exist_ok=True)
-
-        # Get log file name
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         log_file = os.path.join(log_dir, f"civitscraper_{timestamp}.log")
-
-        # Get max size and backup count
         max_size = logging_config.get("file", {}).get("max_size", 10) * 1024 * 1024  # MB to bytes
         backup_count = logging_config.get("file", {}).get("backup_count", 5)
-
-        # Create file handler
         file_handler = logging.handlers.RotatingFileHandler(
             log_file,
             maxBytes=max_size,
             backupCount=backup_count,
         )
         file_handler.setLevel(file_level)
-
-        # Create formatter
         formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         file_handler.setFormatter(formatter)
-
-        # Add handler to logger
         logger.addHandler(file_handler)
 
     return logger
@@ -127,11 +100,8 @@ class ProgressLogger:
             increment: Number of items to increment by
         """
         self.current += increment
-
-        # Calculate percentage
         percentage = int(self.current / self.total * 100) if self.total > 0 else 100
 
-        # Log progress at intervals
         if percentage >= self.last_logged_percentage + self.log_interval or percentage == 100:
             self.logger.info(f"{self.description}: {percentage}% ({self.current}/{self.total})")
             self.last_logged_percentage = percentage

@@ -22,16 +22,10 @@ def calculate_weighted_rating(rating: float, rating_count: int, download_count: 
     if rating_count == 0:
         return "1.0"
 
-    # Calculate ratio of ratings to downloads
     rating_ratio = rating_count / max(download_count, 1)
-
-    # Confidence factor (0.0-1.0) based on rating ratio
     confidence = min(rating_ratio * 5, 1.0)
 
-    # Scale rating toward neutral (3.0) based on confidence
     weighted = 3.0 + (rating - 3.0) * confidence
-
-    # Ensure between 1-5 and round to nearest 0.5
     weighted = min(max(weighted, 1.0), 5.0)
     weighted = round(weighted * 2) / 2
     return f"{weighted: .1f}"
@@ -110,44 +104,29 @@ class PathFormatter:
         Returns:
             Formatted path
         """
-        # Get model information
         model_info = metadata.get("model", {})
-
-        # Get model name
         model_name = metadata.get("name", "Unknown")
-
-        # Get model type
         model_type = model_info.get("type", "Unknown")
 
-        # Get model creator
         creator = model_info.get("creator", {}).get("username", "Unknown")
-
-        # Get base model
         base_model = metadata.get("baseModel", "Unknown")
-
-        # Get NSFW status
         nsfw = "nsfw" if model_info.get("nsfw", False) else "sfw"
 
-        # Get creation date
         created_at = metadata.get("createdAt", "")
         year = created_at[:4] if created_at else "Unknown"
         month = created_at[5:7] if created_at else "Unknown"
 
-        # Get stats from version level
         stats = metadata.get("stats", {})
 
-        # Get stats and calculate ratings
         rating = stats.get("rating", 0.0)
         rating_count = stats.get("ratingCount", 0)
         download_count = stats.get("downloadCount", 0)
         thumbs_up_count = stats.get("thumbsUpCount", 0)
 
-        # Calculate raw and weighted ratings
         rounded_rating = round_to_half(rating)
         weighted_rating = calculate_weighted_rating(rating, rating_count, download_count)
         weighted_thumbsup = calculate_weighted_thumbsup(download_count, thumbs_up_count)
 
-        # Format path
         path = template
         path = path.replace("{rating}", f"rating_{rounded_rating}")
         path = path.replace("{weighted_rating}", f"rating_{weighted_rating}")
@@ -173,14 +152,10 @@ class PathFormatter:
         Returns:
             Sanitized path
         """
-        # Replace invalid characters
         invalid_chars = ["<", ">", ":", '"', "/", "\\", "|", "?", "*"]
         for char in invalid_chars:
             path = path.replace(char, "_")
 
-        # Remove leading and trailing dots and spaces
         path = path.strip(". ")
 
         return path
-
-    # Collision detection removed - files should be overwritten or skipped based on skip_existing

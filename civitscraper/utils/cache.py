@@ -43,11 +43,9 @@ class LRUCache(Generic[T]):
         """
         with self.lock:
             if key in self.cache:
-                # Update timestamp
                 value, _ = self.cache[key]
-                self.cache[key] = (value, time.time())
+                self.cache[key] = (value, time.time())  # Update timestamp
                 return value
-
             return None
 
     def put(self, key: str, value: T):
@@ -59,15 +57,12 @@ class LRUCache(Generic[T]):
             value: Value to cache
         """
         with self.lock:
-            # Add or update item
             self.cache[key] = (value, time.time())
 
             # Evict least recently used items if capacity is exceeded
             if len(self.cache) > self.capacity:
                 # Find least recently used item
                 oldest_key = min(self.cache.items(), key=lambda x: x[1][1])[0]
-
-                # Remove item
                 del self.cache[oldest_key]
 
     def remove(self, key: str):
@@ -121,8 +116,6 @@ class DiskCache(Generic[T]):
         self.cache_dir = Path(cache_dir)
         self.validity = validity
         self.memory_cache = LRUCache[T](1000)  # In-memory cache for frequently accessed items
-
-        # Create cache directory if it doesn't exist
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_cache_path(self, key: str) -> Path:
@@ -150,30 +143,22 @@ class DiskCache(Generic[T]):
         Returns:
             Cached value or default if not found or expired
         """
-        # Check memory cache first
         value = self.memory_cache.get(key)
         if value is not None:
             return value
 
-        # Check disk cache
         cache_path = self._get_cache_path(key)
 
-        # Check if cache file exists
         if not cache_path.exists():
             return default
 
-        # Check if cache is expired
         if time.time() - cache_path.stat().st_mtime > self.validity:
             return default
 
-        # Read cache file
         try:
             with open(cache_path, "r", encoding="utf-8") as f:
                 value = json.load(f)
-
-                # Add to memory cache
-                self.memory_cache.put(key, value)
-
+                self.memory_cache.put(key, value)  # Add to memory cache after successful disk read
                 return value if value is not None else default
         except (json.JSONDecodeError, IOError) as e:
             logger.error(f"Error reading cache file: {e}")
@@ -187,12 +172,8 @@ class DiskCache(Generic[T]):
             key: Cache key
             value: Value to cache
         """
-        # Add to memory cache
         self.memory_cache.put(key, value)
-
-        # Write to disk cache
         cache_path = self._get_cache_path(key)
-
         try:
             with open(cache_path, "w", encoding="utf-8") as f:
                 json.dump(value, f)
@@ -206,12 +187,8 @@ class DiskCache(Generic[T]):
         Args:
             key: Cache key
         """
-        # Remove from memory cache
         self.memory_cache.remove(key)
-
-        # Remove from disk cache
         cache_path = self._get_cache_path(key)
-
         try:
             if cache_path.exists():
                 cache_path.unlink()
@@ -220,10 +197,7 @@ class DiskCache(Generic[T]):
 
     def clear(self):
         """Clear cache."""
-        # Clear memory cache
         self.memory_cache.clear()
-
-        # Clear disk cache
         try:
             for cache_file in self.cache_dir.glob("*.json"):
                 cache_file.unlink()
@@ -234,7 +208,6 @@ class DiskCache(Generic[T]):
         """Clear expired cache items."""
         try:
             for cache_file in self.cache_dir.glob("*.json"):
-                # Check if cache is expired
                 if time.time() - cache_file.stat().st_mtime > self.validity:
                     cache_file.unlink()
         except IOError as e:
@@ -278,17 +251,9 @@ class CacheManager(Generic[T]):
             config: Cache configuration
         """
         self.config = config
-
-        # Get cache directory
         cache_dir = config.get("scanner", {}).get("cache_dir", ".civitscraper_cache")
-
-        # Get cache validity
         cache_validity = config.get("scanner", {}).get("cache_validity", 86400)
-
-        # Create disk cache
         self.disk_cache = DiskCache[T](cache_dir, cache_validity)
-
-        # Create memory cache
         memory_cache_size = config.get("api", {}).get("batch", {}).get("cache_size", 100)
         self.memory_cache = LRUCache[T](memory_cache_size)
 
@@ -303,15 +268,13 @@ class CacheManager(Generic[T]):
         Returns:
             Cached value or default if not found or expired
         """
-        # Check memory cache first
         value = self.memory_cache.get(key)
         if value is not None:
             return value
 
-        # Check disk cache
         value = self.disk_cache.get(key, default)
 
-        # Add to memory cache if found
+        # Add to memory cache if found on disk
         if value is not default and value is not None:
             self.memory_cache.put(key, value)
 
@@ -325,10 +288,7 @@ class CacheManager(Generic[T]):
             key: Cache key
             value: Value to cache
         """
-        # Add to memory cache
         self.memory_cache.put(key, value)
-
-        # Add to disk cache
         self.disk_cache.set(key, value)
 
     def remove(self, key: str):
@@ -338,18 +298,12 @@ class CacheManager(Generic[T]):
         Args:
             key: Cache key
         """
-        # Remove from memory cache
         self.memory_cache.remove(key)
-
-        # Remove from disk cache
         self.disk_cache.remove(key)
 
     def clear(self):
         """Clear cache."""
-        # Clear memory cache
         self.memory_cache.clear()
-
-        # Clear disk cache
         self.disk_cache.clear()
 
     def clear_expired(self):
@@ -388,19 +342,12 @@ def memoize(func: Callable[..., T]) -> Callable[..., T]:
     cache: Dict[str, Any] = {}
 
     def wrapper(*args: Any, **kwargs: Any) -> T:
-        # Create cache key
         key = str(args) + str(kwargs)
-
-        # Check cache
         if key in cache:
             return cache[key]  # type: ignore
 
-        # Call function
         result: T = func(*args, **kwargs)
-
-        # Cache result
         cache[key] = result
-
         return result
 
     return wrapper

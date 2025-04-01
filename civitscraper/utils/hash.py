@@ -86,19 +86,16 @@ def compute_file_hash(
     Returns:
         Hexadecimal hash string or None if file not found
     """
-    # Get hash function with explicit type
     hash_func: Optional[Callable[[bytes], str]] = HASH_FUNCTIONS.get(algorithm.lower())
     if not hash_func:
         logger.error(f"Unknown hash algorithm: {algorithm}")
         return None
 
     try:
-        # Check if file exists
         if not os.path.isfile(file_path):
             logger.error(f"File not found: {file_path}")
             return None
 
-        # Get file size
         file_size = os.path.getsize(file_path)
 
         # For small files, read the entire file at once
@@ -112,8 +109,7 @@ def compute_file_hash(
             if algorithm.lower() in ["autov1", "autov2"]:
                 # For AutoV1/V2, we need to read specific parts of the file
                 if algorithm.lower() == "autov1":
-                    # Read first 1 MB
-                    data = f.read(1024 * 1024)
+                    data = f.read(1024 * 1024)  # Read first 1 MB
                     return create_hash_function("sha256")(data)
                 else:
                     # For AutoV2, we'll use the full SHA-256 hash for simplicity
@@ -125,7 +121,6 @@ def compute_file_hash(
                         hasher_obj.update(data)
                     return hasher_obj.hexdigest().upper()
             else:
-                # For other algorithms, use the hash function directly
                 hash_instance = (
                     hashlib.new(algorithm.lower())
                     if algorithm.lower() in hashlib.algorithms_available
@@ -138,8 +133,7 @@ def compute_file_hash(
                         break
                     hash_instance.update(data)
 
-                # hexdigest() always returns str
-                result: str = hash_instance.hexdigest()
+                result: str = hash_instance.hexdigest()  # hexdigest() always returns str
                 return result.upper()
 
     except Exception as e:

@@ -36,29 +36,19 @@ class OrganizationConfig:
         org_config = config.get("organization", {})
         defaults = config.get("defaults", {}).get("organization", {})
 
-        # Get enabled flag
         enabled = org_config.get("enabled", False)
-
-        # Get template and custom template
         template = org_config.get("template")
         custom_template = org_config.get("custom_template")
-
-        # Get output directory
         output_dir = org_config.get("output_dir")
 
-        # Get operation mode
-        # First check if it's in the organization config
         operation_mode = org_config.get("operation_mode")
 
-        # If not, check if it's in the defaults.organization section
         if operation_mode is None and defaults:
             operation_mode = defaults.get("operation_mode", "copy")
         else:
-            # Default to copy if not found
             operation_mode = operation_mode or "copy"
 
-        # Fallback to legacy configuration if present
-        if operation_mode == "copy":  # Only check legacy if modern isn't set to move/symlink
+        if operation_mode == "copy":
             if "move_files" in org_config and org_config.get("move_files", False):
                 operation_mode = "move"
                 logger.warning(
@@ -71,14 +61,12 @@ class OrganizationConfig:
                     + "Please use 'operation_mode: symlink' instead."
                 )
 
-        # Get collision handling mode
         on_collision = org_config.get("on_collision")
         if on_collision is None and defaults:
             on_collision = defaults.get("on_collision", "skip")
         else:
             on_collision = on_collision or "skip"
 
-        # Validate on_collision
         valid_collision_modes = ["skip", "overwrite", "fail"]
         if on_collision not in valid_collision_modes:
             logger.warning(
