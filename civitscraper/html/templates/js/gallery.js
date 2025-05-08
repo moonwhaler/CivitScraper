@@ -143,6 +143,7 @@
           data-name="${escapeHTML(model.name?.toLowerCase())}"
           data-type="${escapeHTML(model.type?.toLowerCase())}"
           data-base-model="${escapeHTML(model.base_model?.toLowerCase())}"
+          data-folder-name="${escapeHTML(model.folder_name?.toLowerCase())}"
           data-description="${escapeHTML(model.description?.toLowerCase())}"
           data-created-at="${escapeHTML(model.created_at || '')}"
           data-updated-at="${escapeHTML(model.updated_at || '')}"
@@ -196,6 +197,7 @@
           data-name="${escapeHTML(model.name?.toLowerCase())}"
           data-type="${escapeHTML(model.type?.toLowerCase())}"
           data-base-model="${escapeHTML(model.base_model?.toLowerCase())}"
+          data-folder-name="${escapeHTML(model.folder_name?.toLowerCase())}"
           data-description="${escapeHTML(model.description?.toLowerCase())}"
           data-created-at="${escapeHTML(model.created_at || '')}"
           data-updated-at="${escapeHTML(model.updated_at || '')}"
@@ -280,7 +282,14 @@
     // 1. Apply Directory Filter
     if (currentFilterType && currentFilterValue) {
       filteredModels = filteredModels.filter(model => {
-        const modelValue = model[currentFilterType === 'base-model' ? 'base_model' : 'type'] || '';
+        let modelValue = '';
+        if (currentFilterType === 'base-model') {
+          modelValue = model.base_model || '';
+        } else if (currentFilterType === 'type') {
+          modelValue = model.type || '';
+        } else if (currentFilterType === 'folder_name') {
+          modelValue = model.folder_name || '';
+        }
         return modelValue.toLowerCase() === currentFilterValue;
       });
     }
@@ -292,6 +301,7 @@
         (model.name || '').toLowerCase().includes(searchLower) ||
         (model.type || '').toLowerCase().includes(searchLower) ||
         (model.base_model || '').toLowerCase().includes(searchLower) ||
+        (model.folder_name || '').toLowerCase().includes(searchLower) ||
         (model.description || '').toLowerCase().includes(searchLower)
       );
     }
@@ -553,18 +563,22 @@
 
       const modelTypes = new Map();
       const baseModels = new Map();
+      const folderNames = new Map();
 
       allModelsData.forEach(model => {
           const type = model.type || 'Unknown';
           const baseModel = model.base_model || 'Unknown';
+          const folderName = model.folder_name || 'Unknown';
 
           modelTypes.set(type, (modelTypes.get(type) || 0) + 1);
           baseModels.set(baseModel, (baseModels.get(baseModel) || 0) + 1);
+          folderNames.set(folderName, (folderNames.get(folderName) || 0) + 1);
       });
 
       // Sort categories alphabetically
       const sortedTypes = Array.from(modelTypes.entries()).sort((a, b) => a[0].localeCompare(b[0]));
       const sortedBaseModels = Array.from(baseModels.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+      const sortedFolderNames = Array.from(folderNames.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 
       const treeHtml = `
           <div class="directory-category">
@@ -602,6 +616,22 @@
                       <div class="directory-item" data-filter-type="base-model" data-filter-value="${escapeHTML(baseModel.toLowerCase())}">
                           <span class="directory-icon">🧩</span>
                           <span class="directory-label">${escapeHTML(baseModel)}</span>
+                          <span class="directory-count">${count}</span>
+                      </div>`).join('')}
+              </div>
+          </div>
+
+          <div class="directory-category">
+              <div class="directory-category-header" data-category="folder_name">
+                  <span class="directory-icon">📁</span>
+                  <span class="directory-label">By Folder</span>
+                  <span class="directory-toggle">+</span>
+              </div>
+              <div class="directory-items" style="display: none;">
+                  ${sortedFolderNames.map(([folderName, count]) => `
+                      <div class="directory-item" data-filter-type="folder_name" data-filter-value="${escapeHTML(folderName.toLowerCase())}">
+                          <span class="directory-icon">🏷️</span>
+                          <span class="directory-label">${escapeHTML(folderName)}</span>
                           <span class="directory-count">${count}</span>
                       </div>`).join('')}
               </div>

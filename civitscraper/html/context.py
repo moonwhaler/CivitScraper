@@ -141,6 +141,17 @@ class ContextBuilder:
 
         model_name = metadata.get("model", {}).get("name") or metadata.get("name", "Unknown")
 
+        parent_folder_path = os.path.dirname(file_path)
+        folder_name = os.path.basename(parent_folder_path)
+        # If the file_path itself is a directory (e.g. when scanning for .html files in a dir)
+        # and that directory is the one we want (e.g. "Character"), then basename gives an empty string.
+        # In such cases, we might need to adjust. However, file_path for models is usually a file.
+        # For robustness, if folder_name is empty and parent_folder_path is not the root,
+        # it might indicate file_path was like 'Character/', so we take the name before the trailing slash.
+        if not folder_name and parent_folder_path and parent_folder_path != os.path.sep:
+            folder_name = os.path.basename(os.path.normpath(parent_folder_path))
+
+
         return {
             "name": model_name,
             "type": metadata.get("model", {}).get("type", "Unknown"),
@@ -153,6 +164,7 @@ class ContextBuilder:
             "created_at": metadata.get("createdAt"),
             "updated_at": metadata.get("updatedAt"),
             "version": metadata.get("name"),
+            "folder_name": folder_name,
             "model_id": metadata.get("modelId"),
             "version_id": metadata.get("id"),
         }
