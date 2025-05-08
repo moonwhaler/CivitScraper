@@ -10,4 +10,4 @@ fi
 
 # Start with debug enabled - and executing
 # all available jobs configured
-civitscraper --debug --all-jobs
+civitscraper

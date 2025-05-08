@@ -9,4 +9,4 @@ if errorlevel 1 (
 )
 
 REM Start with debug enabled - and executing all available jobs
-civitscraper --debug --all-jobs
+civitscraper
