@@ -395,7 +395,15 @@ class JobExecutor:
                         if "metadata" not in entry:
                             entry["metadata"] = {}
 
-                        entry["metadata"]["lora_triggers"] = trigger_words
+                        # Convert trigger_words to a single string if it's a list
+                        if isinstance(trigger_words, list):
+                            # Join with commas and clean up trailing commas
+                            trigger_string = ", ".join(str(word).strip().rstrip(',') for word in trigger_words if word)
+                            trigger_string = trigger_string.strip().rstrip(',')
+                        else:
+                            trigger_string = str(trigger_words).strip()
+
+                        entry["metadata"]["lora_triggers"] = trigger_string
                         updated_count += 1
                         break
                 else:
