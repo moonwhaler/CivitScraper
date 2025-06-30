@@ -307,7 +307,9 @@ class JobExecutor:
                 logger.error(f"No loras_file specified for job: {job_name}")
                 return False
 
-            # Get scan options
+            # Get overwrite_triggers setting, default to True if not specified
+            overwrite_triggers = job_config.get("overwrite_triggers", True)
+            logger.info(f"Overwrite existing triggers: {overwrite_triggers}")
 
             # Find model files
             logger.info(f"Finding model files for paths: {path_ids}")
@@ -347,6 +349,7 @@ class JobExecutor:
             # Update loras.json
             updated_count = 0
             processed_count = 0
+            skipped_count = 0
             logger.debug(f"Total files to process: {len(lora_files)}")
 
             for file_path in lora_files:
@@ -384,11 +387,18 @@ class JobExecutor:
                     entry_filename = os.path.basename(entry.get("id", ""))
                     if entry_filename == filename:
                         logger.debug(f"Found entry with id: {entry.get('id')}")
-                        current_triggers = entry.get("metadata", {}).get("lora_triggers", "None")
-                        if current_triggers != "None":
-                            logger.debug(
-                                f"Found pre-existing triggers for {filename}: {current_triggers}"
-                            )
+
+                        # Check if we should skip updating
+                        if not overwrite_triggers:
+                            current_triggers = entry.get("metadata", {}).get("lora_triggers")
+                            if current_triggers:
+                                logger.debug(
+                                    f"Skipping update for {filename} as it already has triggers: "
+                                    f"{current_triggers}"
+                                )
+                                skipped_count += 1
+                                break  # Skip to the next file
+
                         logger.debug(f"Updating with new triggers: {trigger_words}")
 
                         # Update entry
@@ -398,8 +408,10 @@ class JobExecutor:
                         # Convert trigger_words to a single string if it's a list
                         if isinstance(trigger_words, list):
                             # Join with commas and clean up trailing commas
-                            trigger_string = ", ".join(str(word).strip().rstrip(',') for word in trigger_words if word)
-                            trigger_string = trigger_string.strip().rstrip(',')
+                            trigger_string = ", ".join(
+                                str(word).strip().rstrip(",") for word in trigger_words if word
+                            )
+                            trigger_string = trigger_string.strip().rstrip(",")
                         else:
                             trigger_string = str(trigger_words).strip()
 
@@ -415,6 +427,8 @@ class JobExecutor:
 
             logger.info(f"Files processed: {processed_count}")
             logger.info(f"Updated {updated_count} entries in loras.json")
+            if not overwrite_triggers:
+                logger.info(f"Skipped {skipped_count} entries with existing triggers")
 
             return True
 

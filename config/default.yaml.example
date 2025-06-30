@@ -193,6 +193,7 @@ jobs:
     description: "Synchronize LoRA trigger words"
     recursive: true
     loras_file: "path/to/loras.json"
+    overwrite_triggers: true  # [true/false] Overwrite existing trigger words
     paths: ["lora"]
 
 # =============================================================================
