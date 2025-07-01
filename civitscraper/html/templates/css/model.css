@@ -238,17 +238,26 @@
     background-color: var(--card-background);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 10px;
+    padding: 20px;
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.file-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     flex-wrap: wrap;
+    gap: 10px;
 }
 
 .file-name {
-    font-weight: 500;
-    margin-bottom: 5px;
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--text-color);
+    margin: 0;
 }
 
 .file-meta {
@@ -256,10 +265,89 @@
     gap: 15px;
     color: var(--metadata-label-color);
     font-size: 0.85rem;
+    flex-wrap: wrap;
 }
 
 .file-size, .file-format, .file-size-info, .file-format-info {
     display: inline-block;
+    padding: 2px 8px;
+    background: rgba(52, 152, 219, 0.1);
+    border: 1px solid rgba(52, 152, 219, 0.2);
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
+/* File location styles */
+.file-location-section {
+    margin-top: 10px;
+}
+
+.file-location-label {
+    font-weight: 500;
+    color: var(--metadata-label-color);
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+}
+
+.file-location-container {
+    display: flex;
+    align-items: stretch;
+    background: var(--prompt-background);
+    border: 1px solid var(--prompt-border);
+    border-radius: 6px;
+    overflow: hidden;
+    transition: border-color 0.2s ease;
+}
+
+.file-location-container:hover {
+    border-color: rgba(52, 152, 219, 0.4);
+}
+
+.file-location-path {
+    flex: 1;
+    padding: 12px 15px;
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: var(--text-color);
+    background: transparent;
+    word-break: break-all;
+    line-height: 1.4;
+    min-height: 20px;
+}
+
+.copy-location-btn {
+    background: rgba(52, 152, 219, 0.1);
+    border: none;
+    border-left: 1px solid var(--prompt-border);
+    padding: 8px 12px;
+    cursor: pointer;
+    color: rgba(52, 152, 219, 0.8);
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    font-weight: 500;
+    min-width: fit-content;
+}
+
+.copy-location-btn:hover {
+    background: rgba(52, 152, 219, 0.15);
+    color: rgba(52, 152, 219, 1);
+}
+
+.copy-location-btn:active {
+    background: rgba(52, 152, 219, 0.2);
+    transform: scale(0.98);
+}
+
+.copy-location-btn .copy-icon {
+    font-size: 0.8rem;
+}
+
+.copy-location-btn .copy-text {
+    font-size: 0.75rem;
 }
 
 /* Responsive design for model page */

@@ -355,21 +355,49 @@
     <h2 class="section-title">Files</h2>
     {% for file in metadata.files %}
     <div class="file-item">
-        <div class="file-name">{{ file.name }}</div>
-        <div class="file-meta">
-            <span class="file-size">{{ (file.sizeKB / 1024)|round(2) }} MB</span>
-            {% if file.metadata %}
-                {% if file.metadata.fp %}
-                <span class="file-format">{{ file.metadata.fp }}</span>
+        <div class="file-header">
+            <div class="file-name">{{ file.name }}</div>
+            <div class="file-meta">
+                <span class="file-size">{{ (file.sizeKB / 1024)|round(2) }} MB</span>
+                {% if file.metadata %}
+                    {% if file.metadata.fp %}
+                    <span class="file-format">{{ file.metadata.fp }}</span>
+                    {% endif %}
+                    {% if file.metadata.size %}
+                    <span class="file-size-info">{{ file.metadata.size }}</span>
+                    {% endif %}
+                    {% if file.metadata.format %}
+                    <span class="file-format-info">{{ file.metadata.format }}</span>
+                    {% endif %}
                 {% endif %}
-                {% if file.metadata.size %}
-                <span class="file-size-info">{{ file.metadata.size }}</span>
-                {% endif %}
-                {% if file.metadata.format %}
-                <span class="file-format-info">{{ file.metadata.format }}</span>
-                {% endif %}
-            {% endif %}
+            </div>
         </div>
+        
+        {% if file.local_path %}
+        <div class="file-location-section">
+            <div class="file-location-label">Local File Location:</div>
+            <div class="file-location-container" data-path="{{ file.local_path }}">
+                <div class="file-location-path">{{ file.local_path }}</div>
+                <button class="copy-location-btn" title="Copy file path to clipboard">
+                    <span class="copy-icon">📋</span>
+                    <span class="copy-text">Copy Path</span>
+                </button>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if file.local_directory %}
+        <div class="file-location-section">
+            <div class="file-location-label">Directory:</div>
+            <div class="file-location-container" data-path="{{ file.local_directory }}">
+                <div class="file-location-path">{{ file.local_directory }}</div>
+                <button class="copy-location-btn" title="Copy directory path to clipboard">
+                    <span class="copy-icon">📋</span>
+                    <span class="copy-text">Copy Directory</span>
+                </button>
+            </div>
+        </div>
+        {% endif %}
     </div>
     {% endfor %}
 </div>
@@ -399,6 +427,59 @@ document.querySelectorAll('.trigger-word-group').forEach(group => {
                 }, 2000);
             })
             .catch(err => console.error('Failed to copy text:', err));
+    });
+});
+
+// Copy to clipboard functionality for file locations
+document.querySelectorAll('.copy-location-btn').forEach(button => {
+    button.addEventListener('click', () => {
+        const container = button.closest('.file-location-container');
+        const path = container.getAttribute('data-path');
+        const icon = button.querySelector('.copy-icon');
+        const text = button.querySelector('.copy-text');
+
+        if (path) {
+            navigator.clipboard.writeText(path)
+                .then(() => {
+                    // Visual feedback
+                    const originalIcon = icon.textContent;
+                    const originalText = text.textContent;
+                    
+                    icon.textContent = '✓';
+                    text.textContent = 'Copied!';
+                    button.style.background = 'rgba(46, 204, 113, 0.15)';
+                    button.style.borderColor = 'rgba(46, 204, 113, 0.3)';
+                    button.style.color = 'rgba(46, 204, 113, 0.9)';
+
+                    setTimeout(() => {
+                        icon.textContent = originalIcon;
+                        text.textContent = originalText;
+                        button.style.background = '';
+                        button.style.borderColor = '';
+                        button.style.color = '';
+                    }, 2000);
+                })
+                .catch(err => {
+                    console.error('Failed to copy path:', err);
+                    // Error feedback
+                    const originalIcon = icon.textContent;
+                    const originalText = text.textContent;
+                    
+                    icon.textContent = '❌';
+                    text.textContent = 'Failed';
+                    button.style.background = 'rgba(231, 76, 60, 0.15)';
+                    button.style.borderColor = 'rgba(231, 76, 60, 0.3)';
+                    button.style.color = 'rgba(231, 76, 60, 0.9)';
+
+                    setTimeout(() => {
+                        icon.textContent = originalIcon;
+                        text.textContent = originalText;
+                        button.style.background = '';
+                        button.style.borderColor = '';
+                        button.style.color = '';
+                    }, 2000);
+                });
+        }
     });
 });
 </script>
