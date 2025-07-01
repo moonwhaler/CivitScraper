@@ -61,11 +61,12 @@ class HTMLManager:
             self.output_config.get("metadata", {}).get("html", {}).get("generate_gallery", False)
         )
 
-        # Check if we should skip existing HTML files
-        skip_existing = self.config.get("skip_existing", False)
+        # Check if we should skip existing HTML files using HTML-specific setting
+        html_config = self.output_config.get("metadata", {}).get("html", {})
+        skip_existing_html = html_config.get("skip_existing_html", True)
 
         if (
-            skip_existing
+            skip_existing_html
             and os.path.exists(html_path)
             and not force_refresh
             and not generate_gallery

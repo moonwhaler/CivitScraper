@@ -83,6 +83,7 @@ jobs:
         html:
           enabled: true         # Generate HTML preview pages
           filename: "{model_name}.html"  # HTML filename
+          skip_existing_html: true  # Skip existing HTML files (independent of metadata skip_existing)
           generate_gallery: true
           gallery_path: "path/to/html-output/model_gallery.html"
           gallery_title: "Model Gallery"
@@ -181,6 +182,7 @@ jobs:
         html:
           enabled: true
           filename: "{model_name}.html"
+          skip_existing_html: true  # Skip existing HTML files (independent of metadata skip_existing)
           generate_gallery: true
           gallery_path: "path/to/html-output/model_gallery.html"
           gallery_title: "Model Gallery"

@@ -4,6 +4,7 @@ This document details the advanced configuration options for CivitScraper, typic
 
 ## Table of Contents
 - [API Configuration](#api-configuration)
+- [HTML Generation Configuration](#html-generation-configuration)
 - [Advanced Organization Settings](#advanced-organization-settings)
 - [Scanner Settings (Caching)](#scanner-settings-caching)
 - [Logging Configuration](#logging-configuration)
@@ -41,6 +42,64 @@ api:
 -   **`key`**: Your CivitAI API key. While optional for fetching public data, providing a key is recommended as it may grant higher rate limits from the CivitAI API.
 -   **`batch`**: Settings related to processing multiple files concurrently. See [Batch Processing Details](#batch-processing-details).
 -   **`circuit_breaker`**: Settings for automatically stopping requests to specific API endpoints if they consistently fail. See [Batch Processing Details](#batch-processing-details).
+
+## HTML Generation Configuration
+
+The HTML generation feature creates individual model cards and gallery pages for your models. The configuration allows fine-grained control over when HTML files are generated.
+
+```yaml
+# Example within a job's output configuration
+output:
+  metadata:
+    html:
+      enabled: true                 # Enable HTML generation
+      filename: "{model_name}.html" # HTML filename pattern
+      skip_existing_html: true      # Skip existing HTML files (independent of metadata skip_existing)
+      generate_gallery: true        # Generate a gallery page with all models
+      gallery_path: "path/to/model_gallery.html"  # Gallery output path
+      gallery_title: "Model Gallery"              # Gallery page title
+```
+
+### Key Settings
+
+-   **`enabled`**: Controls whether HTML generation is active for this job.
+-   **`filename`**: Pattern for individual model HTML files. Uses the same placeholders as organization templates.
+-   **`skip_existing_html`**: **New Feature** - Controls HTML regeneration independently of metadata fetching.
+-   **`generate_gallery`**: Creates a gallery page that lists all processed models.
+-   **`gallery_path`**: Location for the gallery HTML file.
+-   **`gallery_title`**: Title displayed on the gallery page.
+
+### HTML Regeneration Without API Calls
+
+The new `skip_existing_html` setting allows you to regenerate HTML files without refetching metadata from the CivitAI API. This is useful when you want to:
+
+- Update HTML templates or styling
+- Regenerate HTML with different settings
+- Fix HTML generation issues
+
+**Example Configuration for HTML Regeneration:**
+
+```yaml
+regenerate-html:
+  type: scan-paths
+  skip_existing: true          # Skip metadata fetching - use cached files
+  verify_hashes: false         # Don't verify hashes to avoid API calls
+  paths: ["lora"]
+  output:
+    metadata:
+      html:
+        enabled: true
+        skip_existing_html: false  # Force HTML regeneration
+        generate_gallery: true
+    images:
+      save: false              # Don't re-download images
+```
+
+This configuration will:
+1. Use existing cached metadata files (no API calls)
+2. Regenerate all HTML files even if they exist
+3. Skip image downloading
+4. Create a new gallery page
 
 ## Advanced Organization Settings
 
