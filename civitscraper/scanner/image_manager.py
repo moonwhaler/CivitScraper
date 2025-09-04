@@ -85,9 +85,11 @@ class ImageManager:
         if not self.dry_run and (force_refresh or not skip_existing):
             self._clean_up_old_previews(model_dir, model_name, max_count)
         else:
-            logger.info(
-                f"Dry run or skipping existing: Would not remove old preview images for {file_path}"
-            )
+            # Only log if there are actually images to clean up
+            if self._count_existing_previews(model_dir, model_name) > 0:
+                logger.info(
+                    f"Dry run or skipping existing: Would not remove old preview images for {file_path}"
+                )
 
         # Count existing preview images
         existing_count = self._count_existing_previews(model_dir, model_name)
