@@ -10,8 +10,10 @@
   // --- DOM Elements ---
   const galleryContainer = document.querySelector('.gallery-container');
   const gridViewBtn = document.getElementById('grid-view');
+  const focusedViewBtn = document.getElementById('focused-view');
   const listViewBtn = document.getElementById('list-view');
   const modelsGridContainer = document.querySelector('.models-grid');
+  const modelsFocusedContainer = document.querySelector('.models-focused');
   const modelsListContainer = document.querySelector('.models-list');
   const searchInput = document.getElementById('gallery-search');
   const clearSearchBtn = document.getElementById('clear-search');
@@ -138,7 +140,7 @@
     }
 
     const viewParam = params.get('view');
-    if (viewParam && ['grid', 'list'].includes(viewParam)) {
+    if (viewParam && ['grid', 'focused', 'list'].includes(viewParam)) {
       filterState.viewMode = viewParam;
     }
 
@@ -414,15 +416,21 @@
     }
 
     const gridFragment = document.createDocumentFragment();
+    const focusedFragment = document.createDocumentFragment();
     const listFragment = document.createDocumentFragment();
 
     modelsToRender.forEach(model => {
       const cardHTML = renderModelCard(model);
+      const focusedHTML = renderModelFocusedItem(model);
       const itemHTML = renderModelListItem(model);
 
       const cardTemplate = document.createElement('template');
       cardTemplate.innerHTML = cardHTML.trim();
       gridFragment.appendChild(cardTemplate.content.firstChild);
+
+      const focusedTemplate = document.createElement('template');
+      focusedTemplate.innerHTML = focusedHTML.trim();
+      focusedFragment.appendChild(focusedTemplate.content.firstChild);
 
       const itemTemplate = document.createElement('template');
       itemTemplate.innerHTML = itemHTML.trim();
@@ -431,13 +439,16 @@
 
     if (filterState.searchText) {
       highlightTextInContainer(gridFragment, filterState.searchText);
+      highlightTextInContainer(focusedFragment, filterState.searchText);
       highlightTextInContainer(listFragment, filterState.searchText);
     }
 
     modelsGridContainer.appendChild(gridFragment);
+    modelsFocusedContainer.appendChild(focusedFragment);
     modelsListContainer.appendChild(listFragment);
 
     observeImages(modelsGridContainer);
+    observeImages(modelsFocusedContainer);
     observeImages(modelsListContainer);
 
     console.log(`Appended batch of ${modelsToRender.length} models.`);
@@ -491,6 +502,28 @@
                       </span>` : ''}
                   </div>
                   ${model.version ? `<div class="model-version">v${escapeHTML(model.version)}</div>` : ''}
+              </div>
+          </a>
+      </div>`;
+  }
+
+  function renderModelFocusedItem(model) {
+    return `
+      <div class="model-focused-item"
+          data-model-id="${escapeHTML(model.model_id)}"
+          data-name="${escapeHTML(model.name?.toLowerCase())}">
+          <a href="${model.html_path}" class="model-link">
+              ${model.preview_image_path
+                  ? `<div class="focused-preview">
+                      ${model.is_video
+                          ? `<video src="${model.preview_image_path}" preload="metadata" class="preview-video" muted loop playsinline></video><div class="video-indicator">VIDEO</div>`
+                          : `<img src="${PLACEHOLDER_IMAGE}" data-src="${model.preview_image_path}" alt="${escapeHTML(model.name)}" class="lazy-load-image">`
+                      }
+                    </div>`
+                  : `<div class="focused-preview no-image"></div>`
+              }
+              <div class="focused-overlay">
+                  <h3 class="focused-name">${escapeHTML(model.name)}</h3>
               </div>
           </a>
       </div>`;
@@ -655,6 +688,7 @@
     console.log(`Updating gallery. Found ${currentFilteredSortedModels.length} models after filtering/sorting.`);
 
     modelsGridContainer.innerHTML = '';
+    modelsFocusedContainer.innerHTML = '';
     modelsListContainer.innerHTML = '';
     renderedModelCount = 0;
 
@@ -747,17 +781,27 @@
   function handleViewToggle(mode) {
     console.log(`Setting view mode to: ${mode}`);
     filterState.viewMode = mode;
+
+    // Remove active from all containers and buttons
+    modelsGridContainer.classList.remove('view-active');
+    modelsFocusedContainer.classList.remove('view-active');
+    modelsListContainer.classList.remove('view-active');
+    gridViewBtn.classList.remove('active');
+    focusedViewBtn.classList.remove('active');
+    listViewBtn.classList.remove('active');
+
+    // Set active for selected mode
     if (mode === 'grid') {
       modelsGridContainer.classList.add('view-active');
-      modelsListContainer.classList.remove('view-active');
       gridViewBtn.classList.add('active');
-      listViewBtn.classList.remove('active');
+    } else if (mode === 'focused') {
+      modelsFocusedContainer.classList.add('view-active');
+      focusedViewBtn.classList.add('active');
     } else {
       modelsListContainer.classList.add('view-active');
-      modelsGridContainer.classList.remove('view-active');
       listViewBtn.classList.add('active');
-      gridViewBtn.classList.remove('active');
     }
+
     storePreference('view', mode);
     syncUrlState();
   }
@@ -947,6 +991,7 @@
 
     // 6. Attach Event Listeners
     gridViewBtn?.addEventListener('click', () => handleViewToggle('grid'));
+    focusedViewBtn?.addEventListener('click', () => handleViewToggle('focused'));
     listViewBtn?.addEventListener('click', () => handleViewToggle('list'));
     sortBySelect?.addEventListener('change', handleSortChange);
     sortDirectionBtn?.addEventListener('click', handleSortDirectionToggle);

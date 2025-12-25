@@ -759,6 +759,108 @@
     color: var(--metadata-label-color);
 }
 
+/* Focused View */
+.models-focused {
+    display: none;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+.models-focused.view-active {
+    display: grid;
+}
+
+.model-focused-item {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    aspect-ratio: 3 / 4;
+}
+
+.model-focused-item:hover {
+    transform: scale(1.02);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.model-focused-item .model-link {
+    display: block;
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+.focused-preview {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.focused-preview img,
+.focused-preview video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s ease;
+}
+
+.model-focused-item:hover .focused-preview img,
+.model-focused-item:hover .focused-preview video {
+    transform: scale(1.08);
+}
+
+.focused-preview.no-image {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+.focused-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 60px 20px 20px;
+    background: linear-gradient(to top,
+        rgba(0, 0, 0, 0.9) 0%,
+        rgba(0, 0, 0, 0.6) 50%,
+        transparent 100%);
+    transition: padding 0.3s ease;
+}
+
+.model-focused-item:hover .focused-overlay {
+    padding-bottom: 24px;
+}
+
+.focused-name {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: white;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.model-focused-item .video-indicator {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: white;
+    letter-spacing: 0.5px;
+}
+
 /* List View */
 .models-list {
     display: none;
