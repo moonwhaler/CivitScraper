@@ -1,6 +1,40 @@
 /* Model page specific styles */
 
 /* ========================================
+   Header Back Button (icon in header)
+   ======================================== */
+header h1 .back-to-gallery {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    margin-right: 10px;
+    padding: 0;
+    color: var(--metadata-label-color);
+    background: none;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    vertical-align: middle;
+}
+
+header h1 .back-to-gallery:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--primary-color);
+}
+
+header h1 .back-to-gallery svg {
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+}
+
+header h1 .back-to-gallery:hover svg {
+    transform: translateX(-2px);
+}
+
+/* ========================================
    Hero Section
    ======================================== */
 .model-hero {

@@ -1,6 +1,6 @@
 <header>
     <div class="header-content">
-        <h1>{% block header %}{{ title|default('Model Gallery') }}{% endblock %}</h1>
+        <h1>{% if gallery_path %}<button type="button" onclick="history.back()" class="back-to-gallery" title="Back to Gallery"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>{% endif %}{% block header %}{{ title|default('Model Gallery') }}{% endblock %}</h1>
         <div class="header-actions">
             {% if metadata and metadata.modelId %}
             <a href="https://civitai.com/models/{{ metadata.modelId }}" class="external-link" target="_blank">
