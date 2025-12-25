@@ -250,144 +250,259 @@
 .gallery-controls {
     display: flex;
     flex-wrap: wrap;
-    gap: 15px;
+    gap: 12px;
     margin-bottom: 15px;
     background-color: var(--card-background);
-    padding: 15px;
+    padding: 12px 15px;
     border-radius: 8px;
     border: 1px solid var(--border-color);
     align-items: center;
+    justify-content: space-between;
 }
 
 .controls-left {
     display: flex;
     align-items: center;
-    gap: 15px;
-    flex: 1;
-    max-width: 65%;
+    gap: 12px;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
-/* Search controls */
+/* Search controls - Modern design */
 .search-container {
     position: relative;
-    flex: 1;
-    max-width: none;
+    flex: 1 1 250px;
+    max-width: 400px;
     min-width: 180px;
 }
 
+.search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--metadata-label-color);
+    pointer-events: none;
+    transition: color 0.2s;
+    z-index: 2;
+}
+
+.search-container:focus-within .search-icon {
+    color: var(--primary-color);
+}
+
 #gallery-search {
+    display: block;
     width: 100%;
-    padding: 8px 35px 8px 12px;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    background-color: rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    padding: 10px 42px 10px 42px;
+    border: 2px solid transparent;
+    border-radius: 10px;
+    background: linear-gradient(var(--card-background), var(--card-background)) padding-box,
+                linear-gradient(135deg, rgba(52, 152, 219, 0.3), rgba(46, 204, 113, 0.3)) border-box;
     color: var(--text-color);
     font-size: 0.9rem;
-    transition: border-color 0.3s, box-shadow 0.3s;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+#gallery-search::placeholder {
+    color: var(--metadata-label-color);
+    opacity: 0.7;
+}
+
+#gallery-search:hover {
+    background: linear-gradient(var(--card-background), var(--card-background)) padding-box,
+                linear-gradient(135deg, rgba(52, 152, 219, 0.5), rgba(46, 204, 113, 0.5)) border-box;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 #gallery-search:focus {
     outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.3);
+    background: linear-gradient(var(--card-background), var(--card-background)) padding-box,
+                linear-gradient(135deg, var(--primary-color), var(--secondary-color)) border-box;
+    box-shadow: 0 4px 20px rgba(52, 152, 219, 0.25);
 }
 
 #clear-search {
     position: absolute;
     right: 10px;
-    top: 8px;
-    background-color: rgba(0, 0, 0, 0.2);
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255, 255, 255, 0.1);
     border: none;
-    border-radius: 50%;
-    color: var(--text-color);
-    font-size: 1.2rem;
+    border-radius: 6px;
+    color: var(--metadata-label-color);
     cursor: pointer;
     padding: 0;
-    width: 22px;
-    height: 22px;
+    width: 26px;
+    height: 26px;
     display: flex;
     align-items: center;
     justify-content: center;
-    opacity: 0.8;
-    transition: all 0.2s;
+    opacity: 0.6;
+    transition: background 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+    z-index: 2;
+}
+
+.search-container:focus-within #clear-search {
+    opacity: 1;
 }
 
 #clear-search:hover {
+    background: rgba(231, 76, 60, 0.3);
+    color: #e74c3c;
     opacity: 1;
-    background-color: rgba(0, 0, 0, 0.4);
-    color: white;
 }
 
-/* View toggle controls */
+/* View toggle controls - Modern design */
 .view-toggle {
     display: flex;
-    gap: 5px;
+    gap: 4px;
     position: relative;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 4px;
+    border-radius: 12px;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .view-button {
-    background-color: rgba(0, 0, 0, 0.2);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    padding: 8px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 12px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--metadata-label-color);
-    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+    transition: all 0.2s ease;
+    position: relative;
+    z-index: 1;
 }
 
 .view-button.active {
-    background-color: var(--primary-color);
+    background: linear-gradient(135deg, var(--primary-color), rgba(52, 152, 219, 0.8));
     color: white;
-    border-color: var(--primary-color);
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.4);
 }
 
 .view-button:hover:not(.active) {
-    background-color: rgba(52, 152, 219, 0.1);
-    color: var(--primary-color);
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-color);
 }
 
-/* Sort controls */
+.view-button:active:not(.active) {
+    transform: scale(0.95);
+}
+
+/* Sort controls - Modern design */
 .sort-controls {
     display: flex;
-    gap: 5px;
-    margin-left: auto;
+    gap: 8px;
     flex-shrink: 0;
 }
 
+.sort-select-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.sort-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--metadata-label-color);
+    pointer-events: none;
+    transition: color 0.2s;
+    z-index: 1;
+}
+
+.sort-select-wrapper:hover .sort-icon,
+.sort-select-wrapper:focus-within .sort-icon {
+    color: var(--primary-color);
+}
+
+.select-arrow {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--metadata-label-color);
+    pointer-events: none;
+    transition: transform 0.2s, color 0.2s;
+}
+
+.sort-select-wrapper:hover .select-arrow {
+    color: var(--primary-color);
+}
+
 #sort-by {
-    padding: 8px 12px;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    background-color: rgba(0, 0, 0, 0.2);
+    padding: 10px 36px 10px 38px;
+    border: 2px solid transparent;
+    border-radius: 10px;
+    background: linear-gradient(var(--card-background), var(--card-background)) padding-box,
+                linear-gradient(135deg, rgba(52, 152, 219, 0.2), rgba(46, 204, 113, 0.2)) border-box;
     color: var(--text-color);
     font-size: 0.9rem;
     cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    min-width: 140px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+#sort-by:hover {
+    background: linear-gradient(var(--card-background), var(--card-background)) padding-box,
+                linear-gradient(135deg, rgba(52, 152, 219, 0.4), rgba(46, 204, 113, 0.4)) border-box;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 #sort-by:focus {
     outline: none;
-    border-color: var(--primary-color);
+    background: linear-gradient(var(--card-background), var(--card-background)) padding-box,
+                linear-gradient(135deg, var(--primary-color), var(--secondary-color)) border-box;
+    box-shadow: 0 4px 16px rgba(52, 152, 219, 0.2);
+}
+
+#sort-by option {
+    background-color: var(--card-background);
+    color: var(--text-color);
+    padding: 10px;
 }
 
 #sort-direction {
-    background-color: rgba(0, 0, 0, 0.2);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    padding: 8px;
+    background: linear-gradient(var(--card-background), var(--card-background)) padding-box,
+                linear-gradient(135deg, rgba(52, 152, 219, 0.2), rgba(46, 204, 113, 0.2)) border-box;
+    border: 2px solid transparent;
+    border-radius: 10px;
+    padding: 10px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--metadata-label-color);
-    transition: transform 0.3s, background-color 0.2s;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
 #sort-direction:hover {
-    background-color: rgba(52, 152, 219, 0.1);
+    background: linear-gradient(var(--card-background), var(--card-background)) padding-box,
+                linear-gradient(135deg, rgba(52, 152, 219, 0.4), rgba(46, 204, 113, 0.4)) border-box;
     color: var(--primary-color);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+#sort-direction:active {
+    transform: scale(0.95);
+}
+
+#sort-direction svg {
+    transition: transform 0.3s ease;
 }
 
 #sort-direction[data-direction="asc"] svg {
@@ -804,23 +919,29 @@
     .gallery-controls {
         flex-direction: column;
         align-items: stretch;
-        gap: 15px;
+        gap: 12px;
     }
 
     .controls-left {
-        flex-direction: column;
-        align-items: stretch;
-        max-width: 100%;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
     }
 
     .search-container {
-        position: relative;
-        z-index: 5;
+        flex: 1 1 100%;
+        max-width: none;
+        order: 1;
+    }
+
+    .view-toggle {
+        order: 0;
     }
 
     .sort-controls {
-        margin-left: 0;
         justify-content: flex-end;
+        flex-wrap: wrap;
     }
 
     .active-filters {
