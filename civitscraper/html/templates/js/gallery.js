@@ -8,7 +8,7 @@
   const PLACEHOLDER_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
   // --- DOM Elements ---
-  const galleryContainer = document.querySelector('.gallery-container');
+  const galleryLayout = document.querySelector('.gallery-layout');
   const gridViewBtn = document.getElementById('grid-view');
   const focusedViewBtn = document.getElementById('focused-view');
   const listViewBtn = document.getElementById('list-view');
@@ -21,9 +21,8 @@
   const sortDirectionBtn = document.getElementById('sort-direction');
   const noResultsEl = document.getElementById('no-results');
   const emptyGalleryEl = document.querySelector('.empty-gallery');
-  const facetSidebar = document.getElementById('facet-sidebar');
+  const sidebarWrapper = document.getElementById('facet-sidebar');
   const toggleSidebarBtn = document.getElementById('toggle-sidebar');
-  const closeSidebarBtn = document.getElementById('close-sidebar');
   const facetContainer = document.querySelector('.facet-container');
   const activeFiltersBar = document.querySelector('.active-filters');
   const filterPillsContainer = document.querySelector('.filter-pills');
@@ -1006,8 +1005,14 @@
   }
 
   function toggleSidebar() {
-    const isVisible = facetSidebar.classList.toggle('visible');
-    storePreference('sidebarVisible', isVisible);
+    if (!sidebarWrapper) return;
+    const isExpanded = sidebarWrapper.classList.toggle('expanded');
+    storePreference('sidebarExpanded', isExpanded);
+
+    // Update button title
+    if (toggleSidebarBtn) {
+      toggleSidebarBtn.title = isExpanded ? 'Collapse filters' : 'Expand filters';
+    }
   }
 
   // --- Intersection Observers ---
@@ -1074,7 +1079,7 @@
   async function initializeGallery() {
     console.log("Initializing gallery...");
 
-    if (!galleryContainer || !modelsGridContainer || !modelsListContainer) {
+    if (!galleryLayout || !modelsGridContainer || !modelsListContainer) {
       console.error("Essential gallery containers not found. Aborting initialization.");
       if (emptyGalleryEl) emptyGalleryEl.textContent = "Error: Gallery failed to initialize (missing elements).";
       return;
@@ -1094,18 +1099,30 @@
       filterState.sortDir = getPreference('sortDir', 'desc');
     }
 
-    const savedSidebarVisible = getPreference('sidebarVisible', 'true') === 'true';
+    const savedSidebarExpanded = getPreference('sidebarExpanded', 'true') === 'true';
 
     // 3. Set Initial UI State
     handleViewToggle(filterState.viewMode);
-    sortBySelect.value = filterState.sortBy;
-    sortDirectionBtn.setAttribute('data-direction', filterState.sortDir);
-    sortDirectionBtn.querySelector('svg').style.transform = filterState.sortDir === 'asc' ? 'rotate(180deg)' : '';
+    if (sortBySelect) sortBySelect.value = filterState.sortBy;
+    if (sortDirectionBtn) {
+      sortDirectionBtn.setAttribute('data-direction', filterState.sortDir);
+      const svg = sortDirectionBtn.querySelector('svg');
+      if (svg) svg.style.transform = filterState.sortDir === 'asc' ? 'rotate(180deg)' : '';
+    }
     if (searchInput && filterState.searchText) {
       searchInput.value = filterState.searchText;
     }
-    if (savedSidebarVisible && facetSidebar) {
-      facetSidebar.classList.add('visible');
+    // Set initial sidebar state
+    if (sidebarWrapper) {
+      if (savedSidebarExpanded) {
+        sidebarWrapper.classList.add('expanded');
+      } else {
+        sidebarWrapper.classList.remove('expanded');
+      }
+      // Update button title
+      if (toggleSidebarBtn) {
+        toggleSidebarBtn.title = savedSidebarExpanded ? 'Collapse filters' : 'Expand filters';
+      }
     }
 
     // 4. Get Data from External Script
@@ -1145,16 +1162,18 @@
     searchInput?.addEventListener('input', handleSearchInput);
     clearSearchBtn?.addEventListener('click', handleClearSearch);
     toggleSidebarBtn?.addEventListener('click', toggleSidebar);
-    closeSidebarBtn?.addEventListener('click', toggleSidebar);
     clearAllFiltersBtn?.addEventListener('click', handleClearAllFilters);
 
     // 7. Handle browser back/forward
     window.addEventListener('popstate', function() {
       parseUrlState();
       handleViewToggle(filterState.viewMode);
-      sortBySelect.value = filterState.sortBy;
-      sortDirectionBtn.setAttribute('data-direction', filterState.sortDir);
-      sortDirectionBtn.querySelector('svg').style.transform = filterState.sortDir === 'asc' ? 'rotate(180deg)' : '';
+      if (sortBySelect) sortBySelect.value = filterState.sortBy;
+      if (sortDirectionBtn) {
+        sortDirectionBtn.setAttribute('data-direction', filterState.sortDir);
+        const svg = sortDirectionBtn.querySelector('svg');
+        if (svg) svg.style.transform = filterState.sortDir === 'asc' ? 'rotate(180deg)' : '';
+      }
       if (searchInput) searchInput.value = filterState.searchText;
       updateGallery();
       renderFacets();

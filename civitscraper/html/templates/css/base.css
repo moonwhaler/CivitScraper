@@ -44,12 +44,29 @@ body {
     padding: 20px;
 }
 
+/* Full-width container variant */
+.container-fluid {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
 header {
     background-color: var(--header-background);
     color: var(--header-text);
-    padding: 1rem;
+    padding: 0 1.5rem;
     text-align: left;
     border-bottom: 1px solid var(--border-color);
+    height: 60px;
+    display: flex;
+    align-items: center;
+}
+
+header .header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
 }
 
 header .container {
@@ -60,8 +77,14 @@ header .container {
 
 header h1 {
     margin: 0;
-    font-size: 1.8rem;
+    font-size: 1.4rem;
     font-weight: 600;
+}
+
+header .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
 
 footer {
@@ -105,5 +128,19 @@ a:hover {
 @media (max-width: 768px) {
     .container {
         padding: 10px;
+    }
+
+    header {
+        padding: 0 1rem;
+    }
+
+    header h1 {
+        font-size: 1.2rem;
+    }
+}
+
+@media (max-width: 480px) {
+    header h1 {
+        font-size: 1rem;
     }
 }
