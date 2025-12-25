@@ -22,6 +22,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    object-position: center 10%;
 }
 
 .hero-overlay {
@@ -484,6 +485,21 @@
     letter-spacing: 0.5px;
     z-index: 3;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+}
+
+.gallery-item:hover .video-indicator {
+    background: linear-gradient(135deg, rgba(46, 204, 113, 0.9), rgba(39, 174, 96, 0.9));
+    animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(46, 204, 113, 0.4);
+    }
+    50% {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 10px 3px rgba(46, 204, 113, 0.3);
+    }
 }
 
 .image-metadata {
@@ -725,6 +741,46 @@
     overflow-y: auto;
     white-space: pre-wrap;
     word-break: break-word;
+}
+
+/* Positive Prompt - Green theme */
+#positive-prompt {
+    background: rgba(46, 204, 113, 0.08);
+    border-color: rgba(46, 204, 113, 0.25);
+}
+
+.prompt-section:has(#positive-prompt) .prompt-header h4 {
+    color: #2ecc71;
+}
+
+.prompt-section:has(#positive-prompt) .copy-button {
+    color: rgba(46, 204, 113, 0.7);
+    border-color: rgba(46, 204, 113, 0.2);
+}
+
+.prompt-section:has(#positive-prompt) .copy-button:hover {
+    background: rgba(46, 204, 113, 0.15);
+    color: #2ecc71;
+}
+
+/* Negative Prompt - Red theme */
+#negative-prompt {
+    background: rgba(231, 76, 60, 0.08);
+    border-color: rgba(231, 76, 60, 0.25);
+}
+
+.prompt-section:has(#negative-prompt) .prompt-header h4 {
+    color: #e74c3c;
+}
+
+.prompt-section:has(#negative-prompt) .copy-button {
+    color: rgba(231, 76, 60, 0.7);
+    border-color: rgba(231, 76, 60, 0.2);
+}
+
+.prompt-section:has(#negative-prompt) .copy-button:hover {
+    background: rgba(231, 76, 60, 0.15);
+    color: #e74c3c;
 }
 
 .copy-button {

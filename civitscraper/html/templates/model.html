@@ -149,7 +149,7 @@
         {% for image in images %}
         <div class="gallery-item" data-index="{{ loop.index0 }}">
             {% if image.is_video %}
-            <video src="{{ image.path }}" controls preload="metadata" class="preview-video"></video>
+            <video src="{{ image.path }}" preload="metadata" class="preview-video" muted loop playsinline></video>
             <div class="video-indicator">VIDEO</div>
             {% else %}
             <img src="{{ image.path }}" alt="Preview image" loading="lazy">
@@ -294,12 +294,20 @@
     const galleryItem = galleryItems[index];
     const isVideo = data.is_video || false;
 
+    // Pause any currently playing video first
+    if (viewerVideo) {
+      viewerVideo.pause();
+    }
+
     if (isVideo) {
       const videoElement = galleryItem.querySelector('video');
       if (videoElement) {
         viewerVideo.src = videoElement.src;
         viewerVideo.style.display = 'block';
         viewerImage.style.display = 'none';
+        // Autoplay the video
+        viewerVideo.currentTime = 0;
+        viewerVideo.play().catch(() => {});
       }
     } else {
       const imgElement = galleryItem.querySelector('img');
@@ -446,6 +454,22 @@
         .catch(e => console.error('Error copying:', e));
     });
   }
+
+  // Video hover play/pause functionality
+  galleryItems.forEach(item => {
+    const video = item.querySelector('video');
+    if (!video) return;
+
+    item.addEventListener('mouseenter', () => {
+      video.currentTime = 0;
+      video.play().catch(() => {}); // Ignore autoplay errors
+    });
+
+    item.addEventListener('mouseleave', () => {
+      video.pause();
+      video.currentTime = 0;
+    });
+  });
 })();
 </script>
 {% endif %}
