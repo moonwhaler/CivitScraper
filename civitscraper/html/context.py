@@ -147,14 +147,15 @@ class ContextBuilder:
 
         parent_folder_path = os.path.dirname(file_path)
         folder_name = os.path.basename(parent_folder_path)
-        # If the file_path itself is a directory (e.g. when scanning for .html files in a dir)
-        # and that directory is the one we want (e.g. "Character"), then basename gives an empty string.
+        # If the file_path itself is a directory (e.g. when scanning for .html
+        # files in a dir) and that directory is the one we want (e.g.
+        # "Character"), then basename gives an empty string.
         # In such cases, we might need to adjust. However, file_path for models is usually a file.
         # For robustness, if folder_name is empty and parent_folder_path is not the root,
-        # it might indicate file_path was like 'Character/', so we take the name before the trailing slash.
+        # it might indicate file_path was like 'Character/', so we take the
+        # name before the trailing slash.
         if not folder_name and parent_folder_path and parent_folder_path != os.path.sep:
             folder_name = os.path.basename(os.path.normpath(parent_folder_path))
-
 
         return {
             "name": model_name,
@@ -176,38 +177,40 @@ class ContextBuilder:
     def _filter_model_files(self, file_path: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
         Filter metadata to show only files relevant to the current model file.
-        
+
         Args:
             file_path: Path to the current model file
             metadata: Original metadata
-            
+
         Returns:
             Metadata with filtered files
         """
         # Create a copy of metadata to avoid modifying the original
         filtered_metadata = metadata.copy()
-        
+
         current_filename = os.path.basename(file_path)
         current_name_no_ext = os.path.splitext(current_filename)[0]
-        
+
         # Get all files from metadata
         all_files = metadata.get("files", [])
         if not all_files:
             return filtered_metadata
-        
+
         # Try to find matching files
         matching_files = []
-        
+
         for file_info in all_files:
             file_name = file_info.get("name", "")
             file_name_no_ext = os.path.splitext(file_name)[0]
-            
+
             # Check if this file matches the current model file
             if (
                 # Exact name match
-                file_name == current_filename or
+                file_name == current_filename
+                or
                 # Name without extension match
-                file_name_no_ext == current_name_no_ext or
+                file_name_no_ext == current_name_no_ext
+                or
                 # Primary file flag (fallback)
                 file_info.get("primary", False)
             ):
@@ -216,7 +219,7 @@ class ContextBuilder:
                 file_copy["local_path"] = os.path.abspath(file_path)
                 file_copy["local_directory"] = os.path.dirname(os.path.abspath(file_path))
                 matching_files.append(file_copy)
-        
+
         # If no exact matches found, try to find the primary file or first file
         if not matching_files:
             for file_info in all_files:
@@ -226,19 +229,21 @@ class ContextBuilder:
                     file_copy["local_directory"] = os.path.dirname(os.path.abspath(file_path))
                     matching_files.append(file_copy)
                     break
-            
+
             # If still no match, use the first file as fallback
             if not matching_files and all_files:
                 file_copy = all_files[0].copy()
                 file_copy["local_path"] = os.path.abspath(file_path)
                 file_copy["local_directory"] = os.path.dirname(os.path.abspath(file_path))
                 matching_files.append(file_copy)
-        
+
         # Update the metadata with filtered files
         filtered_metadata["files"] = matching_files
-        
-        logger.debug(f"Filtered {len(all_files)} files to {len(matching_files)} for {current_filename}")
-        
+
+        logger.debug(
+            f"Filtered {len(all_files)} files to {len(matching_files)} for {current_filename}"
+        )
+
         return filtered_metadata
 
     def _load_metadata(self, metadata_path: str) -> Optional[Dict[str, Any]]:
