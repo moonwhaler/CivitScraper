@@ -155,6 +155,8 @@ class ModelVersion:
     name: str
     created_at: datetime
     download_url: str
+    model_id: Optional[int] = None  # Parent model ID
+    base_model: Optional[str] = None  # Base model (e.g., "SDXL 1.0")
     description: Optional[str] = None
     trained_words: List[str] = field(default_factory=list)
     files: List[ModelFile] = field(default_factory=list)
@@ -231,6 +233,8 @@ class ModelVersion:
             name=data["name"],
             created_at=created_at,
             download_url=data["downloadUrl"],
+            model_id=data.get("modelId"),
+            base_model=data.get("baseModel"),
             description=data.get("description"),
             trained_words=data.get("trainedWords", []),
             files=files,

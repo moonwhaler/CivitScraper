@@ -186,3 +186,85 @@ class CivitAIClient:
         return self._base_client.request_handler.download(
             url, output_path, dry_run=self._base_client.dry_run
         )
+
+    def get_parent_model_with_versions(
+        self, model_id: int, current_version_id: int, force_refresh: bool = False
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Fetch parent model and return structured data with sibling versions.
+
+        Args:
+            model_id: Parent model ID
+            current_version_id: ID of the current version (to mark as current)
+            force_refresh: Force refresh cache
+
+        Returns:
+            Dictionary with parentModel and siblingVersions, or None if failed
+        """
+        try:
+            model_data = self.get_model(model_id, force_refresh=force_refresh)
+            if not model_data:
+                logger.warning(f"Failed to fetch parent model {model_id}")
+                return None
+
+            # Handle both dict and Model type responses
+            sibling_versions: List[Dict[str, Any]] = []
+
+            if isinstance(model_data, Model):
+                parent_model = {
+                    "id": model_data.id,
+                    "name": model_data.name,
+                    "type": model_data.type,
+                    "nsfw": model_data.nsfw,
+                    "creator": {
+                        "username": model_data.creator.username if model_data.creator else "Unknown"
+                    },
+                }
+                for version in model_data.model_versions:
+                    sibling_versions.append(
+                        {
+                            "id": version.id,
+                            "name": version.name,
+                            "baseModel": getattr(version, "base_model", None),
+                            "createdAt": (
+                                version.created_at.isoformat() if version.created_at else None
+                            ),
+                            "downloadCount": version.stats.download_count if version.stats else 0,
+                            "isCurrent": version.id == current_version_id,
+                        }
+                    )
+            else:
+                parent_model = {
+                    "id": model_data.get("id"),
+                    "name": model_data.get("name"),
+                    "type": model_data.get("type"),
+                    "nsfw": model_data.get("nsfw", False),
+                    "creator": {
+                        "username": model_data.get("creator", {}).get("username", "Unknown")
+                    },
+                }
+                for version in model_data.get("modelVersions", []):
+                    stats = version.get("stats", {})
+                    version_id = version.get("id")
+                    sibling_versions.append(
+                        {
+                            "id": version_id,
+                            "name": version.get("name"),
+                            "baseModel": version.get("baseModel"),
+                            "createdAt": version.get("createdAt"),
+                            "downloadCount": stats.get("downloadCount", 0),
+                            "isCurrent": version_id == current_version_id,
+                        }
+                    )
+
+            # Sort by creation date (newest first)
+            sibling_versions.sort(key=lambda v: v.get("createdAt") or "", reverse=True)
+
+            return {
+                "parentModel": parent_model,
+                "siblingVersions": sibling_versions,
+            }
+
+        except Exception as e:
+            logger.error(f"Error fetching parent model {model_id}: {e}")
+            return None

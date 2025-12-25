@@ -44,7 +44,8 @@
     searchText: '',
     sortBy: 'name',
     sortDir: 'desc',
-    viewMode: 'grid'
+    viewMode: 'grid',
+    multipleVersionsOnly: false
   };
 
   // Facet metadata for rendering
@@ -144,6 +145,11 @@
       filterState.viewMode = viewParam;
     }
 
+    const multiVersionsParam = params.get('multiVersions');
+    if (multiVersionsParam === 'true') {
+      filterState.multipleVersionsOnly = true;
+    }
+
     console.log("Parsed URL state:", filterState);
   }
 
@@ -170,6 +176,9 @@
     }
     if (filterState.viewMode !== 'grid') {
       params.set('view', filterState.viewMode);
+    }
+    if (filterState.multipleVersionsOnly) {
+      params.set('multiVersions', 'true');
     }
 
     const hashString = params.toString();
@@ -254,7 +263,32 @@
     if (!facetContainer) return;
 
     const counts = computeFacetCounts();
+
+    // Count models with multiple local versions
+    const multiVersionCount = allModelsData.filter(model =>
+      (model.local_version_count || 1) > 1
+    ).length;
+
     let html = '';
+
+    // Add Multiple Local Versions toggle at the top
+    if (multiVersionCount > 0) {
+      html += `
+        <div class="facet-section toggle-section">
+          <label class="facet-toggle-item ${filterState.multipleVersionsOnly ? 'active' : ''}">
+            <input type="checkbox"
+                   id="multiple-versions-toggle"
+                   ${filterState.multipleVersionsOnly ? 'checked' : ''}>
+            <span class="facet-toggle-switch"></span>
+            <span class="facet-toggle-label">
+              <span class="facet-icon">📦</span>
+              Multiple Local Versions
+            </span>
+            <span class="facet-count">${multiVersionCount}</span>
+          </label>
+        </div>
+      `;
+    }
 
     // Render each facet section
     Object.entries(facetConfig).forEach(([facetKey, config]) => {
@@ -305,6 +339,18 @@
   }
 
   function attachFacetEventListeners() {
+    // Multiple versions toggle handler
+    const multiVersionsToggle = document.getElementById('multiple-versions-toggle');
+    if (multiVersionsToggle) {
+      multiVersionsToggle.addEventListener('change', function() {
+        filterState.multipleVersionsOnly = this.checked;
+        storePreference('multipleVersionsOnly', this.checked ? 'true' : 'false');
+        syncUrlState();
+        updateGallery();
+        renderFacets();
+      });
+    }
+
     // Facet header toggle
     facetContainer.querySelectorAll('.facet-header').forEach(header => {
       header.addEventListener('click', function() {
@@ -321,6 +367,9 @@
 
     // Checkbox change handlers
     facetContainer.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+      // Skip the multiple versions toggle (handled separately)
+      if (checkbox.id === 'multiple-versions-toggle') return;
+
       checkbox.addEventListener('change', function() {
         const facetKey = this.dataset.facet;
         const value = this.dataset.value;
@@ -328,6 +377,17 @@
         toggleFacetValue(facetKey, value, this.checked);
       });
     });
+  }
+
+  function updateMultipleVersionsToggle() {
+    const toggle = document.getElementById('multiple-versions-toggle');
+    if (toggle) {
+      toggle.checked = filterState.multipleVersionsOnly;
+      const label = toggle.closest('.facet-toggle-item');
+      if (label) {
+        label.classList.toggle('active', filterState.multipleVersionsOnly);
+      }
+    }
   }
 
   function toggleFacetValue(facetKey, value, isSelected) {
@@ -358,9 +418,21 @@
 
     const hasFilters = filterState.types.length > 0 ||
                        filterState.baseModels.length > 0 ||
-                       filterState.folders.length > 0;
+                       filterState.folders.length > 0 ||
+                       filterState.multipleVersionsOnly;
 
     let pillsHtml = '';
+
+    // Generate pill for multiple versions filter
+    if (filterState.multipleVersionsOnly) {
+      pillsHtml += `
+        <span class="filter-pill" data-filter="multipleVersions">
+          <span class="pill-category">Filter:</span>
+          <span class="pill-value">Multiple Local Versions</span>
+          <button class="pill-remove" title="Remove filter">×</button>
+        </span>
+      `;
+    }
 
     // Generate pills for each facet
     Object.entries(facetConfig).forEach(([facetKey, config]) => {
@@ -398,6 +470,17 @@
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
         const pill = this.closest('.filter-pill');
+
+        // Handle special filters
+        if (pill.dataset.filter === 'multipleVersions') {
+          filterState.multipleVersionsOnly = false;
+          updateMultipleVersionsToggle();
+          syncUrlState();
+          updateGallery();
+          renderFacets();
+          return;
+        }
+
         const facetKey = pill.dataset.facet;
         const value = pill.dataset.value;
         toggleFacetValue(facetKey, value, false);
@@ -647,7 +730,14 @@
       );
     }
 
-    // 5. Apply Sorting
+    // 5. Apply Multiple Local Versions Filter
+    if (filterState.multipleVersionsOnly) {
+      filteredModels = filteredModels.filter(model =>
+        (model.local_version_count || 1) > 1
+      );
+    }
+
+    // 6. Apply Sorting
     const multiplier = filterState.sortDir === 'asc' ? 1 : -1;
     filteredModels.sort((a, b) => {
       let valueA, valueB;
@@ -849,10 +939,13 @@
     filterState.types = [];
     filterState.baseModels = [];
     filterState.folders = [];
+    filterState.multipleVersionsOnly = false;
     syncUrlState();
     storePreference('types', '[]');
     storePreference('baseModels', '[]');
     storePreference('folders', '[]');
+    storePreference('multipleVersionsOnly', 'false');
+    updateMultipleVersionsToggle();
     updateGallery();
     renderFacets();
     renderActiveFilters();
