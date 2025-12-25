@@ -7,7 +7,7 @@ This module handles executing jobs defined in the configuration.
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..api.client import CivitAIClient
 from ..config.loader import merge_configs
@@ -267,25 +267,56 @@ class JobExecutor:
             elif metadata_dict and not images_save:
                 logger.info("Skipping image downloads (images.save is false)")
 
-            # PHASE 4: Process remaining tasks (metadata, HTML)
+            # PHASE 4: Process remaining tasks (metadata, HTML) with parallelization
             logger.info(f"Processing {len(metadata_dict)} files with metadata")
             results = []
 
+            # Prepare items for processing
+            items_to_process = []
             for file_path, metadata in metadata_dict.items():
-                # Determine which path to use for processing
-                process_path = organized_files_mapping.get(file_path, file_path)
-                if process_path:
-                    # Save and process with metadata
+                process_path = organized_files_mapping.get(file_path, file_path) or file_path
+                items_to_process.append((process_path, metadata))
+
+            # Use parallel processing for large collections
+            import concurrent.futures
+
+            if len(items_to_process) > 10:
+                max_workers = min(4, len(items_to_process))  # Lower workers for I/O-heavy tasks
+                logger.info(f"Processing {len(items_to_process)} files with {max_workers} workers")
+
+                def process_single_item(
+                    item: Tuple[str, Dict[str, Any]]
+                ) -> Tuple[str, Optional[Dict[str, Any]]]:
+                    path, meta = item
+                    processed = temp_processor.save_and_process_with_metadata(path, meta)
+                    return (path, processed)
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    future_to_item = {
+                        executor.submit(process_single_item, item): item
+                        for item in items_to_process
+                    }
+                    completed = 0
+                    for future in concurrent.futures.as_completed(future_to_item):
+                        completed += 1
+                        try:
+                            item_result = future.result()
+                            results.append(item_result)
+                        except Exception as e:
+                            item = future_to_item[future]
+                            logger.error(f"Error processing {item[0]}: {e}")
+                            results.append((item[0], None))
+
+                        # Progress logging every 50 files
+                        if completed % 50 == 0 or completed == len(items_to_process):
+                            logger.info(f"Processed {completed}/{len(items_to_process)} files")
+            else:
+                # Sequential processing for small collections
+                for process_path, metadata in items_to_process:
                     processed_metadata = temp_processor.save_and_process_with_metadata(
                         process_path, metadata
                     )
                     results.append((process_path, processed_metadata))
-                else:
-                    # If organization failed, use original path
-                    processed_metadata = temp_processor.save_and_process_with_metadata(
-                        file_path, metadata
-                    )
-                    results.append((file_path, processed_metadata))
 
             # PHASE 4: Generate gallery
             html_config = job_config.get("output", {}).get("metadata", {}).get("html", {})
