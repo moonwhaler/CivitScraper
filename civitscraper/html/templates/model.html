@@ -372,7 +372,7 @@
                 {% endif %}
             </div>
         </div>
-        
+
         {% if file.local_path %}
         <div class="file-location-section">
             <div class="file-location-label">Local File Location:</div>
@@ -385,7 +385,7 @@
             </div>
         </div>
         {% endif %}
-        
+
         {% if file.local_directory %}
         <div class="file-location-section">
             <div class="file-location-label">Directory:</div>
@@ -444,7 +444,7 @@ document.querySelectorAll('.copy-location-btn').forEach(button => {
                     // Visual feedback
                     const originalIcon = icon.textContent;
                     const originalText = text.textContent;
-                    
+
                     icon.textContent = '✓';
                     text.textContent = 'Copied!';
                     button.style.background = 'rgba(46, 204, 113, 0.15)';
@@ -464,7 +464,7 @@ document.querySelectorAll('.copy-location-btn').forEach(button => {
                     // Error feedback
                     const originalIcon = icon.textContent;
                     const originalText = text.textContent;
-                    
+
                     icon.textContent = '❌';
                     text.textContent = 'Failed';
                     button.style.background = 'rgba(231, 76, 60, 0.15)';

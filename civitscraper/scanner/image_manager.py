@@ -88,7 +88,8 @@ class ImageManager:
             # Only log if there are actually images to clean up
             if self._count_existing_previews(model_dir, model_name) > 0:
                 logger.info(
-                    f"Dry run or skipping existing: Would not remove old preview images for {file_path}"
+                    f"Dry run or skipping existing: Would not remove old "
+                    f"preview images for {file_path}"
                 )
 
         # Count existing preview images
