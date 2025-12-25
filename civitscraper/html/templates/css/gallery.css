@@ -271,9 +271,8 @@
 /* Search controls - Modern design */
 .search-container {
     position: relative;
-    flex: 1 1 250px;
-    max-width: 400px;
-    min-width: 180px;
+    flex: 1 1 auto;
+    min-width: 200px;
 }
 
 .search-icon {
