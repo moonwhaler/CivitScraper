@@ -151,6 +151,10 @@
             {% if image.is_video %}
             <video src="{{ image.path }}" preload="metadata" class="preview-video" muted loop playsinline></video>
             <div class="video-indicator">VIDEO</div>
+            <div class="video-play-overlay">
+                <svg class="play-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                <svg class="pause-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+            </div>
             {% else %}
             <img src="{{ image.path }}" alt="Preview image" loading="lazy">
             {% endif %}
@@ -351,11 +355,26 @@
   // Close viewer
   function closeViewer() {
     imageViewer.classList.remove('active');
+    imageViewer.classList.remove('fullscreen');
     document.body.style.overflow = '';
     if (viewerVideo) {
       viewerVideo.pause();
       viewerVideo.src = '';
     }
+  }
+
+  // Toggle fullscreen mode
+  const fullscreenToggle = document.getElementById('fullscreen-toggle');
+
+  function toggleFullscreen() {
+    imageViewer.classList.toggle('fullscreen');
+  }
+
+  if (fullscreenToggle) {
+    fullscreenToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleFullscreen();
+    });
   }
 
   // Build thumbnails on load
@@ -402,7 +421,14 @@
     if (!imageViewer.classList.contains('active')) return;
 
     if (e.key === 'Escape') {
-      closeViewer();
+      // Exit fullscreen first, then close viewer
+      if (imageViewer.classList.contains('fullscreen')) {
+        imageViewer.classList.remove('fullscreen');
+      } else {
+        closeViewer();
+      }
+    } else if (e.key === 'f' || e.key === 'F') {
+      toggleFullscreen();
     } else if (e.key === 'ArrowLeft') {
       currentIndex = (currentIndex - 1 + imageData.length) % imageData.length;
       openImageViewer(currentIndex);
@@ -455,20 +481,56 @@
     });
   }
 
-  // Video hover play/pause functionality
+  // Video play/pause functionality (hover for desktop, tap for mobile)
+  const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
   galleryItems.forEach(item => {
     const video = item.querySelector('video');
     if (!video) return;
 
-    item.addEventListener('mouseenter', () => {
-      video.currentTime = 0;
-      video.play().catch(() => {}); // Ignore autoplay errors
-    });
+    if (isTouchDevice) {
+      // Touch devices: tap play button to toggle play/pause
+      const playButton = item.querySelector('.video-play-overlay');
+      if (playButton) {
+        playButton.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
 
-    item.addEventListener('mouseleave', () => {
-      video.pause();
-      video.currentTime = 0;
-    });
+          if (video.paused) {
+            // Pause all other videos first
+            document.querySelectorAll('.gallery-item.playing').forEach(other => {
+              if (other !== item) {
+                other.classList.remove('playing');
+                const otherVideo = other.querySelector('video');
+                if (otherVideo) {
+                  otherVideo.pause();
+                  otherVideo.currentTime = 0;
+                }
+              }
+            });
+            video.currentTime = 0;
+            video.play().catch(() => {});
+            item.classList.add('playing');
+          } else {
+            video.pause();
+            item.classList.remove('playing');
+          }
+        });
+      }
+    } else {
+      // Desktop: hover to play
+      item.addEventListener('mouseenter', () => {
+        video.currentTime = 0;
+        video.play().catch(() => {});
+        item.classList.add('playing');
+      });
+
+      item.addEventListener('mouseleave', () => {
+        video.pause();
+        video.currentTime = 0;
+        item.classList.remove('playing');
+      });
+    }
   });
 })();
 </script>
