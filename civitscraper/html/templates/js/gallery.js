@@ -476,7 +476,7 @@
               ${model.preview_image_path
                   ? `<div class="model-preview">
                       ${model.is_video
-                          ? `<video src="${model.preview_image_path}" preload="metadata" class="preview-video" controls muted loop playsinline></video><div class="video-indicator">VIDEO</div>`
+                          ? `<video src="${model.preview_image_path}" preload="metadata" class="preview-video" muted loop playsinline></video><div class="video-indicator">VIDEO</div>`
                           : `<img src="${PLACEHOLDER_IMAGE}" data-src="${model.preview_image_path}" alt="${escapeHTML(model.name)}" class="lazy-load-image">`
                       }
                     </div>`
@@ -551,7 +551,7 @@
               <div class="model-list-preview">
                   ${model.preview_image_path
                       ? `${model.is_video
-                          ? `<video src="${model.preview_image_path}" preload="metadata" class="preview-video"></video><div class="video-indicator mini">VIDEO</div>`
+                          ? `<video src="${model.preview_image_path}" preload="metadata" class="preview-video" muted loop playsinline></video><div class="video-indicator mini">VIDEO</div>`
                           : `<img src="${PLACEHOLDER_IMAGE}" data-src="${model.preview_image_path}" alt="${escapeHTML(model.name)}" class="lazy-load-image">`
                         }`
                       : `<div class="no-image-text">No Preview</div>`
@@ -1013,6 +1013,36 @@
       renderFacets();
       renderActiveFilters();
     });
+
+    // 8. Video hover play/pause functionality
+    function setupVideoHoverHandlers(container) {
+      if (!container) return;
+
+      container.addEventListener('mouseenter', function(e) {
+        const card = e.target.closest('.model-card, .model-item, .focused-card');
+        if (!card) return;
+        const video = card.querySelector('video');
+        if (video) {
+          video.currentTime = 0;
+          video.play().catch(() => {}); // Ignore autoplay errors
+        }
+      }, true);
+
+      container.addEventListener('mouseleave', function(e) {
+        const card = e.target.closest('.model-card, .model-item, .focused-card');
+        if (!card) return;
+        const video = card.querySelector('video');
+        if (video) {
+          video.pause();
+          video.currentTime = 0;
+        }
+      }, true);
+    }
+
+    // Setup video hover for all view containers
+    setupVideoHoverHandlers(modelsGridContainer);
+    setupVideoHoverHandlers(modelsFocusedContainer);
+    setupVideoHoverHandlers(modelsListContainer);
 
     console.log("Gallery initialization complete.");
   }
