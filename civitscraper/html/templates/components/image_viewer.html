@@ -1,29 +1,90 @@
 <div id="image-viewer" class="image-viewer">
-    <div class="viewer-content">
-        <div id="viewer-media-container">
-            <img id="viewer-image" src="" alt="Full size image" style="display: none;">
-            <video id="viewer-video" controls style="display: none;"></video>
+    <div class="viewer-backdrop"></div>
+
+    <!-- Close button -->
+    <button id="close-viewer" class="viewer-close" title="Close (Esc)">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </button>
+
+    <!-- Main viewer layout -->
+    <div class="viewer-layout">
+        <!-- Media container -->
+        <div class="viewer-media-section">
+            <!-- Navigation buttons -->
+            <button id="prev-image" class="viewer-nav viewer-nav-prev" title="Previous (←)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+
+            <div class="viewer-media-container">
+                <img id="viewer-image" src="" alt="Full size image">
+                <video id="viewer-video" controls></video>
+            </div>
+
+            <button id="next-image" class="viewer-nav viewer-nav-next" title="Next (→)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+
+            <!-- Image counter -->
+            <div class="viewer-counter">
+                <span id="viewer-current">1</span> / <span id="viewer-total">1</span>
+            </div>
         </div>
-        <div class="image-info">
-            <div class="prompt-section">
-                <h3>Positive Prompt</h3>
-                <div id="positive-prompt" class="prompt"></div>
-                <button class="copy-button" data-target="positive-prompt">📋 Copy</button>
+
+        <!-- Info panel -->
+        <aside class="viewer-info-panel">
+            <div class="viewer-panel-header">
+                <h3>Image Details</h3>
+                <div class="viewer-panel-actions">
+                    <button id="copy-all-metadata" class="panel-action-btn" title="Copy all metadata">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    </button>
+                </div>
             </div>
-            <div class="prompt-section">
-                <h3>Negative Prompt</h3>
-                <div id="negative-prompt" class="prompt"></div>
-                <button class="copy-button" data-target="negative-prompt">📋 Copy</button>
+
+            <div class="viewer-panel-content">
+                <!-- Positive Prompt -->
+                <div class="prompt-section">
+                    <div class="prompt-header">
+                        <h4>Positive Prompt</h4>
+                        <button class="copy-button" data-target="positive-prompt" title="Copy">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        </button>
+                    </div>
+                    <div id="positive-prompt" class="prompt"></div>
+                </div>
+
+                <!-- Negative Prompt -->
+                <div class="prompt-section">
+                    <div class="prompt-header">
+                        <h4>Negative Prompt</h4>
+                        <button class="copy-button" data-target="negative-prompt" title="Copy">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        </button>
+                    </div>
+                    <div id="negative-prompt" class="prompt"></div>
+                </div>
+
+                <!-- Generation Settings -->
+                <div class="settings-section">
+                    <h4>Generation Settings</h4>
+                    <div id="additional-info" class="settings-grid"></div>
+                </div>
             </div>
-            <div class="additional-info">
-                <h3>Additional Information</h3>
-                <div id="additional-info" class="info-content"></div>
+
+            <!-- Keyboard shortcuts hint -->
+            <div class="viewer-shortcuts">
+                <span><kbd>←</kbd><kbd>→</kbd> Navigate</span>
+                <span><kbd>Esc</kbd> Close</span>
             </div>
+        </aside>
+    </div>
+
+    <!-- Thumbnail strip -->
+    <div class="viewer-thumbnails">
+        <div id="thumbnail-strip" class="thumbnail-strip">
+            <!-- Thumbnails will be populated by JS -->
         </div>
     </div>
-    <button id="close-viewer" class="close-button">×</button>
-    <button id="prev-image" class="nav-button prev">❮</button>
-    <button id="next-image" class="nav-button next">❯</button>
 </div>
 
 <!-- Hidden div containing the encoded image data with UTF-8 support -->

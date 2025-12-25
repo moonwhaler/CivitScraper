@@ -1,57 +1,80 @@
 <div class="model-info-bar">
     <div class="model-info-item">
-        <span class="model-info-label">Type</span>
-        <span class="model-info-value">{{ model_type }}</span>
+        <span class="model-info-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+        </span>
+        <div class="model-info-text">
+            <span class="model-info-label">Type</span>
+            <span class="model-info-value type-value type-{{ model_type|lower|replace(' ', '-') }}">{{ model_type }}</span>
+        </div>
     </div>
 
     {% if metadata.baseModel %}
     <div class="model-info-item">
-        <span class="model-info-label">Base Model</span>
-        <span class="model-info-value">{{ metadata.baseModel }}</span>
+        <span class="model-info-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+        </span>
+        <div class="model-info-text">
+            <span class="model-info-label">Base Model</span>
+            <span class="model-info-value">{{ metadata.baseModel }}</span>
+        </div>
     </div>
     {% endif %}
 
     {% if stats and stats.rating %}
     <div class="model-info-item">
-        <span class="model-info-label">Rating</span>
-        <span class="model-info-value">
-            <span class="rating">
-                {% for i in range(5) %}
-                    {% if i < (stats.rating|int) %}
-                        ★
-                    {% elif i < stats.rating and i >= (stats.rating|int) %}
-                        ★
-                    {% else %}
-                        ☆
-                    {% endif %}
-                {% endfor %}
-                <span class="rating-count">({{ stats.ratingCount|default(0) }})</span>
-                {% if stats.weighted_rating %}
-                <span class="weighted-rating">[{{ "%.1f"|format(stats.weighted_rating) }}]</span>
-                {% endif %}
-            </span>
+        <span class="model-info-icon star-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
         </span>
+        <div class="model-info-text">
+            <span class="model-info-label">Rating</span>
+            <span class="model-info-value">
+                <span class="rating-display">
+                    <span class="rating-value">{{ "%.1f"|format(stats.rating) }}</span>
+                    <span class="rating-stars">
+                        {% for i in range(5) %}
+                            {% if i < (stats.rating|int) %}
+                                <span class="star filled">★</span>
+                            {% elif i < stats.rating and i >= (stats.rating|int) %}
+                                <span class="star filled">★</span>
+                            {% else %}
+                                <span class="star">☆</span>
+                            {% endif %}
+                        {% endfor %}
+                    </span>
+                    <span class="rating-count">({{ stats.ratingCount|default(0) }})</span>
+                </span>
+            </span>
+        </div>
     </div>
     {% endif %}
 
     {% if stats and stats.thumbsUpCount %}
     <div class="model-info-item">
-        <span class="model-info-label">Thumbs Up</span>
-        <span class="model-info-value">
-            <span class="thumbs-up">
+        <span class="model-info-icon thumbs-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
+        </span>
+        <div class="model-info-text">
+            <span class="model-info-label">Thumbs Up</span>
+            <span class="model-info-value">
                 {{ stats.thumbsUpCount }}
                 {% if stats.weighted_thumbsup %}
-                <span class="weighted-thumbs">[{{ "%.1f"|format(stats.weighted_thumbsup) }}]</span>
+                <span class="weighted-score">[{{ "%.1f"|format(stats.weighted_thumbsup) }}]</span>
                 {% endif %}
             </span>
-        </span>
+        </div>
     </div>
     {% endif %}
 
     {% if stats and stats.downloadCount %}
     <div class="model-info-item">
-        <span class="model-info-label">Downloads</span>
-        <span class="model-info-value">{{ stats.downloadCount }}</span>
+        <span class="model-info-icon download-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        </span>
+        <div class="model-info-text">
+            <span class="model-info-label">Downloads</span>
+            <span class="model-info-value download-value">{{ stats.downloadCount }}</span>
+        </div>
     </div>
     {% endif %}
 </div>

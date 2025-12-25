@@ -10,4 +10,5 @@ fi
 
 # Start with debug enabled - and executing
 # all available jobs configured
-civitscraper --all-jobs
+#civitscraper --all-jobs
+civitscraper --job regenerate-html

@@ -4,9 +4,10 @@ Job executor for CivitScraper.
 This module handles executing jobs defined in the configuration.
 """
 
+import json
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from ..api.client import CivitAIClient
 from ..config.loader import merge_configs
@@ -132,6 +133,7 @@ class JobExecutor:
             # Get scan options
             skip_existing = job_config.get("skip_existing", True)
             verify_hashes = job_config.get("verify_hashes", True)
+            use_cached_metadata = job_config.get("use_cached_metadata", False)
 
             # Find model files
             logger.info(f"Finding model files for paths: {path_ids}")
@@ -144,10 +146,15 @@ class JobExecutor:
             for path_id, path_files_list in path_files.items():
                 files.extend(path_files_list)
 
-            # Filter files
+            # Filter files based on mode
             logger.info(f"Found {len(files)} files, filtering...")
-            filtered_files = filter_files(files, skip_existing)
-            logger.info(f"Filtered to {len(filtered_files)} files")
+            if use_cached_metadata:
+                # Only include files that HAVE existing metadata
+                filtered_files = [f for f in files if self._has_cached_metadata(f)]
+                logger.info(f"Found {len(filtered_files)} files with cached metadata")
+            else:
+                filtered_files = filter_files(files, skip_existing)
+                logger.info(f"Filtered to {len(filtered_files)} files")
 
             # Use the job configuration directly
             job_specific_config = self.config.copy()
@@ -183,6 +190,16 @@ class JobExecutor:
             # First, fetch metadata for all files without processing them
             for file_path in filtered_files:
                 try:
+                    # If using cached metadata, load from JSON file instead of API
+                    if use_cached_metadata:
+                        metadata = self._load_cached_metadata(file_path)
+                        if metadata:
+                            logger.debug(f"Loaded cached metadata for {file_path}")
+                            metadata_dict[file_path] = metadata
+                        else:
+                            logger.warning(f"No cached metadata found for {file_path}")
+                        continue
+
                     result = temp_processor.file_processor.process(
                         file_path, verify_hash=verify_hashes
                     )
@@ -222,8 +239,9 @@ class JobExecutor:
                     if new_path:
                         organized_files_mapping[orig_path] = new_path
 
-            # PHASE 3: Download images to appropriate paths
-            if metadata_dict:
+            # PHASE 3: Download images to appropriate paths (if enabled)
+            images_save = job_config.get("output", {}).get("images", {}).get("save", True)
+            if metadata_dict and images_save:
                 logger.info(f"Downloading images for {len(metadata_dict)} files")
                 for file_path, metadata in metadata_dict.items():
                     # Use organized path if available, otherwise use original path
@@ -231,6 +249,8 @@ class JobExecutor:
                     temp_processor.image_manager.download_images(
                         target_path, metadata, force_refresh=force_refresh
                     )
+            elif metadata_dict and not images_save:
+                logger.info("Skipping image downloads (images.save is false)")
 
             # PHASE 4: Process remaining tasks (metadata, HTML)
             logger.info(f"Processing {len(metadata_dict)} files with metadata")
@@ -341,8 +361,6 @@ class JobExecutor:
                 return False
 
             # Load loras.json
-            import json
-
             with open(loras_file, "r") as f:
                 loras_data = json.load(f)
 
@@ -435,3 +453,38 @@ class JobExecutor:
         except Exception as e:
             logger.error(f"Error executing sync-lora-triggers job {job_name}: {e}")
             return False
+
+    def _has_cached_metadata(self, file_path: str) -> bool:
+        """
+        Check if a model file has cached metadata.
+
+        Args:
+            file_path: Path to model file
+
+        Returns:
+            True if metadata file exists, False otherwise
+        """
+        metadata_path = os.path.splitext(file_path)[0] + ".json"
+        return os.path.isfile(metadata_path)
+
+    def _load_cached_metadata(self, file_path: str) -> Optional[Dict[str, Any]]:
+        """
+        Load cached metadata from JSON file.
+
+        Args:
+            file_path: Path to model file
+
+        Returns:
+            Metadata dictionary or None if not found
+        """
+        metadata_path = os.path.splitext(file_path)[0] + ".json"
+        if not os.path.isfile(metadata_path):
+            return None
+
+        try:
+            with open(metadata_path, "r", encoding="utf-8") as f:
+                data: Dict[str, Any] = json.load(f)
+                return data
+        except Exception as e:
+            logger.error(f"Error loading cached metadata from {metadata_path}: {e}")
+            return None
