@@ -28,6 +28,87 @@ PreviewImageResult = Optional[PreviewImageDict]
 logger = logging.getLogger(__name__)
 
 
+class VersionIndexCache:
+    """
+    Cache for version ID to HTML path mappings.
+
+    Builds an index of version_id -> html_path for a directory once,
+    avoiding repeated JSON file scanning.
+    """
+
+    def __init__(self):
+        """Initialize the version index cache."""
+        self._cache: Dict[str, Dict[int, str]] = {}  # dir -> {version_id -> html_path}
+
+    def get_html_path(self, search_dir: str, version_id: Optional[int]) -> Optional[str]:
+        """
+        Get HTML path for a version ID, using cached index if available.
+
+        Args:
+            search_dir: Directory to search in
+            version_id: Version ID to find
+
+        Returns:
+            Absolute path to HTML file if found, None otherwise
+        """
+        if not version_id or not os.path.isdir(search_dir):
+            return None
+
+        # Build index for this directory if not cached
+        if search_dir not in self._cache:
+            self._build_index(search_dir)
+
+        return self._cache.get(search_dir, {}).get(version_id)
+
+    def _build_index(self, search_dir: str) -> None:
+        """
+        Build version ID -> HTML path index for a directory.
+
+        Args:
+            search_dir: Directory to index
+        """
+        index: Dict[int, str] = {}
+
+        try:
+            for filename in os.listdir(search_dir):
+                if not filename.endswith(".json"):
+                    continue
+
+                json_path = os.path.join(search_dir, filename)
+                try:
+                    with open(json_path, "r", encoding="utf-8") as f:
+                        metadata = json.load(f)
+                        vid = metadata.get("id")
+                        if vid:
+                            html_filename = os.path.splitext(filename)[0] + ".html"
+                            html_path = os.path.join(search_dir, html_filename)
+                            if os.path.isfile(html_path):
+                                index[vid] = os.path.abspath(html_path)
+                except (json.JSONDecodeError, IOError):
+                    continue
+        except OSError as e:
+            logger.debug(f"Error building version index for {search_dir}: {e}")
+
+        self._cache[search_dir] = index
+        logger.debug(f"Built version index for {search_dir}: {len(index)} versions")
+
+    def invalidate(self, search_dir: Optional[str] = None) -> None:
+        """
+        Invalidate cached index.
+
+        Args:
+            search_dir: Directory to invalidate, or None for all
+        """
+        if search_dir:
+            self._cache.pop(search_dir, None)
+        else:
+            self._cache.clear()
+
+
+# Global version index cache for reuse across context builders
+_version_index_cache = VersionIndexCache()
+
+
 class ContextBuilder:
     """Builder for template context."""
 
@@ -267,6 +348,8 @@ class ContextBuilder:
         """
         Count how many sibling versions have local HTML files.
 
+        Uses the global version index cache for efficient lookups.
+
         Args:
             current_file_path: Path to the current model file
             sibling_versions: List of sibling version data from metadata
@@ -282,7 +365,7 @@ class ContextBuilder:
 
         for version in sibling_versions:
             version_id = version.get("id")
-            if version_id and self._find_local_version_html(current_dir, version_id):
+            if version_id and _version_index_cache.get_html_path(current_dir, version_id):
                 count += 1
 
         return max(count, 1)  # At least 1 (the current version)
@@ -295,6 +378,8 @@ class ContextBuilder:
     ) -> List[Dict[str, Any]]:
         """
         Build context for sibling versions, determining local availability.
+
+        Uses the global version index cache for efficient lookups.
 
         Args:
             current_file_path: Path to the current model file
@@ -314,8 +399,8 @@ class ContextBuilder:
             version_data = version.copy()
             version_id = version.get("id")
 
-            # Check if there's a local HTML file for this version
-            local_html_path = self._find_local_version_html(current_dir, version_id)
+            # Check if there's a local HTML file for this version (using cached index)
+            local_html_path = _version_index_cache.get_html_path(current_dir, version_id)
 
             if local_html_path:
                 version_data["is_local"] = True
@@ -325,15 +410,14 @@ class ContextBuilder:
                 # Build CivitAI URL for remote versions
                 # URL format: https://civitai.com/models/{modelId}?modelVersionId={versionId}
                 if parent_model_id:
-                    version_data["link"] = (
-                        f"https://civitai.com/models/{parent_model_id}"
-                        f"?modelVersionId={version_id}"
-                    )
+                    base_url = "https://civitai.com/models"
+                    version_data[
+                        "link"
+                    ] = f"{base_url}/{parent_model_id}?modelVersionId={version_id}"
                 else:
                     # Fallback if no modelId - this shouldn't happen in practice
-                    version_data["link"] = (
-                        f"https://civitai.com/models?modelVersionId={version_id}"
-                    )
+                    base_url = "https://civitai.com/models"
+                    version_data["link"] = f"{base_url}?modelVersionId={version_id}"
 
             result.append(version_data)
 
@@ -343,8 +427,7 @@ class ContextBuilder:
         """
         Find a local HTML file for a given version ID.
 
-        Searches JSON metadata files in the directory to find one matching
-        the version ID, then returns the corresponding HTML path.
+        Uses the global version index cache for efficient lookups.
 
         Args:
             search_dir: Directory to search in
@@ -353,31 +436,7 @@ class ContextBuilder:
         Returns:
             Absolute path to local HTML file if found, None otherwise
         """
-        if not version_id or not os.path.isdir(search_dir):
-            return None
-
-        try:
-            # Search for JSON metadata files in the directory
-            for filename in os.listdir(search_dir):
-                if not filename.endswith(".json"):
-                    continue
-
-                json_path = os.path.join(search_dir, filename)
-                try:
-                    with open(json_path, "r", encoding="utf-8") as f:
-                        metadata = json.load(f)
-                        if metadata.get("id") == version_id:
-                            # Found matching version, check for HTML file
-                            html_filename = os.path.splitext(filename)[0] + ".html"
-                            html_path = os.path.join(search_dir, html_filename)
-                            if os.path.isfile(html_path):
-                                return os.path.abspath(html_path)
-                except (json.JSONDecodeError, IOError):
-                    continue
-        except OSError as e:
-            logger.debug(f"Error searching for local version HTML: {e}")
-
-        return None
+        return _version_index_cache.get_html_path(search_dir, version_id)
 
     def _load_metadata(self, metadata_path: str) -> Optional[Dict[str, Any]]:
         """Load metadata from a JSON file, checking both organized and original locations."""

@@ -179,19 +179,39 @@ class HTMLGenerator:
         except Exception as e:
             logger.error(f"Error copying assets: {e}")
 
-        # Build model data list using ContextBuilder (which now returns raw data)
-        # Note: build_gallery_context might need adjustment if its internal processing
-        # relies heavily on output_path for relative paths *within* the model data itself.
-        # For now, assume it returns the necessary data per model.
-        models_data = []
-        for file_path in all_file_paths:
-            model_data = self.context_builder._process_gallery_model(file_path, output_path)
-            if model_data:
-                models_data.append(model_data)
+        # Build model data list using ContextBuilder with parallel processing
+        # for better performance with large model collections
+        import concurrent.futures
 
-            data_js_path = os.path.join(data_output_dir, "models_data.js")
-            # Default empty
-            js_content = "const allModelsData = [];"
+        models_data = []
+
+        # Use parallel processing for large collections
+        if len(all_file_paths) > 10:
+            max_workers = min(8, len(all_file_paths))
+            logger.debug(f"Processing {len(all_file_paths)} models with {max_workers} workers")
+
+            def process_model(fp: str) -> Optional[Dict[str, Any]]:
+                return self.context_builder._process_gallery_model(fp, output_path)
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {executor.submit(process_model, fp): fp for fp in all_file_paths}
+                for future in concurrent.futures.as_completed(futures):
+                    try:
+                        model_data = future.result()
+                        if model_data:
+                            models_data.append(model_data)
+                    except Exception as e:
+                        logger.error(f"Error processing model for gallery: {e}")
+        else:
+            # Sequential processing for small collections
+            for file_path in all_file_paths:
+                model_data = self.context_builder._process_gallery_model(file_path, output_path)
+                if model_data:
+                    models_data.append(model_data)
+
+        data_js_path = os.path.join(data_output_dir, "models_data.js")
+        # Default empty
+        js_content = "const allModelsData = [];"
         try:
             # Serialize directly to JSON, no special escaping needed for JS file
             json_string = json.dumps(models_data, separators=(",", ":"))
