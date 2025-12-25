@@ -672,5 +672,223 @@ document.querySelectorAll('.copy-location-btn').forEach(button => {
         }
     });
 });
+
+// Versions Carousel (Desktop) and Expand/Collapse (Mobile)
+(function() {
+    const versionsCard = document.querySelector('.versions-card');
+    if (!versionsCard) return;
+
+    const carousel = versionsCard.querySelector('.versions-carousel');
+    const wrapper = versionsCard.querySelector('.versions-carousel-wrapper');
+    const prevBtn = versionsCard.querySelector('.carousel-prev');
+    const nextBtn = versionsCard.querySelector('.carousel-next');
+    const expandBtn = versionsCard.querySelector('.versions-expand-btn');
+    const nav = versionsCard.querySelector('.carousel-nav');
+
+    if (!carousel || !wrapper) return;
+
+    const cards = carousel.querySelectorAll('.related-version-card');
+    if (cards.length === 0) return;
+
+    // Carousel state
+    let currentOffset = 0;
+    let isDragging = false;
+    let startX = 0;
+    let scrollLeft = 0;
+    let dragDistance = 0;
+
+    // Get actual card width from DOM
+    function getCardMetrics() {
+        const firstCard = cards[0];
+        if (!firstCard) return { width: 220, gap: 12 };
+        const style = window.getComputedStyle(firstCard);
+        const width = firstCard.offsetWidth;
+        const gap = parseInt(window.getComputedStyle(carousel).gap) || 12;
+        return { width, gap, total: width + gap };
+    }
+
+    // Calculate visible cards based on container width
+    function getVisibleCards() {
+        const { total } = getCardMetrics();
+        const wrapperWidth = wrapper.offsetWidth;
+        return Math.max(1, Math.floor(wrapperWidth / total));
+    }
+
+    // Get max scroll offset
+    function getMaxOffset() {
+        const visibleCards = getVisibleCards();
+        return Math.max(0, cards.length - visibleCards);
+    }
+
+    // Update carousel position
+    function updateCarousel(smooth = true) {
+        const { total } = getCardMetrics();
+        carousel.style.transition = smooth ? 'transform 0.3s ease' : 'none';
+        carousel.style.transform = `translateX(-${currentOffset * total}px)`;
+        updateButtons();
+    }
+
+    // Update button states
+    function updateButtons() {
+        if (!prevBtn || !nextBtn || !nav) return;
+
+        const maxOffset = getMaxOffset();
+
+        prevBtn.disabled = currentOffset <= 0;
+        nextBtn.disabled = currentOffset >= maxOffset;
+
+        // Hide nav if all cards visible, show otherwise
+        if (cards.length <= getVisibleCards()) {
+            nav.style.opacity = '0';
+            nav.style.pointerEvents = 'none';
+        } else {
+            nav.style.opacity = '1';
+            nav.style.pointerEvents = 'auto';
+        }
+    }
+
+    // Navigation handlers
+    if (prevBtn) {
+        prevBtn.addEventListener('click', () => {
+            if (currentOffset > 0) {
+                currentOffset--;
+                updateCarousel();
+            }
+        });
+    }
+
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+            const maxOffset = getMaxOffset();
+            if (currentOffset < maxOffset) {
+                currentOffset++;
+                updateCarousel();
+            }
+        });
+    }
+
+    // Mouse drag support
+    wrapper.addEventListener('mousedown', (e) => {
+        // Only on desktop (check if nav is visible)
+        if (window.innerWidth <= 768) return;
+        if (getMaxOffset() === 0) return; // No scrolling needed
+
+        isDragging = true;
+        startX = e.pageX;
+        dragDistance = 0;
+        carousel.style.cursor = 'grabbing';
+        carousel.style.transition = 'none';
+    });
+
+    wrapper.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+
+        const x = e.pageX;
+        const walk = x - startX;
+        dragDistance = walk;
+
+        const { total } = getCardMetrics();
+        const currentTranslate = -currentOffset * total + walk;
+        carousel.style.transform = `translateX(${currentTranslate}px)`;
+    });
+
+    wrapper.addEventListener('mouseup', endDrag);
+    wrapper.addEventListener('mouseleave', endDrag);
+
+    function endDrag() {
+        if (!isDragging) return;
+        isDragging = false;
+        carousel.style.cursor = 'grab';
+
+        const { total } = getCardMetrics();
+        const threshold = total / 3; // Need to drag 1/3 of card width
+
+        if (Math.abs(dragDistance) > threshold) {
+            if (dragDistance > 0 && currentOffset > 0) {
+                currentOffset--;
+            } else if (dragDistance < 0 && currentOffset < getMaxOffset()) {
+                currentOffset++;
+            }
+        }
+
+        updateCarousel(true);
+    }
+
+    // Touch swipe support
+    let touchStartX = 0;
+    let touchDragDistance = 0;
+
+    wrapper.addEventListener('touchstart', (e) => {
+        if (window.innerWidth <= 768) return; // Mobile uses collapsible
+        if (getMaxOffset() === 0) return;
+
+        touchStartX = e.touches[0].pageX;
+        touchDragDistance = 0;
+        carousel.style.transition = 'none';
+    }, { passive: true });
+
+    wrapper.addEventListener('touchmove', (e) => {
+        if (window.innerWidth <= 768) return;
+        if (!touchStartX) return;
+
+        const x = e.touches[0].pageX;
+        touchDragDistance = x - touchStartX;
+
+        const { total } = getCardMetrics();
+        const currentTranslate = -currentOffset * total + touchDragDistance;
+        carousel.style.transform = `translateX(${currentTranslate}px)`;
+    }, { passive: true });
+
+    wrapper.addEventListener('touchend', () => {
+        if (window.innerWidth <= 768) return;
+
+        const { total } = getCardMetrics();
+        const threshold = total / 3;
+
+        if (Math.abs(touchDragDistance) > threshold) {
+            if (touchDragDistance > 0 && currentOffset > 0) {
+                currentOffset--;
+            } else if (touchDragDistance < 0 && currentOffset < getMaxOffset()) {
+                currentOffset++;
+            }
+        }
+
+        touchStartX = 0;
+        updateCarousel(true);
+    });
+
+    // Set initial cursor style
+    if (getMaxOffset() > 0) {
+        wrapper.style.cursor = 'grab';
+    }
+
+    // Mobile expand/collapse
+    if (expandBtn) {
+        expandBtn.addEventListener('click', () => {
+            const isExpanded = versionsCard.classList.toggle('expanded');
+            expandBtn.setAttribute('aria-expanded', isExpanded.toString());
+        });
+    }
+
+    // Handle window resize
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            const maxOffset = getMaxOffset();
+            if (currentOffset > maxOffset) {
+                currentOffset = maxOffset;
+            }
+            updateCarousel(false);
+
+            // Update cursor
+            wrapper.style.cursor = maxOffset > 0 ? 'grab' : 'default';
+        }, 100);
+    });
+
+    // Initial update
+    updateButtons();
+})();
 </script>
 {% endblock %}

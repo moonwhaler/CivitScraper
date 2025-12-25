@@ -1190,25 +1190,95 @@
 }
 
 /* ========================================
-   Related Versions
+   Versions Card - Hybrid Carousel/Collapsible
    ======================================== */
+.versions-card {
+    overflow: hidden;
+}
+
+.versions-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.versions-header .section-title {
+    margin-bottom: 0;
+}
+
 .version-count {
     font-weight: 400;
     color: var(--text-secondary);
     font-size: 0.9em;
 }
 
-.related-versions-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 12px;
+/* Carousel Navigation Buttons */
+.carousel-nav {
+    display: flex;
+    gap: 8px;
+    transition: opacity 0.2s ease;
 }
 
+.carousel-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.carousel-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: var(--accent-primary);
+    transform: scale(1.05);
+}
+
+.carousel-btn:active:not(:disabled) {
+    transform: scale(0.95);
+}
+
+.carousel-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* Carousel Wrapper & Track */
+.versions-carousel-wrapper {
+    overflow: hidden;
+    margin: 0 -4px;
+    padding: 4px;
+    cursor: grab;
+    user-select: none;
+}
+
+.versions-carousel-wrapper:active {
+    cursor: grabbing;
+}
+
+.versions-carousel {
+    display: flex;
+    gap: 12px;
+    transition: transform 0.3s ease;
+}
+
+.versions-carousel-wrapper:active .versions-carousel {
+    transition: none;
+}
+
+/* Version Cards */
 .related-version-card {
+    flex: 0 0 170px;
     display: block;
     background: var(--bg-card);
-    border-radius: 12px;
-    padding: 16px;
+    border-radius: 10px;
+    padding: 12px;
     border: 1px solid rgba(255, 255, 255, 0.06);
     text-decoration: none;
     color: inherit;
@@ -1233,24 +1303,30 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 6px;
+    margin-bottom: 8px;
 }
 
 .version-name {
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     color: var(--text-primary);
     line-height: 1.3;
+    /* Truncate long names */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
 }
 
 .version-badge {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    border-radius: 6px;
-    font-size: 0.7rem;
+    gap: 3px;
+    padding: 3px 6px;
+    border-radius: 5px;
+    font-size: 0.65rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.3px;
@@ -1270,32 +1346,137 @@
 .version-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    font-size: 0.8rem;
+    gap: 6px;
+    font-size: 0.75rem;
     color: var(--text-secondary);
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 
 .version-base-model {
     background: rgba(255, 255, 255, 0.06);
-    padding: 3px 8px;
+    padding: 2px 6px;
     border-radius: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100px;
 }
 
 .version-downloads {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
 }
 
 .version-downloads svg {
     opacity: 0.7;
+    width: 10px;
+    height: 10px;
 }
 
 .version-date {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: var(--text-secondary);
     opacity: 0.7;
+}
+
+/* Mobile Expand Button */
+.versions-expand-btn {
+    width: 100%;
+    padding: 12px 16px;
+    margin-top: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.versions-expand-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-primary);
+}
+
+.versions-expand-btn .collapse-text {
+    display: none;
+}
+
+.versions-expand-btn[aria-expanded="true"] .expand-text {
+    display: none;
+}
+
+.versions-expand-btn[aria-expanded="true"] .collapse-text {
+    display: inline;
+}
+
+.versions-expand-btn .expand-icon {
+    transition: transform 0.3s ease;
+}
+
+.versions-expand-btn[aria-expanded="true"] .expand-icon {
+    transform: rotate(180deg);
+}
+
+/* Desktop/Mobile visibility */
+.desktop-only {
+    display: flex;
+}
+
+.mobile-only {
+    display: none;
+}
+
+/* Mobile styles */
+@media (max-width: 768px) {
+    .desktop-only {
+        display: none !important;
+    }
+
+    .mobile-only {
+        display: flex;
+    }
+
+    .versions-carousel-wrapper {
+        overflow: visible;
+        cursor: default;
+        user-select: auto;
+    }
+
+    .versions-carousel-wrapper:active {
+        cursor: default;
+    }
+
+    .versions-carousel {
+        flex-wrap: wrap;
+        gap: 10px;
+        transform: none !important;
+    }
+
+    .related-version-card {
+        flex: 1 1 calc(50% - 5px);
+        min-width: 130px;
+    }
+
+    /* Collapsed state - show only first 4 */
+    .versions-card:not(.expanded) .related-version-card:nth-child(n+5) {
+        display: none;
+    }
+
+    .versions-card.expanded .related-version-card {
+        display: block;
+    }
+}
+
+@media (max-width: 480px) {
+    .related-version-card {
+        flex: 1 1 100%;
+    }
 }
 
 /* ========================================
