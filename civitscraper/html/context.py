@@ -159,6 +159,28 @@ class ContextBuilder:
             file_path, metadata.get("siblingVersions", []), parent_model_id
         )
 
+        # Calculate relative path to gallery
+        html_path = self.path_manager.get_html_path(file_path)
+        html_dir = os.path.dirname(os.path.abspath(html_path))
+
+        # Get gallery path from config, default to index.html in model directory
+        gallery_output_path = (
+            self.config.get("output", {})
+            .get("metadata", {})
+            .get("html", {})
+            .get("gallery_path", "index.html")
+        )
+
+        # Calculate relative path from model HTML to gallery
+        gallery_path = "index.html"
+        try:
+            gallery_abs_path = os.path.abspath(gallery_output_path)
+            gallery_path = os.path.relpath(gallery_abs_path, html_dir)
+        except ValueError:
+            # On Windows, relpath can fail if paths are on different drives
+            # Fall back to absolute path
+            gallery_path = os.path.abspath(gallery_output_path)
+
         context = {
             "title": model_name,
             "model_name": model_name,
@@ -173,6 +195,7 @@ class ContextBuilder:
             "local_file_path": os.path.abspath(file_path),
             "sibling_versions": sibling_versions,
             "parent_model": metadata.get("parentModel", {}),
+            "gallery_path": gallery_path,
         }
 
         return context
@@ -411,9 +434,9 @@ class ContextBuilder:
                 # URL format: https://civitai.com/models/{modelId}?modelVersionId={versionId}
                 if parent_model_id:
                     base_url = "https://civitai.com/models"
-                    version_data[
-                        "link"
-                    ] = f"{base_url}/{parent_model_id}?modelVersionId={version_id}"
+                    version_data["link"] = (
+                        f"{base_url}/{parent_model_id}?modelVersionId={version_id}"
+                    )
                 else:
                     # Fallback if no modelId - this shouldn't happen in practice
                     base_url = "https://civitai.com/models"

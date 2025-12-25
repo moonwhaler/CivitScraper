@@ -172,9 +172,13 @@ class JobExecutor:
                     # For other values, override them
                     job_specific_config[key] = value
 
+            # Create a temporary HTML generator with job-specific configuration
+            # This ensures the gallery_path and other job settings are used
+            temp_html_generator = HTMLGenerator(job_specific_config)
+
             # Create a temporary processor with the job-specific configuration
             temp_processor = ModelProcessor(
-                job_specific_config, self.api_client, self.html_generator
+                job_specific_config, self.api_client, temp_html_generator
             )
 
             # Get force_refresh setting from job-specific scanner configuration
@@ -285,7 +289,7 @@ class JobExecutor:
                 logger.info(f"Processing {len(items_to_process)} files with {max_workers} workers")
 
                 def process_single_item(
-                    item: Tuple[str, Dict[str, Any]]
+                    item: Tuple[str, Dict[str, Any]],
                 ) -> Tuple[str, Optional[Dict[str, Any]]]:
                     path, meta = item
                     processed = temp_processor.save_and_process_with_metadata(path, meta)
@@ -328,14 +332,11 @@ class JobExecutor:
                 logger.info(f"Generating gallery at {gallery_path}")
                 logger.debug(f"Include existing model cards: {include_existing}")
 
-                # Create a temporary HTML generator with the job-specific configuration
-                # and pass the path_ids to use for finding existing HTML files
-                temp_html_generator = HTMLGenerator(job_specific_config)
-
                 # Store the path_ids in the config for use by find_html_files
                 if include_existing:
                     job_specific_config["gallery_path_ids"] = path_ids
 
+                # Reuse the temp_html_generator already created with job_specific_config
                 temp_html_generator.generate_gallery(
                     list(metadata_dict.keys()),
                     gallery_path,
