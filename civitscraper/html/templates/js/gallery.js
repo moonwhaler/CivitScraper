@@ -264,15 +264,23 @@
 
     const counts = computeFacetCounts();
 
-    // Count models with multiple local versions
-    const multiVersionCount = allModelsData.filter(model =>
-      (model.local_version_count || 1) > 1
-    ).length;
+    // Count parent models with multiple local versions (for grouping)
+    const modelGroups = new Map();
+    allModelsData.forEach(model => {
+      const parentId = model.model_id;
+      if (parentId) {
+        if (!modelGroups.has(parentId)) {
+          modelGroups.set(parentId, 0);
+        }
+        modelGroups.set(parentId, modelGroups.get(parentId) + 1);
+      }
+    });
+    const multiVersionGroupCount = Array.from(modelGroups.values()).filter(count => count > 1).length;
 
     let html = '';
 
-    // Add Multiple Local Versions toggle at the top
-    if (multiVersionCount > 0) {
+    // Add Group Local Versions toggle at the top
+    if (multiVersionGroupCount > 0) {
       html += `
         <div class="facet-section toggle-section">
           <label class="facet-toggle-item ${filterState.multipleVersionsOnly ? 'active' : ''}">
@@ -282,9 +290,9 @@
             <span class="facet-toggle-switch"></span>
             <span class="facet-toggle-label">
               <span class="facet-icon">📦</span>
-              Multiple Local Versions
+              Group Local Versions
             </span>
-            <span class="facet-count">${multiVersionCount}</span>
+            <span class="facet-count">${multiVersionGroupCount}</span>
           </label>
         </div>
       `;
@@ -427,8 +435,8 @@
     if (filterState.multipleVersionsOnly) {
       pillsHtml += `
         <span class="filter-pill" data-filter="multipleVersions">
-          <span class="pill-category">Filter:</span>
-          <span class="pill-value">Multiple Local Versions</span>
+          <span class="pill-category">View:</span>
+          <span class="pill-value">Grouped Versions</span>
           <button class="pill-remove" title="Remove filter">×</button>
         </span>
       `;
@@ -541,9 +549,25 @@
     const rating = model.stats?.rating ? parseFloat(model.stats.rating).toFixed(1) : '0';
     const ratingCount = model.stats?.rating_count || 0;
     const downloads = model.stats?.downloads || 0;
+    const mergedCount = model.merged_count || 0;
+
+    // Build merged versions list for tooltip/dropdown
+    let mergedVersionsHtml = '';
+    if (mergedCount > 1 && model.merged_versions) {
+      const versionsList = model.merged_versions
+        .map(v => `<a href="${v.html_path}" class="merged-version-link">${escapeHTML(v.version || v.name)}</a>`)
+        .join('');
+      mergedVersionsHtml = `
+        <div class="merged-versions-badge" title="${mergedCount} local versions">
+          <span class="merged-count">${mergedCount} versions</span>
+          <div class="merged-versions-dropdown">
+            ${versionsList}
+          </div>
+        </div>`;
+    }
 
     return `
-      <div class="model-card"
+      <div class="model-card ${mergedCount > 1 ? 'has-merged-versions' : ''}"
           data-model-id="${escapeHTML(model.model_id)}"
           data-version-id="${escapeHTML(model.version_id)}"
           data-name="${escapeHTML(model.name?.toLowerCase())}"
@@ -587,6 +611,7 @@
                   ${model.version ? `<div class="model-version">v${escapeHTML(model.version)}</div>` : ''}
               </div>
           </a>
+          ${mergedVersionsHtml}
       </div>`;
   }
 
@@ -730,11 +755,40 @@
       );
     }
 
-    // 5. Apply Multiple Local Versions Filter
+    // 5. Apply Multiple Local Versions Filter (merges models by parent model ID)
     if (filterState.multipleVersionsOnly) {
-      filteredModels = filteredModels.filter(model =>
-        (model.local_version_count || 1) > 1
-      );
+      // Group models by parent model_id
+      const modelGroups = new Map();
+      filteredModels.forEach(model => {
+        const parentId = model.model_id;
+        if (!parentId) return; // Skip models without parent ID
+
+        if (!modelGroups.has(parentId)) {
+          modelGroups.set(parentId, []);
+        }
+        modelGroups.get(parentId).push(model);
+      });
+
+      // Filter to only groups with multiple local versions and pick representative
+      const mergedModels = [];
+      modelGroups.forEach((versions, parentId) => {
+        if (versions.length > 1) {
+          // Sort by downloads (descending) to pick the most popular version as representative
+          versions.sort((a, b) => {
+            const downloadsA = parseInt(a.stats?.downloads) || 0;
+            const downloadsB = parseInt(b.stats?.downloads) || 0;
+            return downloadsB - downloadsA;
+          });
+
+          // Use the most popular version as the representative
+          const representative = { ...versions[0] };
+          representative.merged_versions = versions;
+          representative.merged_count = versions.length;
+          mergedModels.push(representative);
+        }
+      });
+
+      filteredModels = mergedModels;
     }
 
     // 6. Apply Sorting

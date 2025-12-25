@@ -932,6 +932,80 @@
     color: var(--metadata-label-color);
 }
 
+/* Merged versions badge for grouped models */
+.merged-versions-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 10;
+}
+
+.merged-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.9), rgba(139, 92, 246, 0.9));
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 12px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+    transition: all 0.2s ease;
+}
+
+.merged-count::before {
+    content: "📦";
+    font-size: 0.8em;
+}
+
+.merged-versions-badge:hover .merged-count {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5);
+}
+
+.merged-versions-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    background: var(--card-background);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 6px 0;
+    min-width: 160px;
+    max-width: 250px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 100;
+}
+
+.merged-versions-badge:hover .merged-versions-dropdown {
+    display: block;
+}
+
+.merged-version-link {
+    display: block;
+    padding: 8px 14px;
+    color: var(--text-primary);
+    text-decoration: none;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.15s ease;
+}
+
+.merged-version-link:hover {
+    background: rgba(99, 102, 241, 0.2);
+    color: #818cf8;
+}
+
+.model-card.has-merged-versions {
+    position: relative;
+}
+
 .empty-gallery {
     text-align: center;
     padding: 50px 0;
