@@ -57,3 +57,6 @@ Thumbs.db
 
 # Pre-commit
 .pre-commit-config.yaml.bak
+
+# Documentation
+model-gallery-details.md

@@ -1,0 +1,45 @@
+{% if sibling_versions and sibling_versions|length > 1 %}
+<div class="card">
+    <h2 class="section-title">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; vertical-align: middle;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        Other Versions
+        <span class="version-count">({{ sibling_versions|length }})</span>
+    </h2>
+    <div class="related-versions-grid">
+        {% for version in sibling_versions %}
+        {% if not version.isCurrent %}
+        <a href="{{ version.link }}" class="related-version-card {{ 'local' if version.is_local else 'remote' }}" {% if not version.is_local %}target="_blank" rel="noopener noreferrer"{% endif %}>
+            <div class="version-header">
+                <span class="version-name">{{ version.name }}</span>
+                <span class="version-badge {{ 'local' if version.is_local else 'remote' }}">
+                    {% if version.is_local %}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    Local
+                    {% else %}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                    CivitAI
+                    {% endif %}
+                </span>
+            </div>
+            <div class="version-meta">
+                {% if version.baseModel %}
+                <span class="version-base-model">{{ version.baseModel }}</span>
+                {% endif %}
+                {% if version.downloadCount %}
+                <span class="version-downloads">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    {{ version.downloadCount|default(0) }}
+                </span>
+                {% endif %}
+            </div>
+            {% if version.createdAt %}
+            <div class="version-date">
+                {{ version.createdAt[:10] }}
+            </div>
+            {% endif %}
+        </a>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}

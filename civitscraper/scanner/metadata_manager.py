@@ -66,7 +66,8 @@ class MetadataManager:
                 if isinstance(response, dict)
                 else {
                     "id": response.id,
-                    "modelId": response.id,
+                    "modelId": response.model_id,  # Parent model ID
+                    "baseModel": response.base_model,
                     "name": response.name,
                     "createdAt": response.created_at.isoformat(),
                     "downloadUrl": response.download_url,

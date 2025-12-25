@@ -71,6 +71,13 @@ class ContextBuilder:
         # Filter files to show only the current model's files and add local path info
         filtered_metadata = self._filter_model_files(file_path, metadata)
 
+        # Build sibling versions context with local availability info
+        # Get parent model ID for building CivitAI URLs
+        parent_model_id = metadata.get("parentModel", {}).get("id") or metadata.get("modelId")
+        sibling_versions = self._build_sibling_versions_context(
+            file_path, metadata.get("siblingVersions", []), parent_model_id
+        )
+
         context = {
             "title": model_name,
             "model_name": model_name,
@@ -83,6 +90,8 @@ class ContextBuilder:
             "images_encoded": encoded_images,
             "metadata": filtered_metadata,
             "local_file_path": os.path.abspath(file_path),
+            "sibling_versions": sibling_versions,
+            "parent_model": metadata.get("parentModel", {}),
         }
 
         return context
@@ -157,6 +166,11 @@ class ContextBuilder:
         if not folder_name and parent_folder_path and parent_folder_path != os.path.sep:
             folder_name = os.path.basename(os.path.normpath(parent_folder_path))
 
+        # Count local versions (for filtering models with multiple local versions)
+        local_version_count = self._count_local_versions(
+            file_path, metadata.get("siblingVersions", [])
+        )
+
         return {
             "name": model_name,
             "type": metadata.get("model", {}).get("type", "Unknown"),
@@ -172,6 +186,7 @@ class ContextBuilder:
             "folder_name": folder_name,
             "model_id": metadata.get("modelId"),
             "version_id": metadata.get("id"),
+            "local_version_count": local_version_count,
         }
 
     def _filter_model_files(self, file_path: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
@@ -245,6 +260,124 @@ class ContextBuilder:
         )
 
         return filtered_metadata
+
+    def _count_local_versions(
+        self, current_file_path: str, sibling_versions: List[Dict[str, Any]]
+    ) -> int:
+        """
+        Count how many sibling versions have local HTML files.
+
+        Args:
+            current_file_path: Path to the current model file
+            sibling_versions: List of sibling version data from metadata
+
+        Returns:
+            Count of versions with local HTML files (including current)
+        """
+        if not sibling_versions:
+            return 1  # At least the current version is local
+
+        current_dir = os.path.dirname(os.path.abspath(current_file_path))
+        count = 0
+
+        for version in sibling_versions:
+            version_id = version.get("id")
+            if version_id and self._find_local_version_html(current_dir, version_id):
+                count += 1
+
+        return max(count, 1)  # At least 1 (the current version)
+
+    def _build_sibling_versions_context(
+        self,
+        current_file_path: str,
+        sibling_versions: List[Dict[str, Any]],
+        parent_model_id: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Build context for sibling versions, determining local availability.
+
+        Args:
+            current_file_path: Path to the current model file
+            sibling_versions: List of sibling version data from metadata
+            parent_model_id: Parent model ID for building CivitAI URLs
+
+        Returns:
+            List of sibling version dicts with local availability info
+        """
+        if not sibling_versions:
+            return []
+
+        result = []
+        current_dir = os.path.dirname(os.path.abspath(current_file_path))
+
+        for version in sibling_versions:
+            version_data = version.copy()
+            version_id = version.get("id")
+
+            # Check if there's a local HTML file for this version
+            local_html_path = self._find_local_version_html(current_dir, version_id)
+
+            if local_html_path:
+                version_data["is_local"] = True
+                version_data["link"] = local_html_path
+            else:
+                version_data["is_local"] = False
+                # Build CivitAI URL for remote versions
+                # URL format: https://civitai.com/models/{modelId}?modelVersionId={versionId}
+                if parent_model_id:
+                    version_data["link"] = (
+                        f"https://civitai.com/models/{parent_model_id}"
+                        f"?modelVersionId={version_id}"
+                    )
+                else:
+                    # Fallback if no modelId - this shouldn't happen in practice
+                    version_data["link"] = (
+                        f"https://civitai.com/models?modelVersionId={version_id}"
+                    )
+
+            result.append(version_data)
+
+        return result
+
+    def _find_local_version_html(self, search_dir: str, version_id: Optional[int]) -> Optional[str]:
+        """
+        Find a local HTML file for a given version ID.
+
+        Searches JSON metadata files in the directory to find one matching
+        the version ID, then returns the corresponding HTML path.
+
+        Args:
+            search_dir: Directory to search in
+            version_id: Version ID to find
+
+        Returns:
+            Absolute path to local HTML file if found, None otherwise
+        """
+        if not version_id or not os.path.isdir(search_dir):
+            return None
+
+        try:
+            # Search for JSON metadata files in the directory
+            for filename in os.listdir(search_dir):
+                if not filename.endswith(".json"):
+                    continue
+
+                json_path = os.path.join(search_dir, filename)
+                try:
+                    with open(json_path, "r", encoding="utf-8") as f:
+                        metadata = json.load(f)
+                        if metadata.get("id") == version_id:
+                            # Found matching version, check for HTML file
+                            html_filename = os.path.splitext(filename)[0] + ".html"
+                            html_path = os.path.join(search_dir, html_filename)
+                            if os.path.isfile(html_path):
+                                return os.path.abspath(html_path)
+                except (json.JSONDecodeError, IOError):
+                    continue
+        except OSError as e:
+            logger.debug(f"Error searching for local version HTML: {e}")
+
+        return None
 
     def _load_metadata(self, metadata_path: str) -> Optional[Dict[str, Any]]:
         """Load metadata from a JSON file, checking both organized and original locations."""

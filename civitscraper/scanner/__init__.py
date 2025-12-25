@@ -20,6 +20,7 @@ from .html_manager import HTMLManager
 from .image_manager import ImageManager
 from .metadata_manager import MetadataManager
 from .processor import ModelProcessor, ProcessingResult
+from .version_enricher import VersionEnricher
 
 __all__ = [
     "ModelProcessor",
@@ -30,6 +31,7 @@ __all__ = [
     "ImageManager",
     "HTMLManager",
     "BatchProcessor",
+    "VersionEnricher",
     "find_files",
     "find_model_files",
     "has_metadata",

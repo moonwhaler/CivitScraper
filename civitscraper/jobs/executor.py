@@ -219,6 +219,21 @@ class JobExecutor:
                 except Exception as e:
                     logger.error(f"Error fetching metadata for {file_path}: {e}")
 
+            # PHASE 1.5: Enrich with parent model data (deduplicated by modelId)
+            # Run enrichment if any metadata is missing siblingVersions
+            if metadata_dict:
+                needs_enrichment = any(
+                    "siblingVersions" not in meta for meta in metadata_dict.values()
+                )
+                if needs_enrichment:
+                    from ..scanner.version_enricher import VersionEnricher
+
+                    logger.info(f"Enriching {len(metadata_dict)} files with parent model data")
+                    enricher = VersionEnricher(self.api_client, job_specific_config)
+                    metadata_dict = enricher.enrich_batch(
+                        metadata_dict, force_refresh=force_refresh
+                    )
+
             # PHASE 2: Calculate target paths if organization is enabled
             organization_config = job_config.get("organization", {})
             if organization_config.get("enabled", False) and metadata_dict:
