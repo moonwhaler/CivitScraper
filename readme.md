@@ -1,6 +1,8 @@
 # CivitScraper: Tidy Up Your AI Models!
 
-![Example of a generated HTML file](civiscraper_html_example.png)
+![Example of a generated HTML file (overview)](civiscraper_html_overview_001.jpg)
+![Example of a generated HTML file (single LoRA)](civiscraper_html_overview_002.jpg)
+![Example of a generated HTML file (example image)](civiscraper_html_overview_003.jpg)
 
 Tired of digging through messy folders to find your AI models? **CivitScraper** is here to help! It automatically organizes your downloaded models (like LoRAs, Checkpoints, etc.), fetches useful info and preview images from CivitAI, and creates easy-to-browse HTML pages for your collection.
 
