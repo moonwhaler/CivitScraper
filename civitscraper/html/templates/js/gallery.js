@@ -130,7 +130,7 @@
     }
 
     const sortParam = params.get('sort');
-    if (sortParam && ['name', 'created_at', 'updated_at', 'downloads', 'rating'].includes(sortParam)) {
+    if (sortParam && ['name', 'created_at', 'updated_at', 'downloads', 'rating', 'file_modified'].includes(sortParam)) {
       filterState.sortBy = sortParam;
     }
 
@@ -577,7 +577,8 @@
           data-created-at="${escapeHTML(model.created_at || '')}"
           data-updated-at="${escapeHTML(model.updated_at || '')}"
           data-downloads="${downloads}"
-          data-rating="${rating}">
+          data-rating="${rating}"
+          data-file-modified="${escapeHTML(model.file_modified || '')}">
           <a href="${model.html_path}" class="model-link">
               ${model.preview_image_path
                   ? `<div class="model-preview">
@@ -653,7 +654,8 @@
           data-created-at="${escapeHTML(model.created_at || '')}"
           data-updated-at="${escapeHTML(model.updated_at || '')}"
           data-downloads="${downloads}"
-          data-rating="${rating}">
+          data-rating="${rating}"
+          data-file-modified="${escapeHTML(model.file_modified || '')}">
           <a href="${model.html_path}" class="model-link">
               <div class="model-list-preview">
                   ${model.preview_image_path
@@ -810,6 +812,7 @@
           break;
         case 'created_at':
         case 'updated_at':
+        case 'file_modified':
           valueA = a[filterState.sortBy] ? new Date(a[filterState.sortBy]).getTime() : 0;
           valueB = b[filterState.sortBy] ? new Date(b[filterState.sortBy]).getTime() : 0;
           break;

@@ -7,6 +7,7 @@ This module handles preparing context data for templates.
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TypedDict
 
 from .images import ImageHandler
@@ -275,6 +276,19 @@ class ContextBuilder:
             file_path, metadata.get("siblingVersions", [])
         )
 
+        # Get file modification time from the actual model file
+        file_modified = None
+        if is_html_file:
+            model_file = self._find_model_file(file_path)
+            mtime_path = model_file if model_file else file_path
+        else:
+            mtime_path = file_path
+        try:
+            mtime = os.path.getmtime(mtime_path)
+            file_modified = datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
+        except OSError:
+            logger.debug(f"Could not get mtime for {mtime_path}")
+
         return {
             "name": model_name,
             "type": metadata.get("model", {}).get("type", "Unknown"),
@@ -286,6 +300,7 @@ class ContextBuilder:
             "stats": model_stats,
             "created_at": metadata.get("createdAt"),
             "updated_at": metadata.get("updatedAt"),
+            "file_modified": file_modified,
             "version": metadata.get("name"),
             "folder_name": folder_name,
             "model_id": metadata.get("modelId"),
@@ -434,9 +449,9 @@ class ContextBuilder:
                 # URL format: https://civitai.com/models/{modelId}?modelVersionId={versionId}
                 if parent_model_id:
                     base_url = "https://civitai.com/models"
-                    version_data["link"] = (
-                        f"{base_url}/{parent_model_id}?modelVersionId={version_id}"
-                    )
+                    version_data[
+                        "link"
+                    ] = f"{base_url}/{parent_model_id}?modelVersionId={version_id}"
                 else:
                     # Fallback if no modelId - this shouldn't happen in practice
                     base_url = "https://civitai.com/models"
