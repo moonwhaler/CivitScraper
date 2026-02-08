@@ -212,7 +212,11 @@ class RequestHandler:
                     continue
 
                 if response.status_code >= 400:
-                    self.circuit_breaker.record_failure(endpoint_name)
+                    # Don't count 404 (Not Found) as a circuit breaker failure.
+                    # A 404 from hash lookup is a normal "model not found" response,
+                    # not an indication of API failure.
+                    if response.status_code != 404:
+                        self.circuit_breaker.record_failure(endpoint_name)
                     raise ClientError(response.status_code, response.text)
 
                 self.circuit_breaker.record_success(endpoint_name)
