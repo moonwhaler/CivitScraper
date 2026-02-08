@@ -120,6 +120,26 @@ def compute_file_hash(
                             break
                         hasher_obj.update(data)
                     return hasher_obj.hexdigest().upper()
+            elif algorithm.lower() == "blake3":
+                try:
+                    import blake3
+
+                    hasher = blake3.blake3()
+                    while True:
+                        data = f.read(chunk_size)
+                        if not data:
+                            break
+                        hasher.update(data)
+                    return str(hasher.hexdigest().upper())
+                except ImportError:
+                    logger.warning("blake3 module not installed, falling back to SHA-256")
+                    hasher_obj = hashlib.sha256()
+                    while True:
+                        data = f.read(chunk_size)
+                        if not data:
+                            break
+                        hasher_obj.update(data)
+                    return hasher_obj.hexdigest().upper()
             else:
                 hash_instance = (
                     hashlib.new(algorithm.lower())
