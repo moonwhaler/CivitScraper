@@ -1026,6 +1026,24 @@
     color: #818cf8;
 }
 
+/* Local vs remote (CivitAI) version links */
+.merged-version-link.local::before {
+    content: "💾 ";
+}
+
+.merged-version-link.remote {
+    color: var(--text-secondary, #9ca3af);
+}
+
+.merged-version-link.remote::before {
+    content: "🔗 ";
+}
+
+.merged-version-link.current {
+    font-weight: 600;
+    background: rgba(99, 102, 241, 0.12);
+}
+
 .model-card.has-merged-versions {
     position: relative;
 }

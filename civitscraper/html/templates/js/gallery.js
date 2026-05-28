@@ -43,8 +43,7 @@
     searchText: '',
     sortBy: 'name',
     sortDir: 'desc',
-    viewMode: 'grid',
-    multipleVersionsOnly: false
+    viewMode: 'grid'
   };
 
   // Facet metadata for rendering
@@ -144,11 +143,6 @@
       filterState.viewMode = viewParam;
     }
 
-    const multiVersionsParam = params.get('multiVersions');
-    if (multiVersionsParam === 'true') {
-      filterState.multipleVersionsOnly = true;
-    }
-
     console.log("Parsed URL state:", filterState);
   }
 
@@ -175,9 +169,6 @@
     }
     if (filterState.viewMode !== 'grid') {
       params.set('view', filterState.viewMode);
-    }
-    if (filterState.multipleVersionsOnly) {
-      params.set('multiVersions', 'true');
     }
 
     const hashString = params.toString();
@@ -263,39 +254,7 @@
 
     const counts = computeFacetCounts();
 
-    // Count parent models with multiple local versions (for grouping)
-    const modelGroups = new Map();
-    allModelsData.forEach(model => {
-      const parentId = model.model_id;
-      if (parentId) {
-        if (!modelGroups.has(parentId)) {
-          modelGroups.set(parentId, 0);
-        }
-        modelGroups.set(parentId, modelGroups.get(parentId) + 1);
-      }
-    });
-    const multiVersionGroupCount = Array.from(modelGroups.values()).filter(count => count > 1).length;
-
     let html = '';
-
-    // Add Group Local Versions toggle at the top
-    if (multiVersionGroupCount > 0) {
-      html += `
-        <div class="facet-section toggle-section">
-          <label class="facet-toggle-item ${filterState.multipleVersionsOnly ? 'active' : ''}">
-            <input type="checkbox"
-                   id="multiple-versions-toggle"
-                   ${filterState.multipleVersionsOnly ? 'checked' : ''}>
-            <span class="facet-toggle-switch"></span>
-            <span class="facet-toggle-label">
-              <span class="facet-icon">📦</span>
-              Group Local Versions
-            </span>
-            <span class="facet-count">${multiVersionGroupCount}</span>
-          </label>
-        </div>
-      `;
-    }
 
     // Render each facet section
     Object.entries(facetConfig).forEach(([facetKey, config]) => {
@@ -346,18 +305,6 @@
   }
 
   function attachFacetEventListeners() {
-    // Multiple versions toggle handler
-    const multiVersionsToggle = document.getElementById('multiple-versions-toggle');
-    if (multiVersionsToggle) {
-      multiVersionsToggle.addEventListener('change', function() {
-        filterState.multipleVersionsOnly = this.checked;
-        storePreference('multipleVersionsOnly', this.checked ? 'true' : 'false');
-        syncUrlState();
-        updateGallery();
-        renderFacets();
-      });
-    }
-
     // Facet header toggle
     facetContainer.querySelectorAll('.facet-header').forEach(header => {
       header.addEventListener('click', function() {
@@ -374,9 +321,6 @@
 
     // Checkbox change handlers
     facetContainer.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-      // Skip the multiple versions toggle (handled separately)
-      if (checkbox.id === 'multiple-versions-toggle') return;
-
       checkbox.addEventListener('change', function() {
         const facetKey = this.dataset.facet;
         const value = this.dataset.value;
@@ -384,17 +328,6 @@
         toggleFacetValue(facetKey, value, this.checked);
       });
     });
-  }
-
-  function updateMultipleVersionsToggle() {
-    const toggle = document.getElementById('multiple-versions-toggle');
-    if (toggle) {
-      toggle.checked = filterState.multipleVersionsOnly;
-      const label = toggle.closest('.facet-toggle-item');
-      if (label) {
-        label.classList.toggle('active', filterState.multipleVersionsOnly);
-      }
-    }
   }
 
   function toggleFacetValue(facetKey, value, isSelected) {
@@ -425,21 +358,9 @@
 
     const hasFilters = filterState.types.length > 0 ||
                        filterState.baseModels.length > 0 ||
-                       filterState.folders.length > 0 ||
-                       filterState.multipleVersionsOnly;
+                       filterState.folders.length > 0;
 
     let pillsHtml = '';
-
-    // Generate pill for multiple versions filter
-    if (filterState.multipleVersionsOnly) {
-      pillsHtml += `
-        <span class="filter-pill" data-filter="multipleVersions">
-          <span class="pill-category">View:</span>
-          <span class="pill-value">Grouped Versions</span>
-          <button class="pill-remove" title="Remove filter">×</button>
-        </span>
-      `;
-    }
 
     // Generate pills for each facet
     Object.entries(facetConfig).forEach(([facetKey, config]) => {
@@ -477,16 +398,6 @@
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
         const pill = this.closest('.filter-pill');
-
-        // Handle special filters
-        if (pill.dataset.filter === 'multipleVersions') {
-          filterState.multipleVersionsOnly = false;
-          updateMultipleVersionsToggle();
-          syncUrlState();
-          updateGallery();
-          renderFacets();
-          return;
-        }
 
         const facetKey = pill.dataset.facet;
         const value = pill.dataset.value;
@@ -548,17 +459,25 @@
     const rating = model.stats?.rating ? parseFloat(model.stats.rating).toFixed(1) : '0';
     const ratingCount = model.stats?.rating_count || 0;
     const downloads = model.stats?.downloads || 0;
-    const mergedCount = model.merged_count || 0;
 
-    // Build merged versions list for tooltip/dropdown
+    // Build version list (local + remote) for badge/dropdown.
+    const versions = model.versions || [];
+    const localCount = versions.filter(v => v.is_local).length;
+    const totalCount = versions.length;
+
     let mergedVersionsHtml = '';
-    if (mergedCount > 1 && model.merged_versions) {
-      const versionsList = model.merged_versions
-        .map(v => `<a href="${v.html_path}" class="merged-version-link">${escapeHTML(v.version || v.name)}</a>`)
+    if (totalCount > 1) {
+      const versionsList = versions
+        .map(v => {
+          const cls = 'merged-version-link ' + (v.is_local ? 'local' : 'remote') +
+                      (v.is_current ? ' current' : '');
+          const target = v.is_local ? '' : ' target="_blank" rel="noopener"';
+          return `<a href="${encodeURI(v.link || '')}" class="${cls}"${target}>${escapeHTML(v.name || '')}</a>`;
+        })
         .join('');
       mergedVersionsHtml = `
-        <div class="merged-versions-badge" title="${mergedCount} local versions">
-          <span class="merged-count">${mergedCount} versions</span>
+        <div class="merged-versions-badge" title="${localCount} local / ${totalCount} total versions">
+          <span class="merged-count">${localCount}/${totalCount} versions</span>
           <div class="merged-versions-dropdown">
             ${versionsList}
           </div>
@@ -566,7 +485,7 @@
     }
 
     return `
-      <div class="model-card ${mergedCount > 1 ? 'has-merged-versions' : ''}"
+      <div class="model-card ${totalCount > 1 ? 'has-merged-versions' : ''}"
           data-model-id="${escapeHTML(model.model_id)}"
           data-version-id="${escapeHTML(model.version_id)}"
           data-name="${escapeHTML(model.name?.toLowerCase())}"
@@ -756,43 +675,7 @@
       );
     }
 
-    // 5. Apply Multiple Local Versions Filter (merges models by parent model ID)
-    if (filterState.multipleVersionsOnly) {
-      // Group models by parent model_id
-      const modelGroups = new Map();
-      filteredModels.forEach(model => {
-        const parentId = model.model_id;
-        if (!parentId) return; // Skip models without parent ID
-
-        if (!modelGroups.has(parentId)) {
-          modelGroups.set(parentId, []);
-        }
-        modelGroups.get(parentId).push(model);
-      });
-
-      // Filter to only groups with multiple local versions and pick representative
-      const mergedModels = [];
-      modelGroups.forEach((versions, parentId) => {
-        if (versions.length > 1) {
-          // Sort by downloads (descending) to pick the most popular version as representative
-          versions.sort((a, b) => {
-            const downloadsA = parseInt(a.stats?.downloads) || 0;
-            const downloadsB = parseInt(b.stats?.downloads) || 0;
-            return downloadsB - downloadsA;
-          });
-
-          // Use the most popular version as the representative
-          const representative = { ...versions[0] };
-          representative.merged_versions = versions;
-          representative.merged_count = versions.length;
-          mergedModels.push(representative);
-        }
-      });
-
-      filteredModels = mergedModels;
-    }
-
-    // 6. Apply Sorting
+    // 5. Apply Sorting
     const multiplier = filterState.sortDir === 'asc' ? 1 : -1;
     filteredModels.sort((a, b) => {
       let valueA, valueB;
@@ -995,13 +878,10 @@
     filterState.types = [];
     filterState.baseModels = [];
     filterState.folders = [];
-    filterState.multipleVersionsOnly = false;
     syncUrlState();
     storePreference('types', '[]');
     storePreference('baseModels', '[]');
     storePreference('folders', '[]');
-    storePreference('multipleVersionsOnly', 'false');
-    updateMultipleVersionsToggle();
     updateGallery();
     renderFacets();
     renderActiveFilters();
