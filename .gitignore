@@ -60,3 +60,8 @@ Thumbs.db
 
 # Documentation
 model-gallery-details.md
+
+# Ignore all Markdown except readme.md and CONFIGURATION.md
+*.md
+!readme.md
+!CONFIGURATION.md
