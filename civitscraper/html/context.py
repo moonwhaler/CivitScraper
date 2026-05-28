@@ -306,7 +306,106 @@ class ContextBuilder:
             "model_id": metadata.get("modelId"),
             "version_id": metadata.get("id"),
             "local_version_count": local_version_count,
+            # Raw sibling versions for gallery merging (local + remote linking)
+            "sibling_versions": metadata.get("siblingVersions", []),
         }
+
+    @staticmethod
+    def merge_gallery_models(models_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Merge gallery cards so each CivitAI model is shown as a single card.
+
+        Cards sharing the same ``model_id`` are collapsed into one
+        representative card. The representative is the newest local version
+        that has a preview image (falling back to the newest local version).
+        A ``versions`` list is attached describing every version of the model:
+        local versions (with links to their local HTML pages) and remote-only
+        versions (with links to CivitAI).
+
+        Cards without a ``model_id`` are never merged together; each is kept
+        as its own standalone card.
+
+        Args:
+            models_data: Flat list of per-file gallery card dicts.
+
+        Returns:
+            Merged list with one card per model (plus standalone cards).
+        """
+
+        def sort_key(value: Optional[str]) -> str:
+            # None / missing dates sort last when ordering newest-first.
+            return value or ""
+
+        # Group cards by model_id. None model_id -> unique sentinel per card
+        # so they never collapse together.
+        groups: Dict[Any, List[Dict[str, Any]]] = {}
+        order: List[Any] = []
+        for index, card in enumerate(models_data):
+            model_id = card.get("model_id")
+            key = model_id if model_id is not None else ("__none__", index)
+            if key not in groups:
+                groups[key] = []
+                order.append(key)
+            groups[key].append(card)
+
+        merged: List[Dict[str, Any]] = []
+        for key in order:
+            members = groups[key]
+
+            # Pick representative: newest member with a preview image,
+            # falling back to the newest member overall.
+            by_newest = sorted(members, key=lambda c: sort_key(c.get("created_at")), reverse=True)
+            with_preview = [c for c in by_newest if c.get("preview_image_path")]
+            representative = with_preview[0] if with_preview else by_newest[0]
+            rep_version_id = representative.get("version_id")
+
+            # Build version entries from the actual local member cards.
+            member_ids = set()
+            versions: List[Dict[str, Any]] = []
+            for member in members:
+                version_id = member.get("version_id")
+                member_ids.add(version_id)
+                versions.append(
+                    {
+                        "name": member.get("version"),
+                        "version_id": version_id,
+                        "is_local": True,
+                        "is_current": version_id == rep_version_id,
+                        "link": member.get("html_path"),
+                        "created_at": member.get("created_at"),
+                    }
+                )
+
+            # Add remote-only siblings (those without a local card), deduped.
+            model_id = key if not isinstance(key, tuple) else None
+            seen_remote = set()
+            for member in members:
+                for sibling in member.get("sibling_versions", []) or []:
+                    sib_id = sibling.get("id")
+                    if sib_id in member_ids or sib_id in seen_remote:
+                        continue
+                    seen_remote.add(sib_id)
+                    versions.append(
+                        {
+                            "name": sibling.get("name"),
+                            "version_id": sib_id,
+                            "is_local": False,
+                            "is_current": False,
+                            "link": (
+                                f"https://civitai.com/models/{model_id}" f"?modelVersionId={sib_id}"
+                            ),
+                            "created_at": sibling.get("createdAt"),
+                        }
+                    )
+
+            # Sort versions newest-first.
+            versions.sort(key=lambda v: sort_key(v.get("created_at")), reverse=True)
+
+            merged_card = dict(representative)
+            merged_card["versions"] = versions
+            merged.append(merged_card)
+
+        return merged
 
     def _filter_model_files(self, file_path: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -449,9 +548,9 @@ class ContextBuilder:
                 # URL format: https://civitai.com/models/{modelId}?modelVersionId={versionId}
                 if parent_model_id:
                     base_url = "https://civitai.com/models"
-                    version_data[
-                        "link"
-                    ] = f"{base_url}/{parent_model_id}?modelVersionId={version_id}"
+                    version_data["link"] = (
+                        f"{base_url}/{parent_model_id}?modelVersionId={version_id}"
+                    )
                 else:
                     # Fallback if no modelId - this shouldn't happen in practice
                     base_url = "https://civitai.com/models"
