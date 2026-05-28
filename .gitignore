@@ -61,7 +61,9 @@ Thumbs.db
 # Documentation
 model-gallery-details.md
 
-# Ignore all Markdown except readme.md and CONFIGURATION.md
+# Ignore all Markdown except readme.md, CONFIGURATION.md, and the docs/ dir
 *.md
 !readme.md
 !CONFIGURATION.md
+!docs/
+!docs/**/*.md
