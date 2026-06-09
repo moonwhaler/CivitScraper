@@ -19,6 +19,14 @@ logger = logging.getLogger(__name__)
 # Cache validity for failed model IDs (7 days)
 FAILED_MODEL_CACHE_VALIDITY = 7 * 24 * 60 * 60
 
+# Default validity for cached sibling/remote version lists (24 hours)
+SIBLING_VERSIONS_CACHE_VALIDITY_DEFAULT = 86400
+# Field stamped into sidecar metadata recording when siblingVersions was fetched
+SIBLING_VERSIONS_TS_FIELD = "siblingVersionsFetchedAt"
+# Transient in-memory marker telling save_metadata to bypass skip_existing.
+# Popped before serialization; never written to disk.
+DIRTY_FLAG = "_civitscraper_dirty"
+
 
 class VersionEnricher:
     """
@@ -40,6 +48,14 @@ class VersionEnricher:
         """
         self.api_client = api_client
         self.config = config or {}
+
+        # TTL for cached sibling/remote version lists. Falls back to the general
+        # scanner cache validity, then a 24h default.
+        scanner_cfg = self.config.get("scanner", {})
+        self._version_ttl = scanner_cfg.get(
+            "version_cache_validity",
+            scanner_cfg.get("cache_validity", SIBLING_VERSIONS_CACHE_VALIDITY_DEFAULT),
+        )
 
         # Get cache directory from config or use default
         cache_dir = self.config.get("scanner", {}).get("cache_dir", ".civitscraper_cache")
@@ -82,6 +98,36 @@ class VersionEnricher:
         cache_key = f"failed_model_{model_id}"
         self._failed_models_cache.set(cache_key, True)
 
+    def _siblings_expired(self, metadata: Dict[str, Any]) -> bool:
+        """
+        Return True if metadata has siblingVersions but they are stale.
+
+        Stale means the fetch timestamp is missing (legacy sidecar) or older than
+        the configured TTL. Returns False when there are no siblingVersions at all
+        (that case is "never enriched", not "expired").
+        """
+        if not metadata.get("siblingVersions"):
+            return False
+        ts = metadata.get(SIBLING_VERSIONS_TS_FIELD)
+        if not isinstance(ts, (int, float)):
+            return True
+        if self._version_ttl <= 0:
+            return True
+        return (time.time() - ts) >= self._version_ttl
+
+    def needs_enrichment(self, metadata: Dict[str, Any], force_refresh: bool = False) -> bool:
+        """
+        Return True if a file's sibling version data should be (re)fetched.
+
+        True when force_refresh is set, when siblingVersions has never been
+        fetched, or when the existing siblingVersions has gone stale (TTL).
+        """
+        if force_refresh:
+            return True
+        if not metadata.get("siblingVersions"):
+            return True
+        return self._siblings_expired(metadata)
+
     def enrich_batch(
         self,
         metadata_dict: Dict[str, Dict[str, Any]],
@@ -107,19 +153,25 @@ class VersionEnricher:
         # Clear batch-level failed models cache for new batch
         self._batch_failed_models.clear()
 
-        # Group files by parent model ID, skipping those that already have sibling versions
+        # Group files by parent model ID, skipping those whose sibling versions are
+        # still fresh. force_models accumulates (as a union across all files sharing
+        # a model) the models whose siblings are present-but-stale, so the
+        # deduplicated fetch bypasses the HTTP request cache for those.
         files_by_model: Dict[int, List[str]] = defaultdict(list)
+        force_models: Set[int] = set()
         already_enriched = 0
 
         for file_path, metadata in metadata_dict.items():
-            # Skip if already has sibling versions
-            if metadata.get("siblingVersions"):
+            # Skip if sibling versions are still fresh
+            if not self.needs_enrichment(metadata, force_refresh):
                 already_enriched += 1
                 continue
 
             model_id = metadata.get("modelId")
             if model_id:
                 files_by_model[model_id].append(file_path)
+                if force_refresh or self._siblings_expired(metadata):
+                    force_models.add(model_id)
             else:
                 logger.debug(f"No modelId found in metadata for {file_path}")
 
@@ -165,7 +217,7 @@ class VersionEnricher:
         def fetch_parent_model(model_id: int) -> tuple:
             """Fetch a single parent model and return (model_id, data or None)."""
             parent_data = self.api_client.get_parent_model_with_versions(
-                model_id, current_version_id=0, force_refresh=force_refresh
+                model_id, current_version_id=0, force_refresh=(model_id in force_models)
             )
             return (model_id, parent_data)
 
@@ -218,8 +270,8 @@ class VersionEnricher:
         # Enrich each file's metadata
         enriched_count = 0
         for file_path, metadata in metadata_dict.items():
-            # Skip if already has sibling versions
-            if metadata.get("siblingVersions"):
+            # Skip if sibling versions are still fresh
+            if not self.needs_enrichment(metadata, force_refresh):
                 continue
 
             model_id = metadata.get("modelId")
@@ -240,6 +292,10 @@ class VersionEnricher:
                 sibling_versions.append(version_copy)
 
             metadata["siblingVersions"] = sibling_versions
+            # Stamp fetch time and mark dirty so save_metadata persists the
+            # refresh even when skip_existing would otherwise skip the write.
+            metadata[SIBLING_VERSIONS_TS_FIELD] = time.time()
+            metadata[DIRTY_FLAG] = True
             enriched_count += 1
 
         logger.info(
@@ -264,9 +320,9 @@ class VersionEnricher:
         Returns:
             Enriched metadata dictionary
         """
-        # Skip if already has sibling versions
-        if metadata.get("siblingVersions"):
-            logger.debug("Metadata already has siblingVersions, skipping enrichment")
+        # Skip if sibling versions are still fresh
+        if not self.needs_enrichment(metadata, force_refresh):
+            logger.debug("Metadata already has fresh siblingVersions, skipping enrichment")
             return metadata
 
         model_id = metadata.get("modelId")
@@ -281,13 +337,17 @@ class VersionEnricher:
             logger.debug(f"Skipping model {model_id}, known failed lookup")
             return metadata
 
+        # Stale-but-present siblings must bypass the HTTP request cache.
+        force_fetch = force_refresh or self._siblings_expired(metadata)
         parent_data = self.api_client.get_parent_model_with_versions(
-            model_id, current_version_id=version_id or 0, force_refresh=force_refresh
+            model_id, current_version_id=version_id or 0, force_refresh=force_fetch
         )
 
         if parent_data:
             metadata["parentModel"] = parent_data["parentModel"]
             metadata["siblingVersions"] = parent_data["siblingVersions"]
+            metadata[SIBLING_VERSIONS_TS_FIELD] = time.time()
+            metadata[DIRTY_FLAG] = True
             logger.debug(
                 f"Enriched metadata with {len(parent_data.get('siblingVersions', []))} "
                 f"sibling versions"
