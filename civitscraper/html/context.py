@@ -31,44 +31,98 @@ logger = logging.getLogger(__name__)
 
 class VersionIndexCache:
     """
-    Cache for version ID to HTML path mappings.
+    Cache mapping a directory's local model versions, built once per directory.
 
-    Builds an index of version_id -> html_path for a directory once,
-    avoiding repeated JSON file scanning.
+    For each directory it records, per version ``id``: the local HTML path (a
+    version is "local" when its ``.json`` sidecar is present, regardless of whether
+    its HTML has been generated yet), the version's own metadata fields, and a
+    deduplicated pool of every sibling version referenced by any local sidecar of
+    the same model. This lets a detail page render the *union* of all versions of
+    its model instead of just its own (possibly stale) snapshot.
     """
 
     def __init__(self):
         """Initialize the version index cache."""
-        self._cache: Dict[str, Dict[int, str]] = {}  # dir -> {version_id -> html_path}
+        # dir -> {version_id -> html_path}
+        self._html_paths: Dict[str, Dict[int, str]] = {}
+        # dir -> model_id -> {version_id -> version dict (template fields)}
+        self._versions_by_model: Dict[str, Dict[int, Dict[int, Dict[str, Any]]]] = {}
+
+    def ensure_indexed(self, search_dir: str) -> None:
+        """Build the index for a directory if not already cached."""
+        if os.path.isdir(search_dir) and search_dir not in self._html_paths:
+            self._build_index(search_dir)
 
     def get_html_path(self, search_dir: str, version_id: Optional[int]) -> Optional[str]:
         """
-        Get HTML path for a version ID, using cached index if available.
+        Get the local HTML path for a version ID (sidecar presence = local).
 
         Args:
             search_dir: Directory to search in
             version_id: Version ID to find
 
         Returns:
-            Absolute path to HTML file if found, None otherwise
+            Absolute path to the HTML file if the version is local, else None
         """
         if not version_id or not os.path.isdir(search_dir):
             return None
+        self.ensure_indexed(search_dir)
+        return self._html_paths.get(search_dir, {}).get(version_id)
 
-        # Build index for this directory if not cached
-        if search_dir not in self._cache:
-            self._build_index(search_dir)
+    def get_model_versions(
+        self, search_dir: str, model_id: Optional[int], current_version_id: Optional[int]
+    ) -> List[Dict[str, Any]]:
+        """
+        Build the merged version list for a model from all local sidecars in a dir.
 
-        return self._cache.get(search_dir, {}).get(version_id)
+        Returns local versions (linked to their local HTML) plus remote-only
+        versions (linked to CivitAI), deduped by version id, newest-first, each
+        flagged with ``is_local`` and ``isCurrent`` (relative to current_version_id).
+        Returns an empty list if no versions are known for the model.
+        """
+        if not model_id or not os.path.isdir(search_dir):
+            return []
+        self.ensure_indexed(search_dir)
+
+        pool = self._versions_by_model.get(search_dir, {}).get(model_id, {})
+        if not pool:
+            return []
+
+        local_paths = self._html_paths.get(search_dir, {})
+        result: List[Dict[str, Any]] = []
+        for vid, version in pool.items():
+            entry = dict(version)
+            entry["isCurrent"] = vid == current_version_id
+            if vid in local_paths:
+                entry["is_local"] = True
+                entry["link"] = local_paths[vid]
+            else:
+                entry["is_local"] = False
+                entry["link"] = (
+                    f"https://civitai.com/models/{model_id}?modelVersionId={vid}"
+                )
+            result.append(entry)
+
+        result.sort(key=lambda v: v.get("createdAt") or "", reverse=True)
+        return result
 
     def _build_index(self, search_dir: str) -> None:
-        """
-        Build version ID -> HTML path index for a directory.
+        """Build the html-path and per-model version-union index for a directory."""
+        html_paths: Dict[int, str] = {}
+        versions_by_model: Dict[int, Dict[int, Dict[str, Any]]] = {}
 
-        Args:
-            search_dir: Directory to index
-        """
-        index: Dict[int, str] = {}
+        def record_version(model_id: int, version: Dict[str, Any]) -> None:
+            vid = version.get("id")
+            if not vid:
+                return
+            model_versions = versions_by_model.setdefault(model_id, {})
+            existing = model_versions.setdefault(vid, {})
+            # Merge, preferring already-present non-empty fields (first writer wins
+            # per field) so a richer remote sibling isn't overwritten by a sparse one.
+            for key in ("name", "baseModel", "createdAt", "downloadCount"):
+                if not existing.get(key) and version.get(key) is not None:
+                    existing[key] = version.get(key)
+            existing["id"] = vid
 
         try:
             for filename in os.listdir(search_dir):
@@ -79,19 +133,39 @@ class VersionIndexCache:
                 try:
                     with open(json_path, "r", encoding="utf-8") as f:
                         metadata = json.load(f)
-                        vid = metadata.get("id")
-                        if vid:
-                            html_filename = os.path.splitext(filename)[0] + ".html"
-                            html_path = os.path.join(search_dir, html_filename)
-                            if os.path.isfile(html_path):
-                                index[vid] = os.path.abspath(html_path)
                 except (json.JSONDecodeError, IOError):
                     continue
+
+                vid = metadata.get("id")
+                model_id = metadata.get("parentModel", {}).get("id") or metadata.get("modelId")
+                if not vid or not model_id:
+                    continue
+
+                # Local version: sidecar present -> link to its (computed) HTML path.
+                html_filename = os.path.splitext(filename)[0] + ".html"
+                html_paths[vid] = os.path.abspath(os.path.join(search_dir, html_filename))
+
+                # Seed the pool with this version's own metadata (downloadCount lives
+                # under stats), so local-only versions still carry template fields.
+                record_version(
+                    model_id,
+                    {
+                        "id": vid,
+                        "name": metadata.get("name"),
+                        "baseModel": metadata.get("baseModel"),
+                        "createdAt": metadata.get("createdAt"),
+                        "downloadCount": metadata.get("stats", {}).get("downloadCount"),
+                    },
+                )
+                # Merge every sibling this sidecar knows about into the model pool.
+                for sibling in metadata.get("siblingVersions", []) or []:
+                    record_version(model_id, sibling)
         except OSError as e:
             logger.debug(f"Error building version index for {search_dir}: {e}")
 
-        self._cache[search_dir] = index
-        logger.debug(f"Built version index for {search_dir}: {len(index)} versions")
+        self._html_paths[search_dir] = html_paths
+        self._versions_by_model[search_dir] = versions_by_model
+        logger.debug(f"Built version index for {search_dir}: {len(html_paths)} local versions")
 
     def invalidate(self, search_dir: Optional[str] = None) -> None:
         """
@@ -101,13 +175,20 @@ class VersionIndexCache:
             search_dir: Directory to invalidate, or None for all
         """
         if search_dir:
-            self._cache.pop(search_dir, None)
+            self._html_paths.pop(search_dir, None)
+            self._versions_by_model.pop(search_dir, None)
         else:
-            self._cache.clear()
+            self._html_paths.clear()
+            self._versions_by_model.clear()
 
 
 # Global version index cache for reuse across context builders
 _version_index_cache = VersionIndexCache()
+
+
+def invalidate_version_index(search_dir: Optional[str] = None) -> None:
+    """Invalidate the global version index cache (all dirs, or one)."""
+    _version_index_cache.invalidate(search_dir)
 
 
 class ContextBuilder:
@@ -157,7 +238,10 @@ class ContextBuilder:
         # Get parent model ID for building CivitAI URLs
         parent_model_id = metadata.get("parentModel", {}).get("id") or metadata.get("modelId")
         sibling_versions = self._build_sibling_versions_context(
-            file_path, metadata.get("siblingVersions", []), parent_model_id
+            file_path,
+            metadata.get("siblingVersions", []),
+            parent_model_id,
+            metadata.get("id"),
         )
 
         # Calculate relative path to gallery
@@ -512,6 +596,7 @@ class ContextBuilder:
         current_file_path: str,
         sibling_versions: List[Dict[str, Any]],
         parent_model_id: Optional[int] = None,
+        current_version_id: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """
         Build context for sibling versions, determining local availability.
@@ -526,12 +611,23 @@ class ContextBuilder:
         Returns:
             List of sibling version dicts with local availability info
         """
+        current_dir = os.path.dirname(os.path.abspath(current_file_path))
+
+        # Preferred path: union of every version of this model across all local
+        # sidecars in the directory, so every version's detail page shows the same
+        # complete list regardless of per-file snapshot drift.
+        if parent_model_id:
+            merged = _version_index_cache.get_model_versions(
+                current_dir, parent_model_id, current_version_id
+            )
+            if merged:
+                return merged
+
+        # Fallback: no model id (or nothing indexed) -> use this file's own snapshot.
         if not sibling_versions:
             return []
 
         result = []
-        current_dir = os.path.dirname(os.path.abspath(current_file_path))
-
         for version in sibling_versions:
             version_data = version.copy()
             version_id = version.get("id")

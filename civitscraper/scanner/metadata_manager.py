@@ -132,9 +132,15 @@ class MetadataManager:
         # Get metadata path
         metadata_path = get_metadata_path(file_path, self.config)
 
-        # Check if metadata file exists and skip_existing is enabled
+        # Consume the transient dirty marker (set by the version enricher when it
+        # refreshes siblingVersions). Pop it so it is never serialized to disk.
+        dirty = metadata.pop("_civitscraper_dirty", False)
+
+        # Check if metadata file exists and skip_existing is enabled. A dirty
+        # (freshly enriched) metadata always writes, so version refreshes reach
+        # disk even when skip_existing would otherwise skip the write.
         skip_existing = self.config.get("skip_existing", False)
-        if skip_existing and os.path.exists(metadata_path):
+        if skip_existing and not dirty and os.path.exists(metadata_path):
             logger.info(f"Skipping existing metadata at {metadata_path}")
             return True
 

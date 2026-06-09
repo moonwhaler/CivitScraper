@@ -223,17 +223,19 @@ class JobExecutor:
                 except Exception as e:
                     logger.error(f"Error fetching metadata for {file_path}: {e}")
 
-            # PHASE 1.5: Enrich with parent model data (deduplicated by modelId)
-            # Run enrichment if any metadata is missing siblingVersions
-            if metadata_dict:
-                needs_enrichment = any(
-                    "siblingVersions" not in meta for meta in metadata_dict.values()
-                )
-                if needs_enrichment:
-                    from ..scanner.version_enricher import VersionEnricher
+            # PHASE 1.5: Enrich with parent model data (deduplicated by modelId).
+            # Run enrichment if any file's sibling versions are missing or stale
+            # (TTL). Skipped entirely for offline cached-metadata jobs
+            # (e.g. regenerate-html), which must not hit the API.
+            if metadata_dict and not use_cached_metadata:
+                from ..scanner.version_enricher import VersionEnricher
 
+                enricher = VersionEnricher(self.api_client, job_specific_config)
+                if any(
+                    enricher.needs_enrichment(meta, force_refresh)
+                    for meta in metadata_dict.values()
+                ):
                     logger.info(f"Enriching {len(metadata_dict)} files with parent model data")
-                    enricher = VersionEnricher(self.api_client, job_specific_config)
                     metadata_dict = enricher.enrich_batch(
                         metadata_dict, force_refresh=force_refresh
                     )
@@ -281,6 +283,27 @@ class JobExecutor:
                 process_path = organized_files_mapping.get(file_path, file_path) or file_path
                 items_to_process.append((process_path, metadata))
 
+            # PHASE 4a: Flush every sidecar to disk first (using the resolved,
+            # possibly-organized process_path), then rebuild the version index against
+            # the complete sidecar set. This makes the per-model version union on each
+            # detail page deterministic regardless of HTML generation order in 4b.
+            from ..html.context import _version_index_cache, invalidate_version_index
+
+            for process_path, metadata in items_to_process:
+                temp_processor.metadata_manager.save_metadata(
+                    process_path, metadata, temp_processor.dry_run
+                )
+
+            invalidate_version_index()
+            if not temp_processor.dry_run:
+                index_dirs = {
+                    os.path.dirname(os.path.abspath(p)) for p, _ in items_to_process
+                }
+                for index_dir in index_dirs:
+                    _version_index_cache.ensure_indexed(index_dir)
+
+            # PHASE 4b: Generate images + HTML. The internal save_metadata is now a
+            # no-op for already-written sidecars (dirty flag consumed in 4a).
             # Use parallel processing for large collections
             import concurrent.futures
 
