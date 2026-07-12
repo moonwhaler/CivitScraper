@@ -22,6 +22,14 @@ api:
   max_retries: 3         # Number of times to retry failed requests (excluding rate limits)
   user_agent: "CivitScraper/0.2.0"  # User agent string for requests
 
+  # Domain routing for the civitai.com / civitai.red split (2026-04-15)
+  domains:
+    sfw: "civitai.com"     # public domain for SFW model pages
+    nsfw: "civitai.red"    # domain for NSFW model pages
+  nsfw:
+    level_threshold: 4     # nsfwLevel >= this => model treated as NSFW (4 = Mature+)
+    browsing_level: "X"    # /images nsfw value used to fetch NSFW previews
+
   # Batch processing settings (See Batch Processing Details below)
   batch:
     enabled: true         # Enable batch processing for metadata fetching
@@ -40,6 +48,9 @@ api:
 -   **`max_retries`**: How many times to retry a request if it fails due to network issues or server errors (5xx). Does not apply to rate limit errors (429).
 -   **`user_agent`**: Identifies CivitScraper to the CivitAI API.
 -   **`key`**: Your CivitAI API key. While optional for fetching public data, providing a key is recommended as it may grant higher rate limits from the CivitAI API.
+-   **`domains`**: Public domains for model-page links. Since 2026-04-15 CivitAI serves SFW models on `civitai.com` and NSFW models on `civitai.red`. Links in generated HTML are routed per-model based on NSFW classification. `base_url` (the API host) stays on `civitai.com` — metadata, media, and auth all resolve there for both SFW and NSFW models.
+-   **`nsfw.level_threshold`**: The CivitAI `nsfwLevel` at or above which a model is treated as NSFW (bit flags: `1`=PG, `2`=PG-13, `4`=Mature/R, `8`=X, `16`=XX, `32`=XXX). Default `4`. NSFW models route to the `nsfw` domain and pull previews from the images feed.
+-   **`nsfw.browsing_level`**: The `nsfw` enum (`None`/`Soft`/`Mature`/`X`) sent to the images endpoint when fetching NSFW previews. The inline by-hash image list is browsing-level filtered (SFW only), so NSFW models fetch their full media set from the feed with this level. Default `X` (all).
 -   **`batch`**: Settings related to processing multiple files concurrently. See [Batch Processing Details](#batch-processing-details).
 -   **`circuit_breaker`**: Settings for automatically stopping requests to specific API endpoints if they consistently fail. See [Batch Processing Details](#batch-processing-details).
 
