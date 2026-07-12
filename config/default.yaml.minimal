@@ -10,6 +10,14 @@ api:
   max_retries: 3         # Number of times to retry failed requests
   user_agent: "CivitScraper/0.2.0"  # User agent string
 
+  # Domain routing: NSFW models live on civitai.red, SFW on civitai.com (split 2026-04-15)
+  domains:
+    sfw: "civitai.com"     # public/SFW model pages
+    nsfw: "civitai.red"    # NSFW model pages
+  nsfw:
+    level_threshold: 4     # nsfwLevel >= this => treat model as NSFW (4 = Mature+)
+    browsing_level: "X"    # /images nsfw value used when fetching NSFW previews
+
   # Batch processing settings
   batch:
     enabled: false        # [true/false] Enable batch processing (minimal default: false)
