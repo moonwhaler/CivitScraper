@@ -10,6 +10,7 @@ import os
 from typing import Any, Dict, List, Optional, cast
 
 from ..api.client import CivitAIClient
+from ..api.domains import get_domain_settings, is_nsfw
 from .discovery import get_metadata_path
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,12 @@ class MetadataManager:
 
         # Get output configuration
         self.output_config = config.get("output", {})
+
+        _, self.nsfw_threshold, self.nsfw_browsing_level = get_domain_settings(config)
+        # Preview count cap for the NSFW image feed (mirrors image download limit).
+        self.nsfw_feed_limit = (
+            self.output_config.get("images", {}).get("max_count") or 20
+        )
 
     def fetch_metadata(
         self, file_hash: str, force_refresh: bool = False
@@ -103,6 +110,14 @@ class MetadataManager:
                 }
             )
 
+            # For NSFW models the inline by-hash images are browsing-level
+            # filtered (SFW only). Pull the full media set from the images feed
+            # with an explicit nsfw browsing level instead.
+            if is_nsfw(metadata, self.nsfw_threshold):
+                feed_images = self._fetch_nsfw_images(metadata.get("id"), force_refresh)
+                if feed_images:
+                    metadata["images"] = feed_images
+
             # Validate required fields
             if not metadata.get("images"):
                 logger.warning(f"No images found in metadata for hash {file_hash}")
@@ -114,6 +129,45 @@ class MetadataManager:
         except Exception as e:
             logger.error(f"Failed to fetch metadata for hash {file_hash}: {e}")
             return None
+
+    def _fetch_nsfw_images(
+        self, version_id: Optional[int], force_refresh: bool
+    ) -> List[Dict[str, Any]]:
+        """Fetch the NSFW image feed for a version and map to inline shape.
+
+        Returns an empty list on any failure so the caller keeps inline images.
+        """
+        if not version_id:
+            return []
+        try:
+            response = self.api_client.get_images(
+                model_version_id=version_id,
+                nsfw=self.nsfw_browsing_level,
+                limit=self.nsfw_feed_limit,
+                force_refresh=force_refresh,
+            )
+            items = response.get("items", []) if isinstance(response, dict) else []
+            mapped: List[Dict[str, Any]] = []
+            for item in items:
+                level = item.get("nsfwLevel", 0)
+                mapped.append(
+                    {
+                        "id": item.get("id"),
+                        "url": item.get("url"),
+                        "nsfw": bool(
+                            isinstance(level, (int, float))
+                            and level >= self.nsfw_threshold
+                        ),
+                        "width": item.get("width"),
+                        "height": item.get("height"),
+                        "hash": item.get("hash"),
+                        "meta": item.get("meta"),
+                    }
+                )
+            return mapped
+        except Exception as e:
+            logger.warning(f"Failed to fetch NSFW image feed for version {version_id}: {e}")
+            return []
 
     def save_metadata(
         self, file_path: str, metadata: Dict[str, Any], dry_run: bool = False
