@@ -18,6 +18,7 @@ class ImagesEndpoint(BaseEndpoint):
         model_version_id: Optional[int] = None,
         limit: int = 100,
         page: int = 1,
+        nsfw: Optional[str] = None,
         force_refresh: bool = False,
         response_type: Optional[type] = None,
     ) -> Union[Dict[str, Any], ImageSearchResult]:
@@ -29,6 +30,7 @@ class ImagesEndpoint(BaseEndpoint):
             model_version_id: Filter by model version ID
             limit: Results per page
             page: Page number
+            nsfw: Browsing-level enum (None/Soft/Mature/X) to include NSFW images
             force_refresh: Force refresh cache
             response_type: Type to parse response into (ImageSearchResult or None for dict)
 
@@ -45,6 +47,9 @@ class ImagesEndpoint(BaseEndpoint):
 
         if model_version_id:
             params["modelVersionId"] = model_version_id
+
+        if nsfw is not None:
+            params["nsfw"] = nsfw
 
         return self._make_request(
             "GET",

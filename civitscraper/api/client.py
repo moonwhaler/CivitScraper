@@ -161,6 +161,7 @@ class CivitAIClient:
         model_version_id: Optional[int] = None,
         limit: int = 100,
         page: int = 1,
+        nsfw: Optional[str] = None,
         force_refresh: bool = False,
         typed: bool = False,
     ) -> Union[Dict[str, Any], ImageSearchResult]:
@@ -170,6 +171,7 @@ class CivitAIClient:
             model_version_id=model_version_id,
             limit=limit,
             page=page,
+            nsfw=nsfw,
             force_refresh=force_refresh,
             response_type=ImageSearchResult if typed else None,
         )
