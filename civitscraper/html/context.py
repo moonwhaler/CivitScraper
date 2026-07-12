@@ -10,6 +10,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TypedDict
 
+from ..api.domains import DEFAULT_DOMAINS, build_model_url, get_domain_settings, is_nsfw
 from .images import ImageHandler
 from .paths import PathManager
 from .sanitizer import DataSanitizer
@@ -70,7 +71,12 @@ class VersionIndexCache:
         return self._html_paths.get(search_dir, {}).get(version_id)
 
     def get_model_versions(
-        self, search_dir: str, model_id: Optional[int], current_version_id: Optional[int]
+        self,
+        search_dir: str,
+        model_id: Optional[int],
+        current_version_id: Optional[int],
+        nsfw: bool = False,
+        domains: Optional[Dict[str, str]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Build the merged version list for a model from all local sidecars in a dir.
@@ -82,6 +88,7 @@ class VersionIndexCache:
         """
         if not model_id or not os.path.isdir(search_dir):
             return []
+        domains = domains or DEFAULT_DOMAINS
         self.ensure_indexed(search_dir)
 
         pool = self._versions_by_model.get(search_dir, {}).get(model_id, {})
@@ -98,9 +105,7 @@ class VersionIndexCache:
                 entry["link"] = local_paths[vid]
             else:
                 entry["is_local"] = False
-                entry["link"] = (
-                    f"https://civitai.com/models/{model_id}?modelVersionId={vid}"
-                )
+                entry["link"] = build_model_url(model_id, vid, nsfw, domains)
             result.append(entry)
 
         result.sort(key=lambda v: v.get("createdAt") or "", reverse=True)
@@ -203,6 +208,7 @@ class ContextBuilder:
             model_processor: ModelProcessor instance for downloading images (optional)
         """
         self.config = config
+        self.domains, self.nsfw_threshold, _ = get_domain_settings(config)
         self.model_processor = model_processor
         self.path_manager = PathManager(config)
         self.image_handler = ImageHandler(config, model_processor)
@@ -237,11 +243,13 @@ class ContextBuilder:
         # Build sibling versions context with local availability info
         # Get parent model ID for building CivitAI URLs
         parent_model_id = metadata.get("parentModel", {}).get("id") or metadata.get("modelId")
+        model_nsfw = is_nsfw(metadata, self.nsfw_threshold)
         sibling_versions = self._build_sibling_versions_context(
             file_path,
             metadata.get("siblingVersions", []),
             parent_model_id,
             metadata.get("id"),
+            model_nsfw,
         )
 
         # Calculate relative path to gallery
@@ -281,6 +289,9 @@ class ContextBuilder:
             "sibling_versions": sibling_versions,
             "parent_model": metadata.get("parentModel", {}),
             "gallery_path": gallery_path,
+            "model_url": build_model_url(
+                parent_model_id, metadata.get("id"), model_nsfw, self.domains
+            ),
         }
 
         return context
@@ -388,6 +399,7 @@ class ContextBuilder:
             "version": metadata.get("name"),
             "folder_name": folder_name,
             "model_id": metadata.get("modelId"),
+            "nsfw": is_nsfw(metadata, self.nsfw_threshold),
             "version_id": metadata.get("id"),
             "local_version_count": local_version_count,
             # Raw sibling versions for gallery merging (local + remote linking)
@@ -395,7 +407,10 @@ class ContextBuilder:
         }
 
     @staticmethod
-    def merge_gallery_models(models_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def merge_gallery_models(
+        models_data: List[Dict[str, Any]],
+        domains: Optional[Dict[str, str]] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Merge gallery cards so each CivitAI model is shown as a single card.
 
@@ -415,6 +430,8 @@ class ContextBuilder:
         Returns:
             Merged list with one card per model (plus standalone cards).
         """
+
+        domains = domains or DEFAULT_DOMAINS
 
         def sort_key(value: Optional[str]) -> str:
             # None / missing dates sort last when ordering newest-first.
@@ -475,8 +492,8 @@ class ContextBuilder:
                             "version_id": sib_id,
                             "is_local": False,
                             "is_current": False,
-                            "link": (
-                                f"https://civitai.com/models/{model_id}" f"?modelVersionId={sib_id}"
+                            "link": build_model_url(
+                                model_id, sib_id, representative.get("nsfw", False), domains
                             ),
                             "created_at": sibling.get("createdAt"),
                         }
@@ -597,6 +614,7 @@ class ContextBuilder:
         sibling_versions: List[Dict[str, Any]],
         parent_model_id: Optional[int] = None,
         current_version_id: Optional[int] = None,
+        model_nsfw: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Build context for sibling versions, determining local availability.
@@ -618,7 +636,7 @@ class ContextBuilder:
         # complete list regardless of per-file snapshot drift.
         if parent_model_id:
             merged = _version_index_cache.get_model_versions(
-                current_dir, parent_model_id, current_version_id
+                current_dir, parent_model_id, current_version_id, model_nsfw, self.domains
             )
             if merged:
                 return merged
@@ -640,17 +658,11 @@ class ContextBuilder:
                 version_data["link"] = local_html_path
             else:
                 version_data["is_local"] = False
-                # Build CivitAI URL for remote versions
-                # URL format: https://civitai.com/models/{modelId}?modelVersionId={versionId}
-                if parent_model_id:
-                    base_url = "https://civitai.com/models"
-                    version_data["link"] = (
-                        f"{base_url}/{parent_model_id}?modelVersionId={version_id}"
-                    )
-                else:
-                    # Fallback if no modelId - this shouldn't happen in practice
-                    base_url = "https://civitai.com/models"
-                    version_data["link"] = f"{base_url}?modelVersionId={version_id}"
+                # Build CivitAI URL for remote versions, routing NSFW models to
+                # civitai.red and SFW models to civitai.com.
+                version_data["link"] = build_model_url(
+                    parent_model_id, version_id, model_nsfw, self.domains
+                )
 
             result.append(version_data)
 

@@ -3,7 +3,7 @@
         <h1>{% if gallery_path %}<button type="button" onclick="history.back()" class="back-to-gallery" title="Back to Gallery"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>{% endif %}{% block header %}{{ title|default('Model Gallery') }}{% endblock %}</h1>
         <div class="header-actions">
             {% if metadata and metadata.modelId %}
-            <a href="https://civitai.com/models/{{ metadata.modelId }}" class="external-link" target="_blank">
+            <a href="{{ model_url }}" class="external-link" target="_blank">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                     <polyline points="15 3 21 3 21 9"></polyline>
