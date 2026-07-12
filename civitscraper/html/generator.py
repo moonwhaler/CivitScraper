@@ -211,7 +211,9 @@ class HTMLGenerator:
 
         # Merge per-file cards so each CivitAI model is a single gallery card
         # (collapses multiple local versions; attaches local+remote version list).
-        models_data = self.context_builder.merge_gallery_models(models_data)
+        models_data = self.context_builder.merge_gallery_models(
+            models_data, self.context_builder.domains
+        )
         logger.debug(f"Merged into {len(models_data)} unique model cards")
 
         data_js_path = os.path.join(data_output_dir, "models_data.js")
