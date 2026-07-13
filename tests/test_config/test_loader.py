@@ -72,13 +72,26 @@ def test_load_config_with_invalid_yaml(temp_dir: Path):
         load_and_validate_config(str(invalid_yaml_file))
 
 
-def test_load_config_with_default_values(temp_dir: Path):
+def test_load_config_with_default_values(temp_dir: Path, monkeypatch: pytest.MonkeyPatch):
     """
     Test loading a configuration with default values.
 
     Args:
         temp_dir: Path to a temporary directory
+        monkeypatch: Pytest fixture for patching module attributes
     """
+    # Point the loader at a default file this test owns, so the default-merge has a
+    # real source. Otherwise the test depends on an ambient ./config/default.yaml
+    # that isn't present in a clean checkout (only the .example/.minimal templates
+    # ship), making it pass or fail based on developer-local state.
+    default_config_file = temp_dir / "default.yaml"
+    default_config_file.write_text(
+        'api:\n  timeout: 30\n  base_url: "https://civitai.com/api/v1"\n'
+    )
+    monkeypatch.setattr(
+        "civitscraper.config.loader.DEFAULT_CONFIG_PATH", str(default_config_file)
+    )
+
     # Create a minimal config file
     minimal_config_file = temp_dir / "minimal.yaml"
     minimal_config_file.write_text(
