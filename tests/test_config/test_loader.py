@@ -11,7 +11,7 @@ from typing import Any, Dict
 import pytest
 import yaml
 
-from civitscraper.config.loader import load_and_validate_config
+from civitscraper.config.loader import expand_env_vars, load_and_validate_config
 
 
 def test_load_config_with_valid_file(config_file: str, sample_config: Dict[str, Any]):
@@ -70,6 +70,68 @@ def test_load_config_with_invalid_yaml(temp_dir: Path):
     # Try to load the invalid config file
     with pytest.raises(yaml.YAMLError):
         load_and_validate_config(str(invalid_yaml_file))
+
+
+def test_expand_env_vars_brace_and_bare(monkeypatch: pytest.MonkeyPatch):
+    """${VAR} and $VAR are both expanded from the environment (Linux syntax)."""
+    monkeypatch.setenv("MY_DIR", "/mnt/ssd/models")
+    monkeypatch.setenv("SUB", "loras")
+
+    tree = {
+        "path": "${MY_DIR}/organized",
+        "bare": "$MY_DIR",
+        "nested": {"dir": "${MY_DIR}/$SUB"},
+        "patterns": ["${MY_DIR}/a", "static"],
+        "number": 42,
+        "flag": True,
+    }
+
+    result = expand_env_vars(tree)
+
+    assert result["path"] == "/mnt/ssd/models/organized"
+    assert result["bare"] == "/mnt/ssd/models"
+    assert result["nested"]["dir"] == "/mnt/ssd/models/loras"
+    assert result["patterns"] == ["/mnt/ssd/models/a", "static"]
+    # Non-string values pass through untouched.
+    assert result["number"] == 42
+    assert result["flag"] is True
+
+
+def test_expand_env_vars_undefined_left_literal(monkeypatch: pytest.MonkeyPatch):
+    """An unset variable is left as a visible literal, not collapsed to empty."""
+    monkeypatch.delenv("DOES_NOT_EXIST", raising=False)
+    assert expand_env_vars("${DOES_NOT_EXIST}/x") == "${DOES_NOT_EXIST}/x"
+
+
+def test_expand_env_vars_ignores_windows_syntax(monkeypatch: pytest.MonkeyPatch):
+    """Windows %VAR% syntax is intentionally not expanded."""
+    monkeypatch.setenv("MY_DIR", "/mnt/ssd")
+    assert expand_env_vars("%MY_DIR%/x") == "%MY_DIR%/x"
+
+
+def test_load_config_expands_env_in_paths(temp_dir: Path, monkeypatch: pytest.MonkeyPatch):
+    """Env vars in an input path are expanded end-to-end through the loader."""
+    # Use a fixed POSIX-style value so the assertion is independent of the host OS
+    # path separator (the yaml's literal "/loras" stays a forward slash).
+    monkeypatch.setenv("MY_DIR", "/mnt/ssd")
+
+    config_file = temp_dir / "env.yaml"
+    config_file.write_text(
+        """
+    api:
+      key: "k"
+      base_url: "https://civitai.com/api/v1"
+    input_paths:
+      my-models:
+        path: "${MY_DIR}/loras"
+        type: "LORA"
+        patterns: ["*.safetensors"]
+    """
+    )
+
+    config = load_and_validate_config(str(config_file))
+
+    assert config["input_paths"]["my-models"]["path"] == "/mnt/ssd/loras"
 
 
 def test_load_config_with_default_values(temp_dir: Path, monkeypatch: pytest.MonkeyPatch):
