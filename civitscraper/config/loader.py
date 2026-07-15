@@ -9,11 +9,49 @@ This module handles loading configuration from various sources:
 
 import logging
 import os
-from typing import Any, Dict, Optional
+import re
+from typing import Any, Dict, Optional, cast
 
 import yaml
 
 logger = logging.getLogger(__name__)
+
+# Linux-style environment references: ${VAR} or $VAR. Windows %VAR% is intentionally
+# left untouched so config files use POSIX syntax consistently across platforms.
+_ENV_VAR_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def _expand_str(value: str) -> str:
+    """Expand ${VAR}/$VAR references in a string using os.environ.
+
+    Undefined variables are left literally in place and logged, so a typo surfaces
+    as a visible ``${VAR}`` path rather than silently collapsing to an empty string.
+    """
+
+    def replace(match: "re.Match[str]") -> str:
+        name = match.group(1) or match.group(2)
+        if name in os.environ:
+            return os.environ[name]
+        logger.warning(
+            "Environment variable '%s' referenced in configuration is not set; "
+            "leaving '%s' unexpanded",
+            name,
+            match.group(0),
+        )
+        return match.group(0)
+
+    return _ENV_VAR_PATTERN.sub(replace, value)
+
+
+def expand_env_vars(config: Any) -> Any:
+    """Recursively expand ${VAR}/$VAR references in all string values of a config tree."""
+    if isinstance(config, dict):
+        return {key: expand_env_vars(val) for key, val in config.items()}
+    if isinstance(config, list):
+        return [expand_env_vars(item) for item in config]
+    if isinstance(config, str):
+        return _expand_str(config)
+    return config
 
 DEFAULT_CONFIG_PATH = "./config/default.yaml"
 USER_CONFIG_PATHS = [
@@ -51,7 +89,9 @@ def load_yaml_config(path: str) -> Dict[str, Any]:
                 f"Configuration from {path} is not a dictionary, converting to empty dict"
             )
             return {}
-        return config
+        # Expand ${VAR}/$VAR references so env vars work anywhere in the config,
+        # not just the special-cased CIVITAI_API_KEY override.
+        return cast(Dict[str, Any], expand_env_vars(config))
     except FileNotFoundError:
         logger.error(f"Configuration file not found: {path}")
         raise
