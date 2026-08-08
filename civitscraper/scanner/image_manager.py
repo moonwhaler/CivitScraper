@@ -200,20 +200,23 @@ class ImageManager:
         html_path = get_html_path(file_path, self.config)
         html_dir = os.path.dirname(html_path)
 
-        # Collect all preview files first
+        def extract_preview_number(filename: str) -> Optional[int]:
+            match = re.search(r"preview(\d+)", os.path.basename(filename))
+            return int(match.group(1)) if match else None
+
+        # Collect all preview files first, ignoring any that don't follow the
+        # "previewN" naming convention (e.g. leftover files from another tool
+        # or an earlier misconfigured filename pattern)
         preview_files = []
         for ext in [".jpeg", ".jpg", ".png", ".webp", ".mp4"]:
             pattern = os.path.join(model_dir, f"{model_name}.preview*{ext}")
             for image_path in glob.glob(pattern):
+                if extract_preview_number(image_path) is None:
+                    logger.warning(f"Ignoring preview file with unexpected name: {image_path}")
+                    continue
                 preview_files.append((image_path, ext == ".mp4"))
 
         # Sort by preview number (lowest to highest)
-        def extract_preview_number(filename: str) -> int:
-            match = re.search(r"preview(\d+)", os.path.basename(filename))
-            if not match:
-                raise ValueError("Invalid preview filename")
-            return int(match.group(1))
-
         preview_files.sort(key=lambda x: extract_preview_number(x[0]))
 
         # Take first max_count files
@@ -238,22 +241,26 @@ class ImageManager:
             model_name: Model name
             max_count: Maximum number of images to keep
         """
+        def extract_preview_number(filename: str) -> Optional[int]:
+            match = re.search(r"preview(\d+)", os.path.basename(filename))
+            return int(match.group(1)) if match else None
+
+        # Collect all preview files, ignoring any that don't follow the
+        # "previewN" naming convention (e.g. leftover files from another tool
+        # or an earlier misconfigured filename pattern)
         preview_files = []
-        # Collect all preview files
         for ext in [".jpeg", ".jpg", ".png", ".webp", ".mp4"]:
             pattern = os.path.join(model_dir, f"{model_name}.preview*{ext}")
-            preview_files.extend(glob.glob(pattern))
+            for image_path in glob.glob(pattern):
+                if extract_preview_number(image_path) is None:
+                    logger.warning(f"Ignoring preview file with unexpected name: {image_path}")
+                    continue
+                preview_files.append(image_path)
 
         if not preview_files:
             return
 
         # Sort by preview number (lowest to highest)
-        def extract_preview_number(filename: str) -> int:
-            match = re.search(r"preview(\d+)", os.path.basename(filename))
-            if not match:
-                raise ValueError("Invalid preview filename")
-            return int(match.group(1))
-
         preview_files.sort(key=lambda x: extract_preview_number(x))
 
         if max_count is not None:
