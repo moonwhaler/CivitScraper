@@ -146,9 +146,6 @@ def get_metadata_path(file_path: str, config: Dict[str, Any]) -> str:
     # Get output configuration
     output_config = config.get("output", {}).get("metadata", {})
 
-    # Get path template
-    path_template = output_config.get("path", "{model_dir}")
-
     # Get filename template
     filename_template = output_config.get("filename", "{model_name}.json")
 
@@ -160,10 +157,17 @@ def get_metadata_path(file_path: str, config: Dict[str, Any]) -> str:
 
     model_type: str = get_model_type(file_path, config)
 
-    # Format path
-    path = path_template.replace("{model_dir}", model_dir)
-    path = path.replace("{model_name}", model_name)
-    path = path.replace("{model_type}", model_type)
+    base_dir = config.get("output", {}).get("base_dir")
+    if base_dir:
+        path = os.path.join(os.path.expanduser(base_dir), model_type)
+    else:
+        # Get path template
+        path_template = output_config.get("path", "{model_dir}")
+
+        # Format path
+        path = path_template.replace("{model_dir}", model_dir)
+        path = path.replace("{model_name}", model_name)
+        path = path.replace("{model_type}", model_type)
 
     # Format filename
     filename = filename_template.replace("{model_name}", model_name)
@@ -230,9 +234,6 @@ def get_html_path(file_path: str, config: Dict[str, Any]) -> str:
     # Get output configuration
     output_config = config.get("output", {}).get("metadata", {}).get("html", {})
 
-    # Get path template
-    path_template = output_config.get("path", "{model_dir}")
-
     # Get filename template
     filename_template = output_config.get("filename", "{model_name}.html")
 
@@ -245,10 +246,17 @@ def get_html_path(file_path: str, config: Dict[str, Any]) -> str:
     # Get model type
     model_type = get_model_type(file_path, config)
 
-    # Format path
-    path = path_template.replace("{model_dir}", model_dir)
-    path = path.replace("{model_name}", model_name)
-    path = path.replace("{model_type}", model_type)
+    base_dir = config.get("output", {}).get("base_dir")
+    if base_dir:
+        path = os.path.join(os.path.expanduser(base_dir), model_type)
+    else:
+        # Get path template
+        path_template = output_config.get("path", "{model_dir}")
+
+        # Format path
+        path = path_template.replace("{model_dir}", model_dir)
+        path = path.replace("{model_name}", model_name)
+        path = path.replace("{model_type}", model_type)
 
     # Format filename
     filename = filename_template.replace("{model_name}", model_name)
@@ -277,9 +285,6 @@ def get_image_path(
     # Get output configuration
     output_config = config.get("output", {}).get("images", {})
 
-    # Get path template
-    path_template = output_config.get("path", "{model_dir}")
-
     # Extract the base image type and index number
     import re
 
@@ -305,10 +310,17 @@ def get_image_path(
     # Get model type
     model_type = get_model_type(file_path, config)
 
-    # Format path
-    path = path_template.replace("{model_dir}", model_dir)
-    path = path.replace("{model_name}", model_name)
-    path = path.replace("{model_type}", model_type)
+    base_dir = config.get("output", {}).get("base_dir")
+    if base_dir:
+        path = os.path.join(os.path.expanduser(base_dir), model_type)
+    else:
+        # Get path template
+        path_template = output_config.get("path", "{model_dir}")
+
+        # Format path
+        path = path_template.replace("{model_dir}", model_dir)
+        path = path.replace("{model_name}", model_name)
+        path = path.replace("{model_type}", model_type)
 
     # Format filename
     filename = filename_template.replace("{model_name}", model_name)

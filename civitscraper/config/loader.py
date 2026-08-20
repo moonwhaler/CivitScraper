@@ -204,6 +204,12 @@ def validate_config(config: Dict[str, Any]) -> bool:
         logger.error("Missing 'base_url' in API configuration")
         return False
 
+    # Check output.base_dir, if present
+    base_dir = config.get("output", {}).get("base_dir")
+    if base_dir is not None and (not isinstance(base_dir, str) or not base_dir):
+        logger.error("'output.base_dir' must be a non-empty string")
+        return False
+
     return True
 
 

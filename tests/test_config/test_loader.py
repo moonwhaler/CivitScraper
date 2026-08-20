@@ -11,7 +11,7 @@ from typing import Any, Dict
 import pytest
 import yaml
 
-from civitscraper.config.loader import expand_env_vars, load_and_validate_config
+from civitscraper.config.loader import expand_env_vars, load_and_validate_config, validate_config
 
 
 def test_load_config_with_valid_file(config_file: str, sample_config: Dict[str, Any]):
@@ -132,6 +132,29 @@ def test_load_config_expands_env_in_paths(temp_dir: Path, monkeypatch: pytest.Mo
     config = load_and_validate_config(str(config_file))
 
     assert config["input_paths"]["my-models"]["path"] == "/mnt/ssd/loras"
+
+
+def test_validate_config_accepts_missing_base_dir(sample_config: Dict[str, Any]):
+    """output.base_dir is optional; its absence is valid."""
+    assert validate_config(sample_config) is True
+
+
+def test_validate_config_accepts_string_base_dir(sample_config: Dict[str, Any]):
+    """A non-empty string output.base_dir is valid."""
+    sample_config["output"] = {"base_dir": "~/civitai-data"}
+    assert validate_config(sample_config) is True
+
+
+def test_validate_config_rejects_empty_base_dir(sample_config: Dict[str, Any]):
+    """An empty-string output.base_dir is rejected."""
+    sample_config["output"] = {"base_dir": ""}
+    assert validate_config(sample_config) is False
+
+
+def test_validate_config_rejects_non_string_base_dir(sample_config: Dict[str, Any]):
+    """A non-string output.base_dir is rejected."""
+    sample_config["output"] = {"base_dir": 123}
+    assert validate_config(sample_config) is False
 
 
 def test_load_config_with_default_values(temp_dir: Path, monkeypatch: pytest.MonkeyPatch):

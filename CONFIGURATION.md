@@ -4,6 +4,7 @@ This document details the advanced configuration options for CivitScraper, typic
 
 ## Table of Contents
 - [API Configuration](#api-configuration)
+- [Output Location Configuration](#output-location-configuration)
 - [HTML Generation Configuration](#html-generation-configuration)
 - [Advanced Organization Settings](#advanced-organization-settings)
 - [Scanner Settings (Caching)](#scanner-settings-caching)
@@ -53,6 +54,29 @@ api:
 -   **`nsfw.browsing_level`**: The `nsfw` enum (`None`/`Soft`/`Mature`/`X`) sent to the images endpoint when fetching NSFW previews. The inline by-hash image list is browsing-level filtered (SFW only), so NSFW models fetch their full media set from the feed with this level. Default `X` (all).
 -   **`batch`**: Settings related to processing multiple files concurrently. See [Batch Processing Details](#batch-processing-details).
 -   **`circuit_breaker`**: Settings for automatically stopping requests to specific API endpoints if they consistently fail. See [Batch Processing Details](#batch-processing-details).
+
+## Output Location Configuration
+
+By default, metadata JSON, preview images, and per-model HTML files are all written next to the model file itself, using the `{model_dir}` placeholder in `output.metadata.path` / `output.images.path` / `output.metadata.html.path` (each defaults to `"{model_dir}"`).
+
+If you'd rather keep model folders containing only the model files, set `output.base_dir` to redirect metadata, images, and per-model HTML to one central directory, organized by model type:
+
+```yaml
+output:
+  base_dir: "~/civitai-data"   # Optional. Default: unset (write next to model file).
+  metadata:
+    filename: "{model_name}.json"
+  images:
+    filenames:
+      preview: "{model_name}.preview{ext}"
+```
+
+- `base_dir` supports `~` and `${VAR}`/`$VAR` expansion.
+- When set, output is written to `base_dir/{model_type}/<filename>` — the `path` settings under `output.metadata`, `output.images`, and `output.metadata.html` are ignored for the directory portion (filename templates still apply).
+- When unset, behavior is unchanged from today.
+- `output.metadata.html.gallery_path` is unaffected — it's a separate, fixed path for the shared gallery index page, not per-model output. It can point at the same directory as `base_dir` with no conflict.
+- `organization.output_dir` is also unaffected — that setting relocates the model file itself, a separate feature from metadata/image/HTML output.
+- **Caveat**: two different model files that share the same name and model type, but live in different source folders, will collide under `base_dir/{model_type}/` — the second will overwrite the first's output.
 
 ## HTML Generation Configuration
 

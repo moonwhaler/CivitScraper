@@ -84,6 +84,12 @@ jobs:
     verify_hashes: true  # Verify file hashes against CivitAI data
     paths: ["lora"]      # Process these path types
     output:
+      # base_dir: "~/civitai-data"  # Optional: central directory for metadata/images/HTML,
+      # organized as base_dir/{model_type}/... Overrides the metadata/images "path" settings
+      # below for the directory portion (filenames are unaffected). Model files themselves
+      # are left in place. Supports "~" and ${VAR}/$VAR expansion.
+      # Caveat: two models with the same name and type from different source folders
+      # will collide under the same base_dir/{model_type}/ subfolder.
       metadata:
         format: "json"
         path: "{model_dir}"     # Where to save metadata
