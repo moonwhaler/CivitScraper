@@ -54,3 +54,30 @@ def test_model_page_never_contains_raw_description_script():
     )
     assert "alert('x')" not in html
     assert "<p>ok</p>" in html
+
+
+def test_description_excerpt_is_plain_text_and_bounded():
+    from civitscraper.html.sanitizer import description_excerpt
+
+    html = "<p>Use <b>weight</b> 0.8 &amp; trigger <i>foo</i>.</p>" + "<p>word </p>" * 200
+    text = description_excerpt(html)
+
+    assert text.startswith("Use weight 0.8 & trigger foo.")
+    assert "<" not in text and "&amp;" not in text
+    assert len(text) <= 300
+    assert not text.endswith(" ")
+    assert description_excerpt(None) == ""
+
+
+def test_merged_gallery_card_drops_raw_sibling_versions():
+    from civitscraper.html.context import ContextBuilder
+
+    cards = [
+        {"model_id": 1, "version_id": 10, "version": "v1", "sibling_versions": [{"id": 11}]},
+        {"model_id": 1, "version_id": 11, "version": "v2", "sibling_versions": [{"id": 10}]},
+    ]
+    merged = ContextBuilder.merge_gallery_models(cards)
+
+    assert len(merged) == 1
+    assert "sibling_versions" not in merged[0]
+    assert {v["version_id"] for v in merged[0]["versions"]} == {10, 11}

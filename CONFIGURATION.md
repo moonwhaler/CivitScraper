@@ -217,11 +217,17 @@ scanner:
   cache_dir: ".civitscraper_cache"  # Directory to store cache files (API responses)
   cache_validity: 86400            # [seconds] How long cache entries are considered valid (default: 24 hours)
   force_refresh: false             # Global flag to ignore cache and always fetch fresh data
+  not_found_validity: 604800       # [seconds] Don't re-query hashes CivitAI answered 404 for (7 days)
+  hash_workers: 4                  # Parallel hash + lookup workers (set 1 for spinning HDDs)
 ```
 
 -   **`cache_dir`**: Specifies the directory where API responses are cached locally.
 -   **`cache_validity`**: Determines the maximum age (in seconds) of a cached response before it's considered stale and needs refreshing.
 -   **`force_refresh`**: If set to `true` globally (or via the `--force-refresh` command-line flag), the cache will be ignored entirely for the run.
+
+-   **File hashes**: a model's SHA-256 is cached in `cache_dir/file_hashes/` and reused while the file's size and modification time are unchanged, so unchanged models are never re-read. `--rehash` ignores the cached hashes.
+-   **`not_found_validity`**: models that are not on CivitAI (404 by hash) are remembered and not looked up again for this long. Network errors, server errors and rate limits are never remembered. A model uploaded to CivitAI only minutes ago can briefly 404 by hash; run with `--force-refresh` to look it up immediately.
+-   **`hash_workers`**: how many files are hashed and looked up in parallel. 4 suits SSD/NVMe; use 1 for spinning hard disks (parallel reads make them seek) and 2 for network shares.
 
 The API client uses an LRU (Least Recently Used) cache in memory (`api.batch.cache_size`) for frequently accessed items during a single run, while the `scanner.cache_dir` provides persistent caching between runs.
 
@@ -266,13 +272,17 @@ api:
     rate_limit: 100       # Target requests/minute
     retry_delay: 1000     # Base delay (ms) for retrying after rate limit (429 error)
     cache_size: 100       # In-memory LRU cache size for API responses during a run
+    download_rate_limit: 300  # Image downloads/minute (separate from API calls)
+    download_workers: 4   # Models whose previews download in parallel
     circuit_breaker:
       failure_threshold: 5 # Consecutive failures to trigger breaker
       reset_timeout: 60    # Seconds before retrying a broken circuit
 ```
 
--   **`enabled`** / **`max_concurrent`**: Currently not used by `scan-paths` jobs; metadata lookups run sequentially. (Parallel lookups are planned.)
--   **`rate_limit`**: A single token bucket (shared by API calls and image downloads) keeps requests below the target rate (requests per minute).
+-   **`enabled`**: `false` makes hashing and metadata lookups sequential.
+-   **`max_concurrent`**: Maximum number of simultaneous metadata API requests. Files are hashed by `scanner.hash_workers` threads; this caps how many of them talk to the API at once.
+-   **`rate_limit`**: Token bucket for CivitAI API calls (requests per minute).
+-   **`download_rate_limit`** (default 300/min) and **`download_workers`** (default 4): preview downloads from the image CDN have their own bucket and run for several models at once. Your API key is only ever sent to the API host, never to image or other hosts.
 -   **HTTP 429**: CivitAI's `Retry-After` header (seconds or HTTP date, capped at 5 minutes) is honored; without it the client backs off exponentially from `retry_delay`. Rate limiting does not count toward the circuit breaker.
 -   **`cache_size`**: An in-memory LRU cache stores recent API responses during a run to avoid refetching the same data multiple times within that run.
 -   **`circuit_breaker`**: Monitors consecutive failures for each API endpoint (e.g., `/models/{id}`, `/images`). If an endpoint fails `failure_threshold` times in a row, the breaker "opens," and further requests to that specific endpoint are blocked for `reset_timeout` seconds to allow the API to recover. This prevents hammering a potentially failing service.

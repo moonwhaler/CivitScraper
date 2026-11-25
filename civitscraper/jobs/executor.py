@@ -4,10 +4,12 @@ Job executor for CivitScraper.
 This module handles executing jobs defined in the configuration.
 """
 
+import concurrent.futures
 import json
 import logging
 import os
 import shutil
+import threading
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..api.client import CivitAIClient
@@ -236,44 +238,92 @@ class JobExecutor:
             metadata_dict = {}
             organized_files_mapping = {}
 
-            summary = {"not_found": 0, "unreadable": 0, "errors": 0, "output_failed": 0}
+            summary = {
+                "not_found": 0,
+                "not_found_cached": 0,
+                "unreadable": 0,
+                "errors": 0,
+                "output_failed": 0,
+            }
 
-            # First, fetch metadata for all files without processing them
-            for file_path in filtered_files:
+            # Hash + look up files in parallel. Hashing releases the GIL (hashlib), and
+            # API calls are additionally bounded by api.batch.max_concurrent; the shared
+            # rate limiter, circuit breaker and caches are thread-safe.
+            batch_config = job_specific_config.get("api", {}).get("batch", {})
+            parallel = batch_config.get("enabled", True)
+            workers = (
+                max(1, int(job_specific_config.get("scanner", {}).get("hash_workers", 4)))
+                if parallel
+                else 1
+            )
+            api_slots = threading.BoundedSemaphore(
+                max(1, int(batch_config.get("max_concurrent", 4))) if parallel else 1
+            )
+
+            def fetch_one(file_path: str) -> Tuple[str, Optional[Dict[str, Any]]]:
+                """Return (outcome, metadata) for one file."""
                 try:
-                    # If using cached metadata, load from JSON file instead of API
                     if use_cached_metadata:
                         metadata = self._load_cached_metadata(file_path, job_specific_config)
                         if metadata:
                             logger.debug(f"Loaded cached metadata for {file_path}")
-                            metadata_dict[file_path] = metadata
-                        else:
-                            logger.warning(f"No cached metadata found for {file_path}")
-                            summary["not_found"] += 1
-                        continue
+                            return "matched", metadata
+                        logger.warning(f"No cached metadata found for {file_path}")
+                        return "not_found", None
 
                     result = temp_processor.file_processor.process(
                         file_path, verify_hash=verify_hashes
                     )
                     if not result.success or not result.file_hash:
                         logger.warning(f"Failed to process file {file_path}: {result.error}")
-                        summary["unreadable"] += 1
-                        continue
+                        return "unreadable", None
 
-                    # Get metadata from API
-                    metadata = temp_processor.metadata_manager.fetch_metadata(
-                        result.file_hash, force_refresh=force_refresh
-                    )
+                    if not force_refresh and temp_processor.metadata_manager.is_known_not_found(
+                        result.file_hash
+                    ):
+                        return "not_found_cached", None
+
+                    with api_slots:
+                        metadata = temp_processor.metadata_manager.fetch_metadata(
+                            result.file_hash, force_refresh=force_refresh
+                        )
                     if metadata:
                         logger.debug(f"Got metadata for {file_path}")
-                        metadata_dict[file_path] = metadata
-                    else:
-                        logger.warning(f"No metadata found for {file_path}")
-                        summary["not_found"] += 1
+                        return "matched", metadata
+                    logger.warning(f"No metadata found for {file_path}")
+                    return "not_found", None
                 except Exception as e:
                     logger.error(f"Error fetching metadata for {file_path}: {e}")
                     logger.debug("Traceback:", exc_info=True)
-                    summary["errors"] += 1
+                    return "errors", None
+
+            fetched: Dict[str, Dict[str, Any]] = {}
+            if workers > 1 and len(filtered_files) > 1:
+                logger.info(f"Hashing and looking up with {workers} workers")
+                with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+                    futures = {pool.submit(fetch_one, f): f for f in filtered_files}
+                    for done, future in enumerate(concurrent.futures.as_completed(futures), 1):
+                        outcome, metadata = future.result()
+                        if metadata is not None:
+                            fetched[futures[future]] = metadata
+                        else:
+                            summary[outcome] += 1
+                        if done % 100 == 0 or done == len(filtered_files):
+                            logger.info(f"Looked up {done}/{len(filtered_files)} files")
+            else:
+                for file_path in filtered_files:
+                    outcome, metadata = fetch_one(file_path)
+                    if metadata is not None:
+                        fetched[file_path] = metadata
+                    else:
+                        summary[outcome] += 1
+
+            # Keep discovery order so later phases behave deterministically.
+            for file_path in filtered_files:
+                if file_path in fetched:
+                    metadata_dict[file_path] = fetched[file_path]
+
+            temp_processor.file_processor.flush()
 
             # PHASE 1.5: Enrich with parent model data (deduplicated by modelId).
             # Run enrichment if any file's sibling versions are missing or stale
@@ -312,17 +362,11 @@ class JobExecutor:
                     if new_path:
                         organized_files_mapping[orig_path] = new_path
 
-            # PHASE 3: Download images to appropriate paths (if enabled)
-            images_save = job_config.get("output", {}).get("images", {}).get("save", True)
-            if metadata_dict and images_save:
-                logger.info(f"Downloading images for {len(metadata_dict)} files")
-                for file_path, metadata in metadata_dict.items():
-                    # Use organized path if available, otherwise use original path
-                    target_path = organized_files_mapping.get(file_path, file_path)
-                    temp_processor.image_manager.download_images(
-                        target_path, metadata, force_refresh=force_refresh
-                    )
-            elif metadata_dict and not images_save:
+            # Images are downloaded per model in phase 4b (in parallel, right before
+            # that model's HTML is rendered), into the organized location if any.
+            if metadata_dict and not job_specific_config.get("output", {}).get("images", {}).get(
+                "save", True
+            ):
                 logger.info("Skipping image downloads (images.save is false)")
 
             # PHASE 4: Process remaining tasks (metadata, HTML) with parallelization
@@ -370,17 +414,20 @@ class JobExecutor:
             # PHASE 4b: Generate images + HTML. The internal save_metadata is now a
             # no-op for already-written sidecars (dirty flag consumed in 4a).
             # Use parallel processing for large collections
-            import concurrent.futures
-
             if len(items_to_process) > 10:
-                max_workers = min(4, len(items_to_process))  # Lower workers for I/O-heavy tasks
+                download_workers = (
+                    job_specific_config.get("api", {}).get("batch", {}).get("download_workers", 4)
+                )
+                max_workers = max(1, min(int(download_workers), len(items_to_process)))
                 logger.info(f"Processing {len(items_to_process)} files with {max_workers} workers")
 
                 def process_single_item(
                     item: Tuple[str, Dict[str, Any]],
                 ) -> Tuple[str, Optional[Dict[str, Any]]]:
                     path, meta = item
-                    processed = temp_processor.save_and_process_with_metadata(path, meta)
+                    processed = temp_processor.save_and_process_with_metadata(
+                        path, meta, force_refresh=force_refresh
+                    )
                     return (path, processed)
 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -406,7 +453,7 @@ class JobExecutor:
                 # Sequential processing for small collections
                 for process_path, metadata in items_to_process:
                     processed_metadata = temp_processor.save_and_process_with_metadata(
-                        process_path, metadata
+                        process_path, metadata, force_refresh=force_refresh
                     )
                     results.append((process_path, processed_metadata))
 
@@ -436,7 +483,8 @@ class JobExecutor:
             logger.info(
                 f"Job {job_name} summary: {len(files)} found, "
                 f"{len(files) - len(filtered_files)} skipped (already have metadata), "
-                f"{len(metadata_dict)} matched, {summary['not_found']} not found on CivitAI, "
+                f"{len(metadata_dict)} matched, {summary['not_found']} not found on CivitAI "
+                f"(+{summary['not_found_cached']} known unknown, not re-queried), "
                 f"{summary['unreadable']} unreadable, {summary['errors']} lookup errors, "
                 f"{summary['output_failed']} failed while writing output"
             )

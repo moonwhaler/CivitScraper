@@ -44,6 +44,12 @@ def parse_args():
         "--force-refresh", action="store_true", help="Ignore cache and force refresh metadata"
     )
 
+    parser.add_argument(
+        "--rehash",
+        action="store_true",
+        help="Re-hash model files even if their cached hash is still valid",
+    )
+
     # Logging
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     parser.add_argument("--quiet", action="store_true", help="Suppress console output")
@@ -72,6 +78,9 @@ def main():
             if "scanner" not in config:
                 config["scanner"] = {}
             config["scanner"]["force_refresh"] = True
+
+        if args.rehash:
+            config.setdefault("scanner", {})["rehash"] = True
 
         # Set up logging
         if args.debug:

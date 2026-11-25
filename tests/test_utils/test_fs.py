@@ -123,3 +123,27 @@ def test_interrupted_download_leaves_no_preview(tmp_path):
 
     assert not ok
     assert os.listdir(tmp_path) == []
+
+
+def test_api_cache_prunes_expired_entries_but_not_subcaches(tmp_path, monkeypatch):
+    import time as _time
+
+    from civitscraper.utils import cache as cache_mod
+    from civitscraper.utils.cache import CacheManager
+
+    monkeypatch.setattr(cache_mod, "PRUNE_THRESHOLD", 3)
+    old = _time.time() - 10_000
+    for i in range(5):
+        f = tmp_path / f"{i}.json"
+        f.write_text("{}")
+        if i < 4:
+            os.utime(f, (old, old))
+    sub = tmp_path / "file_hashes"
+    sub.mkdir()
+    (sub / "hashes.json").write_text("{}")
+    os.utime(sub / "hashes.json", (old, old))
+
+    CacheManager({"scanner": {"cache_dir": str(tmp_path), "cache_validity": 60}})
+
+    assert sorted(p.name for p in tmp_path.glob("*.json")) == ["4.json"]
+    assert (sub / "hashes.json").exists()

@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
+# Prune expired API responses at start-up once the cache holds more entries than this.
+PRUNE_THRESHOLD = 1000
+
 
 class LRUCache(Generic[T]):
     """LRU (Least Recently Used) cache implementation."""
@@ -256,6 +259,13 @@ class CacheManager(Generic[T]):
         self.disk_cache = DiskCache[T](cache_dir, cache_validity)
         memory_cache_size = config.get("api", {}).get("batch", {}).get("cache_size", 100)
         self.memory_cache = LRUCache[T](memory_cache_size)
+
+        # Expired responses were never deleted, so the cache directory only grew.
+        # Prune once per run when it holds a meaningful number of entries. Only
+        # top-level *.json files are API responses; subdirectories (file hashes,
+        # not-found and failed-model caches) are untouched.
+        if self.disk_cache.get_item_count() > PRUNE_THRESHOLD:
+            self.disk_cache.clear_expired()
 
     def get(self, key: str, default: Optional[T] = None) -> Optional[T]:
         """

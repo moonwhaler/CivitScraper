@@ -39,6 +39,8 @@ class BaseClient:
 
         rate_limit = config["api"].get("batch", {}).get("rate_limit", 100)
         self.rate_limiter = RateLimiter(rate_limit)
+        download_rate_limit = config["api"].get("batch", {}).get("download_rate_limit", 300)
+        self.download_rate_limiter = RateLimiter(download_rate_limit)
 
         failure_threshold = (
             config["api"].get("batch", {}).get("circuit_breaker", {}).get("failure_threshold", 5)
@@ -70,6 +72,7 @@ class BaseClient:
             max_retries=self.max_retries,
             base_retry_delay=self.base_retry_delay,
             headers=headers,
+            download_rate_limiter=self.download_rate_limiter,
         )
 
         self.response_parser = ResponseParser()
