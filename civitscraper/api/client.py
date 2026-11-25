@@ -108,6 +108,7 @@ class CivitAIClient:
                 "type": model_data.get("type"),
                 "nsfw": model_data.get("nsfw", False),
                 "creator": {"username": model_data.get("creator", {}).get("username", "Unknown")},
+                "tags": model_data.get("tags", []),
             }
             for version in model_data.get("modelVersions", []):
                 stats = version.get("stats", {})

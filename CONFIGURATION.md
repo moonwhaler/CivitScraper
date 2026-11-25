@@ -98,6 +98,7 @@ output:
       generate_gallery: true        # Generate a gallery page with all models
       gallery_path: "path/to/model_gallery.html"  # Gallery output path
       gallery_title: "Model Gallery"              # Gallery page title
+      portable_paths: true          # Gallery links relative to the gallery (default true)
 ```
 
 ### Key Settings
@@ -108,6 +109,19 @@ output:
 -   **`generate_gallery`**: Creates a gallery page that lists all processed models.
 -   **`gallery_path`**: Location for the gallery HTML file.
 -   **`gallery_title`**: Title displayed on the gallery page.
+-   **`portable_paths`** (default `true`): links in the gallery are relative to the gallery file. The gallery then keeps working when the whole tree moves together: the gallery and the model folders copied to another disk, or a NAS mounted at a different path or drive letter. A path on another Windows drive than the gallery stays absolute. Set it to `false` if you move only the gallery folder and leave the models where they are.
+
+### Gallery Features
+
+-   **Search** matches model name, trigger words, tags, creator, type, base model, folder and the description.
+-   **Facets** filter by health, model type, base model, creator and folder. Within one facet any selected value matches; across facets all must match.
+-   **Copy buttons** on each card copy the trigger words (comma-separated, ready to paste into a prompt) or the model file path.
+-   **Collection health** (summary line above the results, and the *Health* facet):
+    -   *Update available*: CivitAI has a version newer than every local version on the same base model. A new SDXL release does not flag a model you only keep for SD 1.5.
+    -   *No preview*: no preview image was found.
+    -   *Duplicate*: the same CivitAI version is stored at two or more locations. Organized copies and symlinks (copy/symlink mode) are not counted.
+    -   *Not on CivitAI*: scanned files that have no sidecar because CivitAI answered "not found" for their hash. Other files without a sidecar (never looked up, or the lookup failed) are listed as *No metadata yet*. Both are in the collapsible panel above the results.
+-   Version lists (and so *Update available*) are as fresh as each model's last lookup. With `skip_existing: true` only new files are looked up, so run a job with `skip_existing: false` now and then to refresh them. Tags come from the parent model data, so older sidecars show them after such a refresh.
 
 ### HTML Regeneration Without API Calls
 

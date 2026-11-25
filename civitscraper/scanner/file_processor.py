@@ -79,6 +79,13 @@ class ModelFileProcessor:
         # Return successful result
         return FileProcessingResult(file_path=file_path, file_hash=file_hash, success=True)
 
+    def cached_hash(self, file_path: str, algorithm: str = "sha256") -> Optional[str]:
+        """Return the file's cached hash if it is still valid, without hashing."""
+        try:
+            return self.hash_cache.get(file_path, algorithm, os.stat(file_path))
+        except OSError:
+            return None
+
     def _hash(self, file_path: str, algorithm: str = "sha256") -> Optional[str]:
         """Hash a file, reusing the cached hash when size and mtime are unchanged."""
         try:

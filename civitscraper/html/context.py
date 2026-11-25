@@ -22,6 +22,68 @@ from .images import ImageHandler
 from .paths import PathManager
 from .sanitizer import DataSanitizer, description_excerpt, sanitize_description
 
+# Gallery card limits: the detail page shows everything, cards only need enough
+# to search and copy (keeps models_data.js small for big collections).
+MAX_CARD_TAGS = 20
+MAX_CARD_TRIGGER_WORDS = 10
+MAX_CARD_TRIGGER_CHARS = 300
+
+HEALTH_UPDATE = "update"
+HEALTH_NO_PREVIEW = "no_preview"
+HEALTH_DUPLICATE = "duplicate"
+
+
+def card_trigger_words(trained_words: Any) -> List[str]:
+    """Trigger words for a gallery card: at most 10 entries and 300 characters."""
+    if isinstance(trained_words, str):
+        trained_words = [trained_words]
+    if not isinstance(trained_words, list):
+        return []
+    words: List[str] = []
+    total = 0
+    for word in trained_words:
+        word = str(word).strip().rstrip(",").strip() if word else ""
+        if not word:
+            continue
+        if len(words) >= MAX_CARD_TRIGGER_WORDS or total + len(word) > MAX_CARD_TRIGGER_CHARS:
+            break
+        words.append(word)
+        total += len(word)
+    return words
+
+
+def update_available(versions: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """
+    Return the newest remote version that beats the local ones on its base model.
+
+    A remote version counts only if it is newer than every local version on the same
+    base model; returns None if there is no such version.
+
+    Comparing per base model keeps e.g. a new SDXL release from flagging a model the
+    user only has (and wants) for SD 1.5.
+    """
+    newest_local: Dict[Any, str] = {}
+    for version in versions:
+        if version.get("is_local"):
+            base = version.get("base_model")
+            created = version.get("created_at") or ""
+            if created > newest_local.get(base, ""):
+                newest_local[base] = created
+            else:
+                newest_local.setdefault(base, created)
+
+    best: Optional[Dict[str, Any]] = None
+    for version in versions:
+        if version.get("is_local"):
+            continue
+        base = version.get("base_model")
+        created = version.get("created_at") or ""
+        if base not in newest_local or not created or created <= newest_local[base]:
+            continue
+        if best is None or created > (best.get("created_at") or ""):
+            best = version
+    return best
+
 
 # Define a typed dictionary for the preview image result
 class PreviewImageDict(TypedDict):
@@ -363,6 +425,12 @@ class ContextBuilder:
         }
 
         model_name = metadata.get("model", {}).get("name") or metadata.get("name", "Unknown")
+        parent = metadata.get("parentModel") or {}
+        model_info = metadata.get("model") or {}
+        creator = (parent.get("creator") or {}).get("username") or (
+            model_info.get("creator") or {}
+        ).get("username")
+        tags = parent.get("tags") or model_info.get("tags") or []
 
         parent_folder_path = os.path.dirname(file_path)
         folder_name = os.path.basename(parent_folder_path)
@@ -383,6 +451,7 @@ class ContextBuilder:
 
         # Get file modification time from the actual model file
         file_modified = None
+        model_file: Optional[str] = file_path
         if is_html_file:
             model_file = self._find_model_file(file_path)
             mtime_path = model_file if model_file else file_path
@@ -414,6 +483,10 @@ class ContextBuilder:
             "nsfw": is_nsfw(metadata, self.nsfw_threshold),
             "version_id": metadata.get("id"),
             "local_version_count": local_version_count,
+            "creator": creator,
+            "tags": [str(t) for t in tags if t][:MAX_CARD_TAGS],
+            "trigger_words": card_trigger_words(metadata.get("trainedWords")),
+            "file_path": os.path.abspath(model_file) if model_file else None,
             # Raw sibling versions for gallery merging (local + remote linking)
             "sibling_versions": metadata.get("siblingVersions", []),
         }
@@ -472,11 +545,22 @@ class ContextBuilder:
             representative = with_preview[0] if with_preview else by_newest[0]
             rep_version_id = representative.get("version_id")
 
-            # Build version entries from the actual local member cards.
+            # Build version entries from the actual local member cards. The same
+            # version at several local paths is one entry plus a duplicate list.
             member_ids = set()
             versions: List[Dict[str, Any]] = []
+            copies: Dict[Any, List[str]] = {}
             for member in members:
                 version_id = member.get("version_id")
+                paths = member.get("duplicates") or (
+                    [member["file_path"]] if member.get("file_path") else []
+                )
+                copies.setdefault(version_id, [])
+                for path in paths:
+                    if path not in copies[version_id]:
+                        copies[version_id].append(path)
+                if version_id in member_ids and version_id is not None:
+                    continue
                 member_ids.add(version_id)
                 versions.append(
                     {
@@ -486,6 +570,7 @@ class ContextBuilder:
                         "is_current": version_id == rep_version_id,
                         "link": member.get("html_path"),
                         "created_at": member.get("created_at"),
+                        "base_model": member.get("base_model"),
                     }
                 )
 
@@ -508,6 +593,7 @@ class ContextBuilder:
                                 model_id, sib_id, representative.get("nsfw", False), domains
                             ),
                             "created_at": sibling.get("createdAt"),
+                            "base_model": sibling.get("baseModel"),
                         }
                     )
 
@@ -518,6 +604,19 @@ class ContextBuilder:
             merged_card["versions"] = versions
             # Raw sibling lists are folded into "versions"; don't ship them twice.
             merged_card.pop("sibling_versions", None)
+
+            duplicates = [paths for paths in copies.values() if len(paths) > 1]
+            merged_card["duplicates"] = [p for paths in duplicates for p in paths]
+            update = update_available(versions)
+            merged_card["update_version"] = update.get("name") if update else None
+            health = []
+            if update:
+                health.append(HEALTH_UPDATE)
+            if not merged_card.get("preview_image_path"):
+                health.append(HEALTH_NO_PREVIEW)
+            if duplicates:
+                health.append(HEALTH_DUPLICATE)
+            merged_card["health"] = health
             merged.append(merged_card)
 
         return merged

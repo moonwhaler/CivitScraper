@@ -1442,3 +1442,198 @@
 .facet-container::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.3);
 }
+
+/* ---------------------------------------------------------------------------
+   Collection health: badges, summary bar, files without a card
+   --------------------------------------------------------------------------- */
+.model-card,
+.model-list-item {
+    position: relative;
+}
+
+.health-badges {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 10;
+    display: flex;
+    gap: 4px;
+    pointer-events: none;
+}
+
+.model-list-item .health-badges {
+    top: auto;
+    bottom: 8px;
+    left: auto;
+    right: 8px;
+}
+
+.health-badge {
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.health-badge.update {
+    background-color: rgba(46, 204, 113, 0.92);
+}
+
+.health-badge.duplicate {
+    background-color: rgba(230, 126, 34, 0.92);
+}
+
+.health-summary {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    padding: 8px 15px;
+    background-color: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.85rem;
+}
+
+.health-total {
+    color: var(--metadata-label-color);
+    font-weight: 500;
+}
+
+.health-sep {
+    color: var(--metadata-label-color);
+}
+
+.health-link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--link-color);
+    font: inherit;
+    cursor: pointer;
+}
+
+.health-link:hover {
+    color: var(--link-hover-color);
+    text-decoration: underline;
+}
+
+.unmatched-panel {
+    margin-bottom: 15px;
+    padding: 8px 15px;
+    background-color: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.unmatched-summary {
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--metadata-label-color);
+}
+
+.unmatched-group h4 {
+    margin: 12px 0 2px;
+    font-size: 0.9rem;
+    color: var(--section-title-color);
+}
+
+.unmatched-help {
+    margin: 0 0 6px;
+    font-size: 0.8rem;
+    color: var(--metadata-label-color);
+}
+
+.unmatched-row,
+.duplicate-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 3px 0;
+    font-size: 0.82rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.unmatched-name,
+.duplicate-path {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.unmatched-folder {
+    color: var(--metadata-label-color);
+}
+
+.unmatched-more {
+    padding: 4px 0;
+    font-size: 0.8rem;
+    color: var(--metadata-label-color);
+}
+
+/* Copy buttons (outside the card link) */
+.card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px 10px;
+}
+
+.model-focused-item .card-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 0;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.model-focused-item:hover .card-actions,
+.model-focused-item:focus-within .card-actions {
+    opacity: 1;
+}
+
+.card-action {
+    padding: 3px 9px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background-color: var(--stat-background);
+    color: var(--text-color);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.card-action:hover {
+    border-color: var(--primary-color);
+}
+
+.card-action.small {
+    padding: 1px 7px;
+}
+
+.card-action.copied {
+    border-color: var(--secondary-color);
+    color: var(--secondary-color);
+}
+
+.card-action.copy-failed {
+    border-color: #e74c3c;
+    color: #e74c3c;
+}
+
+.duplicate-list {
+    flex-basis: 100%;
+    font-size: 0.78rem;
+}
+
+.duplicate-list summary {
+    cursor: pointer;
+    color: var(--metadata-label-color);
+}
