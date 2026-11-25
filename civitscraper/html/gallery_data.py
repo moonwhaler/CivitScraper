@@ -150,6 +150,33 @@ def make_cards_portable(cards: List[Dict[str, Any]], gallery_dir: str, portable:
                 version["link"] = portable_path(version.get("link"), gallery_dir, portable)
 
 
+# Version fields gallery.js reads; the rest only feeds the health flags.
+_VERSION_KEYS_FOR_JS = ("name", "link", "is_local", "is_current")
+# Card fields left out of models_data.js when empty (gallery.js treats missing as empty)
+_OMIT_WHEN_EMPTY = ("duplicates", "health", "update_version")
+
+
+def slim_cards_for_js(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Drop card data the gallery page does not read, to keep models_data.js small.
+
+    Args:
+        cards: Merged gallery cards
+
+    Returns:
+        New card dicts with trimmed version entries and empty optional fields removed
+    """
+    slim = []
+    for card in cards:
+        out = {k: v for k, v in card.items() if not (k in _OMIT_WHEN_EMPTY and not v)}
+        if "versions" in out:
+            out["versions"] = [
+                {k: v[k] for k in _VERSION_KEYS_FOR_JS if k in v} for v in out["versions"]
+            ]
+        slim.append(out)
+    return slim
+
+
 def unmatched_entries(
     unmatched: Iterable[Tuple[str, str]], gallery_dir: str, portable: bool
 ) -> List[Dict[str, Any]]:

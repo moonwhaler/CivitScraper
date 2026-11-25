@@ -13,7 +13,12 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..scanner.discovery import cached_listings, find_html_files
 from ..utils.fs import atomic_write
 from .context import ContextBuilder
-from .gallery_data import collapse_candidates, make_cards_portable, unmatched_entries
+from .gallery_data import (
+    collapse_candidates,
+    make_cards_portable,
+    slim_cards_for_js,
+    unmatched_entries,
+)
 from .paths import PathManager
 from .renderer import TemplateRenderer
 
@@ -235,7 +240,7 @@ class HTMLGenerator:
         js_content = "const allModelsData = [];"
         try:
             # Serialize directly to JSON, no special escaping needed for JS file
-            json_string = json.dumps(models_data, separators=(",", ":"))
+            json_string = json.dumps(slim_cards_for_js(models_data), separators=(",", ":"))
             unmatched_json = json.dumps(unmatched_data, separators=(",", ":"))
             # Explicitly assign to window object
             js_content = (

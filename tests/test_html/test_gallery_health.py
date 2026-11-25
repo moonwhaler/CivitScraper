@@ -16,7 +16,7 @@ from civitscraper.html.context import (
     card_trigger_words,
     update_available,
 )
-from civitscraper.html.gallery_data import collapse_candidates, portable_path
+from civitscraper.html.gallery_data import collapse_candidates, portable_path, slim_cards_for_js
 from civitscraper.html.generator import HTMLGenerator
 from civitscraper.jobs.executor import JobExecutor
 
@@ -235,6 +235,16 @@ def test_portable_path_other_drive_stays_absolute(tmp_path, monkeypatch):
     target = str(tmp_path / "a.png")
 
     assert portable_path(target, str(tmp_path / "html")) == target
+
+
+def test_slim_cards_keep_only_what_the_page_reads():
+    """Version entries keep name/link/local/current; empty health fields are omitted."""
+    merged = ContextBuilder.merge_gallery_models([_card()])
+    slim = slim_cards_for_js(merged)[0]
+
+    assert set(slim["versions"][0]) == {"name", "link", "is_local", "is_current"}
+    assert "health" not in slim and "duplicates" not in slim and "update_version" not in slim
+    assert "base_model" in merged[0]["versions"][0]  # input untouched
 
 
 # --- end to end --------------------------------------------------------------------
