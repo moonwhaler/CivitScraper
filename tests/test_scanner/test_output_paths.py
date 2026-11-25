@@ -307,3 +307,31 @@ def test_gallery_with_bare_filename_is_written_to_cwd(tmp_path, monkeypatch):
 
     assert (tmp_path / "gallery.html").is_file()
     assert (tmp_path / "data" / "models_data.js").is_file()
+
+
+def test_cached_metadata_job_summary_counts_files_without_sidecar(tmp_path, monkeypatch, caplog):
+    """regenerate-html skips files because they have NO sidecar; the summary says so."""
+    import logging
+
+    from civitscraper.jobs.scan_job import ScanJob
+
+    monkeypatch.chdir(tmp_path)
+    config, models = make_config(tmp_path, base_dir=False)
+    config["scanner"] = {"cache_dir": str(tmp_path / "cache")}
+    write_sidecar(config, make_model(models, "with_sidecar"))
+    make_model(models, "without_sidecar")
+    job = {
+        "type": "scan-paths",
+        "paths": ["l"],
+        "use_cached_metadata": True,
+        "output": {"metadata": {"html": {"enabled": False}}, "images": {"save": False}},
+    }
+
+    with caplog.at_level(logging.INFO, logger="civitscraper.jobs.scan_job"):
+        assert ScanJob(config, "regen", job, MagicMock()).run()
+
+    summary = next(r.getMessage() for r in caplog.records if "summary" in r.getMessage())
+    assert "2 found, 1 skipped (no metadata yet), 1 loaded from sidecars" in summary
+    assert "already have metadata" not in summary
+    assert "not found on CivitAI" not in summary
+    assert not any("Looked up" in r.getMessage() for r in caplog.records)
