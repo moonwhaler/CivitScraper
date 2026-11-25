@@ -6,11 +6,64 @@ This module handles image discovery, processing, and metadata extraction.
 
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
+from ..api.domains import get_domain_settings
 from .paths import PathManager
 
 logger = logging.getLogger(__name__)
+
+
+# CivitAI image meta keys -> A1111/Forge infotext labels, in infotext order.
+# Size is built from width/height. Several keys have two spellings in the wild.
+_INFOTEXT_KEYS: List[Tuple[str, Tuple[str, ...]]] = [
+    ("Steps", ("steps",)),
+    ("Sampler", ("sampler",)),
+    ("Schedule type", ("Schedule type", "scheduler")),
+    ("CFG scale", ("cfgScale",)),
+    ("Seed", ("seed",)),
+    ("Size", ()),
+    ("Model hash", ("Model hash",)),
+    ("Model", ("Model",)),
+    ("Denoising strength", ("Denoising strength", "denoise")),
+    ("Clip skip", ("clipSkip", "Clip skip")),
+    ("Hires upscale", ("Hires upscale",)),
+    ("Hires steps", ("Hires steps",)),
+    ("Hires upscaler", ("Hires upscaler",)),
+    ("RNG", ("RNG",)),
+]
+
+
+def _positive_int(value: Any) -> Optional[int]:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def generation_params(meta: Dict[str, Any]) -> List[List[str]]:
+    """
+    Return a preview image's generation settings as ordered (label, value) pairs.
+
+    Labels follow the A1111/Forge infotext ("Steps", "CFG scale", "Size", ...),
+    so the page can rebuild text that Forge's "Read generation parameters" parses.
+    Nested values (dicts, lists) are skipped.
+    """
+    params: List[List[str]] = []
+    for label, keys in _INFOTEXT_KEYS:
+        if label == "Size":
+            width, height = _positive_int(meta.get("width")), _positive_int(meta.get("height"))
+            if width and height:
+                params.append([label, f"{width}x{height}"])
+            continue
+        for key in keys:
+            value = meta.get(key)
+            if value is None or value == "" or isinstance(value, (dict, list)):
+                continue
+            params.append([label, str(value)])
+            break
+    return params
 
 
 class ImageHandler:
@@ -30,6 +83,7 @@ class ImageHandler:
         self.max_count = self.config.get("output", {}).get("images", {}).get("max_count", None)
 
         self.dry_run = config.get("dry_run", False)
+        _, self.nsfw_threshold, _ = get_domain_settings(config)
 
     def get_image_paths(self, file_path: str, metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
@@ -146,15 +200,20 @@ class ImageHandler:
                 is_video = image_path.lower().endswith(".mp4")
             logger.debug(f"File is video: {is_video}")
 
+            level = image.get("nsfwLevel")
             return {
-                "path": rel_path,
-                "prompt": image_meta.get("prompt", ""),
-                "negative_prompt": image_meta.get("negativePrompt", ""),
+                "path": rel_path.replace(os.sep, "/"),
+                "prompt": str(image_meta.get("prompt") or ""),
+                "negative_prompt": str(image_meta.get("negativePrompt") or ""),
                 "sampler": image_meta.get("sampler", ""),
                 "cfg_scale": image_meta.get("cfgScale", ""),
                 "steps": image_meta.get("steps", ""),
                 "seed": image_meta.get("seed", ""),
                 "model": image_meta.get("Model", ""),
+                "params": generation_params(image_meta),
+                "width": _positive_int(image.get("width")),
+                "height": _positive_int(image.get("height")),
+                "nsfw": isinstance(level, int) and level >= self.nsfw_threshold,
                 "is_video": is_video,
             }
         except Exception as e:

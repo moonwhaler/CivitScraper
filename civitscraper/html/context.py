@@ -20,7 +20,7 @@ from ..organization.organizer import (
 from ..scanner.discovery import get_metadata_path, list_preview_files
 from .images import ImageHandler
 from .paths import PathManager
-from .sanitizer import DataSanitizer, description_excerpt, sanitize_description
+from .sanitizer import description_excerpt, sanitize_description
 
 # Gallery card limits: the detail page shows everything, cards only need enough
 # to search and copy (keeps models_data.js small for big collections).
@@ -265,6 +265,15 @@ def invalidate_version_index(search_dir: Optional[str] = None) -> None:
     _version_index_cache.invalidate(search_dir)
 
 
+def _relative_to(path: str, directory: str) -> str:
+    """``path`` relative to ``directory`` with forward slashes; absolute on another drive."""
+    absolute = os.path.abspath(path)
+    try:
+        return os.path.relpath(absolute, directory).replace(os.sep, "/")
+    except ValueError:
+        return absolute
+
+
 class ContextBuilder:
     """Builder for template context."""
 
@@ -279,7 +288,6 @@ class ContextBuilder:
         self.domains, self.nsfw_threshold, _ = get_domain_settings(config)
         self.path_manager = PathManager(config)
         self.image_handler = ImageHandler(config)
-        self.sanitizer = DataSanitizer()
         self.org_config = OrganizationConfig.from_dict(config)
 
     def build_model_context(self, file_path: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
@@ -293,17 +301,18 @@ class ContextBuilder:
             Returns:
             Template context
         """
-        model_info = metadata.get("model", {})
+        model_info = metadata.get("model") or {}
+        parent = metadata.get("parentModel") or {}
         model_name = model_info.get("name", metadata.get("name", "Unknown"))
         model_type = model_info.get("type", "Unknown")
-        creator = model_info.get("creator", {}).get("username", "Unknown")
+        # Version sidecars carry the creator on the parent model only.
+        creator = (model_info.get("creator") or {}).get("username") or (
+            parent.get("creator") or {}
+        ).get("username")
         description = sanitize_description(metadata.get("description", ""))
-        tags = model_info.get("tags", [])
+        tags = model_info.get("tags") or parent.get("tags") or []
         stats = metadata.get("stats", {})
         image_paths = self.image_handler.get_image_paths(file_path, metadata)
-
-        # Sanitize and encode image data to avoid JSON parsing issues
-        encoded_images = self.sanitizer.sanitize_json_data(image_paths)
 
         # Filter files to show only the current model's files and add local path info
         filtered_metadata = self._filter_model_files(file_path, metadata)
@@ -336,11 +345,24 @@ class ContextBuilder:
         gallery_path = "index.html"
         try:
             gallery_abs_path = os.path.abspath(gallery_output_path)
-            gallery_path = os.path.relpath(gallery_abs_path, html_dir)
+            gallery_path = os.path.relpath(gallery_abs_path, html_dir).replace(os.sep, "/")
         except ValueError:
             # On Windows, relpath can fail if paths are on different drives
             # Fall back to absolute path
             gallery_path = os.path.abspath(gallery_output_path)
+
+        # Local version links are absolute; make them relative to this page.
+        sibling_versions = [
+            (
+                dict(v, link=_relative_to(v["link"], html_dir))
+                if v.get("is_local") and v.get("link")
+                else v
+            )
+            for v in sibling_versions
+        ]
+
+        files = filtered_metadata.get("files") or []
+        hashes = (files[0].get("hashes") or {}) if files else {}
 
         context = {
             "title": model_name,
@@ -351,9 +373,13 @@ class ContextBuilder:
             "tags": tags,
             "stats": stats,
             "images": image_paths,
-            "images_encoded": encoded_images,
             "metadata": filtered_metadata,
+            "base_model": metadata.get("baseModel"),
+            "version_name": metadata.get("name"),
+            "hashes": {k: hashes[k] for k in ("AutoV2", "SHA256") if hashes.get(k)},
             "local_file_path": os.path.abspath(file_path),
+            # Relative to the page, so copying still works after the collection moves.
+            "file_rel_path": _relative_to(file_path, html_dir),
             "sibling_versions": sibling_versions,
             "parent_model": metadata.get("parentModel", {}),
             "gallery_path": gallery_path,

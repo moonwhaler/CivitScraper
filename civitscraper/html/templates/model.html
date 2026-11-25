@@ -1,928 +1,246 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
+{% set stats = stats or {} %}
+{% set metadata = metadata or {} %}
+{% set images = images or [] %}
+{% set hashes = hashes or {} %}
+{% set slug = model_type|type_slug %}
+{% set version = version_name|version_label %}
+{% set file = (metadata.files or [])|first %}
 
-{% block title %}{{ model_name }} - CivitAI Model{% endblock %}
+{% block title %}{{ model_name }}{% if version %} · {{ version }}{% endif %}{% endblock %}
 
-{% block css %}
-{# Do NOT call super() here to avoid inheriting linked CSS from base.html #}
-<!-- Base CSS (Inlined) -->
+{% block styles %}
 <style>
-{{ read_file('css/base.css') }}
+{{ read_file('css/theme.css') }}
 </style>
-<!-- Components CSS (Inlined) -->
-<style>
-{{ read_file('css/components.css') }}
-</style>
-<!-- model.css (Inlined) -->
 <style>
 {{ read_file('css/model.css') }}
 </style>
 {% endblock %}
 
-{% block header %}{{ model_name }}{% endblock %}
+{% block body_class %}page-model{% endblock %}
 
-{% block content %}
-<!-- Hero Section with Featured Image -->
-{% if images and images|length > 0 %}
-<div class="model-hero">
-    <div class="hero-image-container">
-        {% if images[0].is_video %}
-        <video src="{{ images[0].path }}" class="hero-media" muted loop autoplay playsinline></video>
-        {% else %}
-        <img src="{{ images[0].path }}" alt="{{ model_name }}" class="hero-media">
-        {% endif %}
-        <div class="hero-overlay"></div>
-    </div>
-    <div class="hero-content">
-        <div class="hero-badges">
-            <span class="hero-badge type-badge type-{{ model_type|lower|replace(' ', '-') }}">{{ model_type }}</span>
-            {% if metadata.baseModel %}
-            <span class="hero-badge base-badge">{{ metadata.baseModel }}</span>
-            {% endif %}
-        </div>
-        <h1 class="hero-title">{{ model_name }}</h1>
-        <div class="hero-stats">
-            {% if stats and stats.downloadCount %}
-            <div class="hero-stat">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                <span>{{ stats.downloadCount|default(0) }}</span>
-            </div>
-            {% endif %}
-            {% if stats and stats.rating %}
-            <div class="hero-stat">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-                <span>{{ "%.1f"|format(stats.rating) }}</span>
-            </div>
-            {% endif %}
-            {% if stats and stats.thumbsUpCount %}
-            <div class="hero-stat">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
-                <span>{{ stats.thumbsUpCount }}</span>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-</div>
-{% endif %}
-
-<!-- Related Versions (other versions of the same model) -->
-{% include "components/related_versions.html" %}
-
-<!-- Model info component -->
-{% include "components/model_info.html" %}
-
-<div class="card">
-    <h2 class="section-title">Model Details</h2>
-    <div class="metadata-grid">
-        {% if metadata.name %}
-        <div class="metadata-item">
-            <div class="metadata-label">Version Name:</div>
-            <div class="metadata-value">{{ metadata.name }}</div>
-        </div>
-        {% endif %}
-
-        {% if metadata.createdAt %}
-        <div class="metadata-item">
-            <div class="metadata-label">Created:</div>
-            <div class="metadata-value">{{ metadata.createdAt|replace('T', ' ')|replace('Z', '')|replace('.000', '') }}</div>
-        </div>
-        {% endif %}
-
-        {% if metadata.updatedAt %}
-        <div class="metadata-item">
-            <div class="metadata-label">Updated:</div>
-            <div class="metadata-value">{{ metadata.updatedAt|replace('T', ' ')|replace('Z', '')|replace('.000', '') }}</div>
-        </div>
-        {% endif %}
-
-        {% if metadata.status %}
-        <div class="metadata-item">
-            <div class="metadata-label">Status:</div>
-            <div class="metadata-value">{{ metadata.status }}</div>
-        </div>
-        {% endif %}
-
-        {% if metadata.baseModel %}
-        <div class="metadata-item">
-            <div class="metadata-label">Base Model:</div>
-            <div class="metadata-value">{{ metadata.baseModel }}</div>
-        </div>
-        {% endif %}
-    </div>
-
-    {% if metadata.trainedWords %}
-    <div class="trigger-words-container">
-        <div class="trigger-words-header">
-            <div class="trigger-words-label">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-                <span>Trigger Words</span>
-            </div>
-            <button class="copy-all-triggers" title="Copy all trigger words">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                <span>Copy All</span>
-            </button>
-        </div>
-        <div class="trigger-words-groups" data-all-words="{{ metadata.trainedWords|join(', ') }}">
-            {% for wordGroup in metadata.trainedWords %}
-            <div class="trigger-word-group" title="Click to copy" data-word="{{ wordGroup }}">
-                <span class="trigger-text">{{ wordGroup }}</span>
-                <span class="trigger-copy-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                </span>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
+{% block topbar %}
+<header class="topbar">
+    <a class="btn ghost" href="{{ gallery_path|urlencode }}" data-action="back">
+        <svg class="icon sm" aria-hidden="true"><use href="#i-left"/></svg>Gallery
+    </a>
+    <div class="topbar-title m-topbar-title"><span>{{ model_name }}</span></div>
+    <span class="topbar-spacer"></span>
+    {% if images|selectattr('nsfw')|list %}
+    <button type="button" class="btn ghost sm" data-action="toggle-blur" aria-pressed="false" title="Blur previews marked NSFW until you hover them">
+        <svg class="icon sm" aria-hidden="true"><use href="#i-eye-off"/></svg><span class="m-hide-sm">Blur NSFW</span>
+    </button>
     {% endif %}
-
-    {% if description %}
-    <div class="metadata-item" style="margin-top: 20px;">
-        <div class="metadata-label">Description:</div>
-        <div class="metadata-value">{{ description|safe }}</div>
-    </div>
+    <button type="button" class="btn ghost icon-only" data-action="toggle-theme" aria-label="Switch theme">
+        <svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg>
+    </button>
+    {% if model_url %}
+    <a class="btn" href="{{ model_url }}" target="_blank" rel="noopener noreferrer">
+        <span class="m-hide-sm">Open on </span>CivitAI<svg class="icon sm" aria-hidden="true"><use href="#i-external"/></svg>
+    </a>
     {% endif %}
-</div>
-
-{% if images %}
-<div class="card">
-    <h2 class="section-title">Gallery</h2>
-    <div class="gallery">
-        {% for image in images %}
-        <div class="gallery-item" data-index="{{ loop.index0 }}">
-            {% if image.is_video %}
-            <video src="{{ image.path }}" preload="metadata" class="preview-video" muted loop playsinline></video>
-            <div class="video-indicator">VIDEO</div>
-            <div class="video-play-overlay">
-                <svg class="play-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                <svg class="pause-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-            </div>
-            {% else %}
-            <img src="{{ image.path }}" alt="Preview image" loading="lazy">
-            {% endif %}
-            <div class="image-metadata">
-                {% if image.steps %}
-                <span class="image-meta-item">Steps: {{ image.steps }}</span>
-                {% endif %}
-                {% if image.cfg_scale %}
-                <span class="image-meta-item">CFG: {{ image.cfg_scale }}</span>
-                {% endif %}
-                {% if image.sampler %}
-                <span class="image-meta-item">Sampler: {{ image.sampler }}</span>
-                {% endif %}
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-
-<!-- Image viewer component -->
-{% include "components/image_viewer.html" %}
-
-<!-- Inline script for image viewer functionality -->
-<script>
-// Detail pages are opened from file://, which not every browser treats as a secure
-// context; fall back to a hidden textarea + execCommand when the Clipboard API is
-// unavailable or refuses.
-window.copyToClipboard = function (text) {
-  function legacyCopy() {
-    const area = document.createElement('textarea');
-    area.value = text;
-    area.setAttribute('readonly', '');
-    area.style.position = 'fixed';
-    area.style.opacity = '0';
-    document.body.appendChild(area);
-    area.select();
-    let ok = false;
-    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
-    document.body.removeChild(area);
-    return ok ? Promise.resolve() : Promise.reject(new Error('Copy failed'));
-  }
-  if (navigator.clipboard && window.isSecureContext) {
-    return navigator.clipboard.writeText(text).catch(legacyCopy);
-  }
-  return legacyCopy();
-};
-// Immediately executing function for image viewer functionality
-(function() {
-  const galleryItems = document.querySelectorAll('.gallery-item');
-  if (galleryItems.length === 0) return;
-
-  const imageViewer = document.getElementById('image-viewer');
-  const viewerImage = document.getElementById('viewer-image');
-  const viewerVideo = document.getElementById('viewer-video');
-  const positivePrompt = document.getElementById('positive-prompt');
-  const negativePrompt = document.getElementById('negative-prompt');
-  const additionalInfo = document.getElementById('additional-info');
-  const closeButton = document.getElementById('close-viewer');
-  const prevButton = document.getElementById('prev-image');
-  const nextButton = document.getElementById('next-image');
-  const viewerCurrent = document.getElementById('viewer-current');
-  const viewerTotal = document.getElementById('viewer-total');
-  const thumbnailStrip = document.getElementById('thumbnail-strip');
-  const copyAllMetadataBtn = document.getElementById('copy-all-metadata');
-  const copyButtons = document.querySelectorAll('.copy-button');
-  const imagesDataElem = document.getElementById('images-data');
-
-  if (!imageViewer || !viewerImage || !viewerVideo || !imagesDataElem) return;
-
-  let currentIndex = 0;
-
-  // Toast notification helper
-  function showToast(message) {
-    let toast = document.querySelector('.copy-toast');
-    if (!toast) {
-      toast = document.createElement('div');
-      toast.className = 'copy-toast';
-      document.body.appendChild(toast);
-    }
-    toast.textContent = message;
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 2000);
-  }
-
-  // Function to decode base64 encoded JSON data with Unicode support
-  function decodeBase64Json(base64String) {
-    try {
-      const binary = atob(base64String);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-      const jsonString = new TextDecoder('utf-8').decode(bytes);
-      return JSON.parse(jsonString);
-    } catch (e) {
-      return [];
-    }
-  }
-
-  // Parse image data
-  let imageData;
-  try {
-    const encodedData = imagesDataElem.getAttribute('data-images');
-    if (!encodedData) return;
-    imageData = decodeBase64Json(encodedData);
-    if (!Array.isArray(imageData) || imageData.length === 0) return;
-  } catch (e) {
-    return;
-  }
-
-  // Build thumbnail strip
-  function buildThumbnails() {
-    if (!thumbnailStrip) return;
-    thumbnailStrip.innerHTML = '';
-    galleryItems.forEach((item, index) => {
-      const thumb = document.createElement('div');
-      thumb.className = 'thumbnail-item' + (index === 0 ? ' active' : '');
-      thumb.dataset.index = index;
-
-      const media = item.querySelector('img') || item.querySelector('video');
-      if (media) {
-        if (media.tagName === 'VIDEO') {
-          const video = document.createElement('video');
-          video.src = media.src;
-          video.muted = true;
-          thumb.appendChild(video);
-        } else {
-          const img = document.createElement('img');
-          img.src = media.src;
-          img.alt = 'Thumbnail';
-          thumb.appendChild(img);
-        }
-      }
-
-      thumb.addEventListener('click', () => {
-        currentIndex = index;
-        openImageViewer(currentIndex);
-      });
-
-      thumbnailStrip.appendChild(thumb);
-    });
-  }
-
-  // Update active thumbnail
-  function updateActiveThumbnail(index) {
-    if (!thumbnailStrip) return;
-    thumbnailStrip.querySelectorAll('.thumbnail-item').forEach((item, i) => {
-      item.classList.toggle('active', i === index);
-    });
-    // Scroll thumbnail into view
-    const activeThumb = thumbnailStrip.querySelector('.thumbnail-item.active');
-    if (activeThumb) {
-      activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-    }
-  }
-
-  // Function to open image viewer
-  function openImageViewer(index) {
-    if (index < 0 || index >= imageData.length) return;
-
-    currentIndex = index;
-    const data = imageData[index];
-    const galleryItem = galleryItems[index];
-    const isVideo = data.is_video || false;
-
-    // Pause any currently playing video first
-    if (viewerVideo) {
-      viewerVideo.pause();
-    }
-
-    if (isVideo) {
-      const videoElement = galleryItem.querySelector('video');
-      if (videoElement) {
-        viewerVideo.src = videoElement.src;
-        viewerVideo.style.display = 'block';
-        viewerImage.style.display = 'none';
-        // Autoplay the video
-        viewerVideo.currentTime = 0;
-        viewerVideo.play().catch(() => {});
-      }
-    } else {
-      const imgElement = galleryItem.querySelector('img');
-      if (imgElement) {
-        viewerImage.src = imgElement.src;
-        viewerImage.style.display = 'block';
-        viewerVideo.style.display = 'none';
-      }
-    }
-
-    // Update prompts
-    if (positivePrompt) {
-      positivePrompt.textContent = data.prompt || 'No positive prompt available';
-    }
-    if (negativePrompt) {
-      negativePrompt.textContent = data.negative_prompt || 'No negative prompt available';
-    }
-
-    // Format additional info with grid layout
-    if (additionalInfo) {
-      // Image metadata is free text typed by uploaders: build nodes, never innerHTML.
-      const rows = [
-        ['Sampler', data.sampler],
-        ['CFG Scale', data.cfg_scale],
-        ['Steps', data.steps],
-        ['Seed', data.seed],
-        ['Model', data.model],
-      ].filter(([, value]) => value);
-      additionalInfo.replaceChildren();
-      if (rows.length === 0) {
-        const empty = document.createElement('div');
-        empty.textContent = 'No additional information available';
-        additionalInfo.appendChild(empty);
-      }
-      rows.forEach(([label, value]) => {
-        const row = document.createElement('div');
-        const strong = document.createElement('strong');
-        strong.textContent = label;
-        row.appendChild(strong);
-        row.appendChild(document.createTextNode(String(value)));
-        additionalInfo.appendChild(row);
-      });
-    }
-
-    // Update counter
-    if (viewerCurrent) viewerCurrent.textContent = index + 1;
-    if (viewerTotal) viewerTotal.textContent = imageData.length;
-
-    // Update thumbnails
-    updateActiveThumbnail(index);
-
-    imageViewer.classList.add('active');
-    document.body.style.overflow = 'hidden';
-  }
-
-  // Close viewer
-  function closeViewer() {
-    imageViewer.classList.remove('active');
-    imageViewer.classList.remove('fullscreen');
-    document.body.style.overflow = '';
-    if (viewerVideo) {
-      viewerVideo.pause();
-      viewerVideo.src = '';
-    }
-  }
-
-  // Toggle fullscreen mode
-  const fullscreenToggle = document.getElementById('fullscreen-toggle');
-
-  function toggleFullscreen() {
-    imageViewer.classList.toggle('fullscreen');
-  }
-
-  if (fullscreenToggle) {
-    fullscreenToggle.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleFullscreen();
-    });
-  }
-
-  // Build thumbnails on load
-  buildThumbnails();
-
-  // Attach click events to gallery items
-  galleryItems.forEach((item, index) => {
-    item.addEventListener('click', () => {
-      currentIndex = index;
-      openImageViewer(currentIndex);
-    });
-  });
-
-  // Close button
-  if (closeButton) {
-    closeButton.addEventListener('click', closeViewer);
-  }
-
-  // Click on backdrop to close
-  const backdrop = imageViewer.querySelector('.viewer-backdrop');
-  if (backdrop) {
-    backdrop.addEventListener('click', closeViewer);
-  }
-
-  // Navigation
-  if (prevButton) {
-    prevButton.addEventListener('click', (e) => {
-      e.stopPropagation();
-      currentIndex = (currentIndex - 1 + imageData.length) % imageData.length;
-      openImageViewer(currentIndex);
-    });
-  }
-
-  if (nextButton) {
-    nextButton.addEventListener('click', (e) => {
-      e.stopPropagation();
-      currentIndex = (currentIndex + 1) % imageData.length;
-      openImageViewer(currentIndex);
-    });
-  }
-
-  // Keyboard navigation
-  document.addEventListener('keydown', (e) => {
-    if (!imageViewer.classList.contains('active')) return;
-
-    if (e.key === 'Escape') {
-      // Exit fullscreen first, then close viewer
-      if (imageViewer.classList.contains('fullscreen')) {
-        imageViewer.classList.remove('fullscreen');
-      } else {
-        closeViewer();
-      }
-    } else if (e.key === 'f' || e.key === 'F') {
-      toggleFullscreen();
-    } else if (e.key === 'ArrowLeft') {
-      currentIndex = (currentIndex - 1 + imageData.length) % imageData.length;
-      openImageViewer(currentIndex);
-    } else if (e.key === 'ArrowRight') {
-      currentIndex = (currentIndex + 1) % imageData.length;
-      openImageViewer(currentIndex);
-    }
-  });
-
-  // Copy to clipboard functionality with SVG icon support
-  copyButtons.forEach(button => {
-    button.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const targetId = button.getAttribute('data-target');
-      if (!targetId) return;
-
-      const targetElement = document.getElementById(targetId);
-      if (!targetElement) return;
-
-      const text = targetElement.textContent;
-
-      copyToClipboard(text)
-        .then(() => {
-          button.classList.add('copied');
-          showToast('Copied to clipboard!');
-          setTimeout(() => button.classList.remove('copied'), 2000);
-        })
-        .catch(e => console.error('Error copying:', e));
-    });
-  });
-
-  // Copy all metadata
-  if (copyAllMetadataBtn) {
-    copyAllMetadataBtn.addEventListener('click', () => {
-      const data = imageData[currentIndex];
-      if (!data) return;
-
-      let text = '';
-      if (data.prompt) text += `Positive Prompt:\n${data.prompt}\n\n`;
-      if (data.negative_prompt) text += `Negative Prompt:\n${data.negative_prompt}\n\n`;
-      if (data.sampler) text += `Sampler: ${data.sampler}\n`;
-      if (data.cfg_scale) text += `CFG Scale: ${data.cfg_scale}\n`;
-      if (data.steps) text += `Steps: ${data.steps}\n`;
-      if (data.seed) text += `Seed: ${data.seed}\n`;
-      if (data.model) text += `Model: ${data.model}\n`;
-
-      copyToClipboard(text.trim())
-        .then(() => showToast('All metadata copied!'))
-        .catch(e => console.error('Error copying:', e));
-    });
-  }
-
-  // Video play/pause functionality (hover for desktop, tap for mobile)
-  const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-
-  galleryItems.forEach(item => {
-    const video = item.querySelector('video');
-    if (!video) return;
-
-    if (isTouchDevice) {
-      // Touch devices: tap play button to toggle play/pause
-      const playButton = item.querySelector('.video-play-overlay');
-      if (playButton) {
-        playButton.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-
-          if (video.paused) {
-            // Pause all other videos first
-            document.querySelectorAll('.gallery-item.playing').forEach(other => {
-              if (other !== item) {
-                other.classList.remove('playing');
-                const otherVideo = other.querySelector('video');
-                if (otherVideo) {
-                  otherVideo.pause();
-                  otherVideo.currentTime = 0;
-                }
-              }
-            });
-            video.currentTime = 0;
-            video.play().catch(() => {});
-            item.classList.add('playing');
-          } else {
-            video.pause();
-            item.classList.remove('playing');
-          }
-        });
-      }
-    } else {
-      // Desktop: hover to play
-      item.addEventListener('mouseenter', () => {
-        video.currentTime = 0;
-        video.play().catch(() => {});
-        item.classList.add('playing');
-      });
-
-      item.addEventListener('mouseleave', () => {
-        video.pause();
-        video.currentTime = 0;
-        item.classList.remove('playing');
-      });
-    }
-  });
-})();
-</script>
-{% endif %}
-
-{% if metadata.files %}
-<div class="card">
-    <h2 class="section-title">Files</h2>
-    {% for file in metadata.files %}
-    <div class="file-item">
-        <div class="file-header">
-            <div class="file-name">{{ file.name }}</div>
-            <div class="file-meta">
-                <span class="file-size">{{ (file.sizeKB / 1024)|round(2) }} MB</span>
-                {% if file.metadata %}
-                    {% if file.metadata.fp %}
-                    <span class="file-format">{{ file.metadata.fp }}</span>
-                    {% endif %}
-                    {% if file.metadata.size %}
-                    <span class="file-size-info">{{ file.metadata.size }}</span>
-                    {% endif %}
-                    {% if file.metadata.format %}
-                    <span class="file-format-info">{{ file.metadata.format }}</span>
-                    {% endif %}
-                {% endif %}
-            </div>
-        </div>
-
-        {% if file.local_path %}
-        <div class="file-location-section">
-            <div class="file-location-label">Local File Location:</div>
-            <div class="file-location-container" data-path="{{ file.local_path }}">
-                <div class="file-location-path">{{ file.local_path }}</div>
-                <button class="copy-location-btn" title="Copy file path to clipboard">
-                    <span class="copy-icon">📋</span>
-                    <span class="copy-text">Copy Path</span>
-                </button>
-            </div>
-        </div>
-        {% endif %}
-
-        {% if file.local_directory %}
-        <div class="file-location-section">
-            <div class="file-location-label">Directory:</div>
-            <div class="file-location-container" data-path="{{ file.local_directory }}">
-                <div class="file-location-path">{{ file.local_directory }}</div>
-                <button class="copy-location-btn" title="Copy directory path to clipboard">
-                    <span class="copy-icon">📋</span>
-                    <span class="copy-text">Copy Directory</span>
-                </button>
-            </div>
-        </div>
-        {% endif %}
-    </div>
-    {% endfor %}
-</div>
-{% endif %}
+</header>
 {% endblock %}
 
-{% block page_scripts %}
+{% block content %}
+<div class="m-wrap t-{{ slug }}">
+
+    <section class="m-hero" aria-label="Overview">
+        <div class="m-stage">
+            {% set first = images|first %}
+            <div class="mount m-main{% if first and first.nsfw %} is-nsfw{% endif %}">
+                <div class="mount-window"{% if first and first.width and first.height %} style="aspect-ratio: {{ first.width }} / {{ first.height }}"{% endif %}>
+                    {% if first %}
+                        {% if first.is_video %}
+                        <video src="{{ first.path|urlencode }}" muted loop playsinline preload="metadata" class="m-main-media"></video>
+                        {% else %}
+                        <img src="{{ first.path|urlencode }}" alt="Preview of {{ model_name }}" class="m-main-media" decoding="async">
+                        {% endif %}
+                        <button type="button" class="m-main-open" data-action="open-viewer" data-index="0" aria-label="Open preview with prompt and settings">
+                            <span class="btn sm"><svg class="icon sm" aria-hidden="true"><use href="#i-expand"/></svg>Prompt &amp; settings</span>
+                        </button>
+                    {% else %}
+                        <div class="mount-empty"><span>No preview downloaded</span></div>
+                    {% endif %}
+                </div>
+            </div>
+            {% if images|length > 1 %}
+            <div class="m-strip" role="group" aria-label="Previews">
+                {% for image in images[:8] %}
+                <button type="button" class="m-thumb{% if loop.first %} active{% endif %}{% if image.nsfw %} is-nsfw{% endif %}" data-action="show" data-index="{{ loop.index0 }}" aria-label="Show preview {{ loop.index }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">
+                    {% if image.is_video %}
+                    <video src="{{ image.path|urlencode }}" muted playsinline preload="metadata" aria-hidden="true"></video>
+                    <svg class="icon sm m-thumb-video" aria-hidden="true"><use href="#i-play"/></svg>
+                    {% else %}
+                    <img src="{{ image.path|urlencode }}" alt="" loading="lazy" decoding="async">
+                    {% endif %}
+                </button>
+                {% endfor %}
+                {% if images|length > 8 %}
+                <a class="m-thumb more" href="#previews">+{{ images|length - 8 }}</a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="m-card">
+            <div class="stamp">
+                <span class="stamp-type">{{ model_type }}</span>
+                {% if base_model %}<span>{{ base_model }}</span>{% endif %}
+                {% if version %}<span class="stamp-truncate">{{ version }}</span>{% endif %}
+            </div>
+            <h1 class="m-title">{{ model_name }}</h1>
+            <p class="m-meta">
+                {% if creator %}<span>by <strong>{{ creator }}</strong></span>{% endif %}
+                {% if stats.downloadCount %}<span title="{{ stats.downloadCount }} downloads"><svg class="icon sm" aria-hidden="true"><use href="#i-download"/></svg>{{ stats.downloadCount|compact }}</span>{% endif %}
+                {% if stats.rating %}<span title="Rating"><svg class="icon sm" aria-hidden="true"><use href="#i-star"/></svg>{{ "%.1f"|format(stats.rating) }}{% if stats.ratingCount %} <small>({{ stats.ratingCount|compact }})</small>{% endif %}</span>{% endif %}
+                {% if stats.thumbsUpCount %}<span title="{{ stats.thumbsUpCount }} likes"><svg class="icon sm" aria-hidden="true"><use href="#i-thumb"/></svg>{{ stats.thumbsUpCount|compact }}</span>{% endif %}
+            </p>
+
+            {% if metadata.trainedWords %}
+            <section class="m-block m-triggers">
+                <div class="m-block-head">
+                    <h2 class="eyebrow">Trigger words</h2>
+                    <button type="button" class="btn sm" data-copy-text="{{ metadata.trainedWords|join(', ') }}" data-copy-what="trigger words">
+                        <svg class="icon sm" aria-hidden="true"><use href="#i-copy"/></svg>Copy all
+                    </button>
+                </div>
+                <div class="chips">
+                    {% for word in metadata.trainedWords %}
+                    <button type="button" class="chip trigger" data-copy-text="{{ word }}" data-copy-what="“{{ word|truncate(36, True, '…') }}”" title="Copy"><span>{{ word }}</span></button>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endif %}
+
+            <section class="m-block m-file">
+                <div class="m-block-head">
+                    <h2 class="eyebrow">File</h2>
+                    <span class="m-btns">
+                        <button type="button" class="btn sm" data-copy-rel="{{ file_rel_path }}" data-copy-what="file path">
+                            <svg class="icon sm" aria-hidden="true"><use href="#i-file"/></svg>Copy path
+                        </button>
+                        <button type="button" class="btn sm" data-copy-rel="{{ file_rel_path }}" data-copy-part="folder" data-copy-what="folder path">
+                            <svg class="icon sm" aria-hidden="true"><use href="#i-folder"/></svg>Copy folder
+                        </button>
+                    </span>
+                </div>
+                {% if file %}
+                <p class="m-file-name">
+                    <span class="mono">{{ file.name }}</span>
+                    {% if file.sizeKB %}<span>{{ file.sizeKB|filesize }}</span>{% endif %}
+                    {% if file.metadata and file.metadata.fp %}<span>{{ file.metadata.fp }}</span>{% endif %}
+                    {% if file.metadata and file.metadata.format %}<span>{{ file.metadata.format }}</span>{% endif %}
+                </p>
+                {% endif %}
+                <p class="path" data-abs-from="{{ file_rel_path }}">{{ local_file_path }}</p>
+            </section>
+
+            {% if sibling_versions and sibling_versions|length > 1 %}
+            <section class="m-block">
+                <h2 class="eyebrow">Versions <span class="m-count">{{ sibling_versions|selectattr('is_local')|list|length }} of {{ sibling_versions|length }} on disk</span></h2>
+                <ul class="versions" role="list">
+                    {% for v in sibling_versions %}
+                    <li>
+                        <a class="ver{% if v.isCurrent %} current{% endif %}{% if v.is_local %} local{% endif %}"
+                           href="{{ v.link|urlencode if v.is_local else v.link }}"
+                           {% if not v.is_local %}target="_blank" rel="noopener noreferrer"{% endif %}
+                           {% if v.isCurrent %}aria-current="page"{% endif %}>
+                            <i aria-hidden="true"></i>
+                            <span class="ver-name">{{ v.name|version_label }}</span>
+                            <span class="ver-base">{{ v.baseModel or '' }}</span>
+                            <span class="ver-date">{{ v.createdAt|date }}</span>
+                            <span class="ver-where">{% if v.isCurrent %}this page{% elif v.is_local %}on disk{% else %}CivitAI <svg class="icon sm" aria-hidden="true"><use href="#i-external"/></svg>{% endif %}</span>
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </section>
+            {% endif %}
+
+            {% if tags %}
+            <section class="m-block">
+                <h2 class="eyebrow">Tags</h2>
+                <div class="chips">{% for tag in tags %}<span class="chip">{{ tag }}</span>{% endfor %}</div>
+            </section>
+            {% endif %}
+        </div>
+    </section>
+
+    {% if images %}
+    <section class="m-section" id="previews" aria-labelledby="previews-title">
+        <h2 class="m-section-title" id="previews-title">Previews <span class="m-count">{{ images|length }}</span></h2>
+        <ul class="m-shots" role="list">
+            {% for image in images %}
+            <li class="m-shot mount{% if image.nsfw %} is-nsfw{% endif %}">
+                <button type="button" class="m-shot-open" data-action="open-viewer" data-index="{{ loop.index0 }}" aria-label="Open preview {{ loop.index }} with prompt and settings">
+                    <span class="mount-window">
+                        {% if image.is_video %}
+                        <video data-src="{{ image.path|urlencode }}" muted loop playsinline preload="none" aria-hidden="true"></video>
+                        {% else %}
+                        <img src="{{ image.path|urlencode }}" alt="" loading="lazy" decoding="async">
+                        {% endif %}
+                    </span>
+                </button>
+                {% if image.is_video %}
+                <button type="button" class="btn sm icon-only play-btn" data-action="play" aria-label="Play preview {{ loop.index }}">
+                    <svg class="icon sm" aria-hidden="true"><use href="#i-play"/></svg>
+                </button>
+                {% endif %}
+                <div class="m-shot-caption">
+                    <p class="m-shot-prompt">{{ image.prompt or 'No prompt' }}</p>
+                    {% if image.prompt %}
+                    <button type="button" class="btn ghost sm icon-only" data-copy-index="{{ loop.index0 }}" aria-label="Copy prompt and settings of preview {{ loop.index }} for Forge" title="Copy for Forge">
+                        <svg class="icon sm" aria-hidden="true"><use href="#i-terminal"/></svg>
+                    </button>
+                    {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    <section class="m-section m-columns">
+        <div class="m-about">
+            <h2 class="m-section-title">About this version</h2>
+            {% if description %}
+            <div class="m-prose">{{ description|safe }}</div>
+            {% else %}
+            <p class="m-muted">The creator left no description for this version.</p>
+            {% endif %}
+        </div>
+        <aside class="m-details" aria-labelledby="details-title">
+            <h2 class="m-section-title" id="details-title">Details</h2>
+            <dl>
+                <dt>Type</dt><dd>{{ model_type }}</dd>
+                {% if base_model %}<dt>Base model</dt><dd>{{ base_model }}</dd>{% endif %}
+                {% if version_name %}<dt>Version</dt><dd>{{ version_name }}</dd>{% endif %}
+                {% if metadata.publishedAt or metadata.createdAt %}<dt>Published</dt><dd class="mono">{{ (metadata.publishedAt or metadata.createdAt)|date }}</dd>{% endif %}
+                {% if metadata.updatedAt %}<dt>Updated</dt><dd class="mono">{{ metadata.updatedAt|date }}</dd>{% endif %}
+                {% if metadata.status and metadata.status != 'Published' %}<dt>Status</dt><dd>{{ metadata.status }}</dd>{% endif %}
+                {% if metadata.id %}<dt>Version ID</dt><dd class="mono">{{ metadata.id }}</dd>{% endif %}
+                {% for name, value in hashes.items() %}
+                <dt>{{ name }}</dt>
+                <dd class="m-hash"><span class="mono">{{ value }}</span>
+                    <button type="button" class="btn ghost sm icon-only" data-copy-text="{{ value }}" data-copy-what="{{ name }} hash" aria-label="Copy {{ name }} hash"><svg class="icon sm" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                </dd>
+                {% endfor %}
+            </dl>
+        </aside>
+    </section>
+</div>
+
+{% if images %}{% include "components/viewer.html" %}{% endif %}
+<script type="application/json" id="images-data">{{ images|default([])|tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
 <script>
-// Toast notification helper
-function showToast(message) {
-    let toast = document.querySelector('.copy-toast');
-    if (!toast) {
-        toast = document.createElement('div');
-        toast.className = 'copy-toast';
-        document.body.appendChild(toast);
-    }
-    toast.textContent = message;
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 2000);
-}
-
-// Copy to clipboard functionality for trigger words
-document.querySelectorAll('.trigger-word-group').forEach(group => {
-    group.addEventListener('click', () => {
-        const word = group.getAttribute('data-word') || group.querySelector('.trigger-text').textContent.trim();
-
-        copyToClipboard(word)
-            .then(() => {
-                group.classList.add('copied');
-                showToast(`Copied: ${word}`);
-                setTimeout(() => group.classList.remove('copied'), 2000);
-            })
-            .catch(err => console.error('Failed to copy text:', err));
-    });
-});
-
-// Copy all trigger words
-const copyAllBtn = document.querySelector('.copy-all-triggers');
-if (copyAllBtn) {
-    copyAllBtn.addEventListener('click', () => {
-        const wordsContainer = document.querySelector('.trigger-words-groups');
-        const allWords = wordsContainer ? wordsContainer.getAttribute('data-all-words') : '';
-
-        if (allWords) {
-            copyToClipboard(allWords)
-                .then(() => showToast('All trigger words copied!'))
-                .catch(err => console.error('Failed to copy:', err));
-        }
-    });
-}
-
-// Copy to clipboard functionality for file locations
-document.querySelectorAll('.copy-location-btn').forEach(button => {
-    button.addEventListener('click', () => {
-        const container = button.closest('.file-location-container');
-        const path = container.getAttribute('data-path');
-        const textEl = button.querySelector('.copy-text');
-
-        if (path) {
-            copyToClipboard(path)
-                .then(() => {
-                    const originalText = textEl.textContent;
-                    textEl.textContent = 'Copied!';
-                    button.style.background = 'linear-gradient(135deg, rgba(46, 204, 113, 0.25), rgba(46, 204, 113, 0.15))';
-                    button.style.color = '#2ecc71';
-                    showToast('Path copied!');
-
-                    setTimeout(() => {
-                        textEl.textContent = originalText;
-                        button.style.background = '';
-                        button.style.color = '';
-                    }, 2000);
-                })
-                .catch(err => {
-                    console.error('Failed to copy path:', err);
-                    textEl.textContent = 'Failed';
-                    button.style.color = '#e74c3c';
-                    setTimeout(() => {
-                        textEl.textContent = 'Copy Path';
-                        button.style.color = '';
-                    }, 2000);
-                });
-        }
-    });
-});
-
-// Versions Carousel (Desktop) and Expand/Collapse (Mobile)
-(function() {
-    const versionsCard = document.querySelector('.versions-card');
-    if (!versionsCard) return;
-
-    const carousel = versionsCard.querySelector('.versions-carousel');
-    const wrapper = versionsCard.querySelector('.versions-carousel-wrapper');
-    const prevBtn = versionsCard.querySelector('.carousel-prev');
-    const nextBtn = versionsCard.querySelector('.carousel-next');
-    const expandBtn = versionsCard.querySelector('.versions-expand-btn');
-    const nav = versionsCard.querySelector('.carousel-nav');
-
-    if (!carousel || !wrapper) return;
-
-    const cards = carousel.querySelectorAll('.related-version-card');
-    if (cards.length === 0) return;
-
-    // Carousel state
-    let currentOffset = 0;
-    let isDragging = false;
-    let startX = 0;
-    let scrollLeft = 0;
-    let dragDistance = 0;
-
-    // Get actual card width from DOM
-    function getCardMetrics() {
-        const firstCard = cards[0];
-        if (!firstCard) return { width: 220, gap: 12 };
-        const style = window.getComputedStyle(firstCard);
-        const width = firstCard.offsetWidth;
-        const gap = parseInt(window.getComputedStyle(carousel).gap) || 12;
-        return { width, gap, total: width + gap };
-    }
-
-    // Calculate visible cards based on container width
-    function getVisibleCards() {
-        const { total } = getCardMetrics();
-        const wrapperWidth = wrapper.offsetWidth;
-        return Math.max(1, Math.floor(wrapperWidth / total));
-    }
-
-    // Get max scroll offset
-    function getMaxOffset() {
-        const visibleCards = getVisibleCards();
-        return Math.max(0, cards.length - visibleCards);
-    }
-
-    // Update carousel position
-    function updateCarousel(smooth = true) {
-        const { total } = getCardMetrics();
-        carousel.style.transition = smooth ? 'transform 0.3s ease' : 'none';
-        carousel.style.transform = `translateX(-${currentOffset * total}px)`;
-        updateButtons();
-    }
-
-    // Update button states
-    function updateButtons() {
-        if (!prevBtn || !nextBtn || !nav) return;
-
-        const maxOffset = getMaxOffset();
-
-        prevBtn.disabled = currentOffset <= 0;
-        nextBtn.disabled = currentOffset >= maxOffset;
-
-        // Hide nav if all cards visible, show otherwise
-        if (cards.length <= getVisibleCards()) {
-            nav.style.opacity = '0';
-            nav.style.pointerEvents = 'none';
-        } else {
-            nav.style.opacity = '1';
-            nav.style.pointerEvents = 'auto';
-        }
-    }
-
-    // Navigation handlers
-    if (prevBtn) {
-        prevBtn.addEventListener('click', () => {
-            if (currentOffset > 0) {
-                currentOffset--;
-                updateCarousel();
-            }
-        });
-    }
-
-    if (nextBtn) {
-        nextBtn.addEventListener('click', () => {
-            const maxOffset = getMaxOffset();
-            if (currentOffset < maxOffset) {
-                currentOffset++;
-                updateCarousel();
-            }
-        });
-    }
-
-    // Mouse drag support
-    wrapper.addEventListener('mousedown', (e) => {
-        // Only on desktop (check if nav is visible)
-        if (window.innerWidth <= 768) return;
-        if (getMaxOffset() === 0) return; // No scrolling needed
-
-        isDragging = true;
-        startX = e.pageX;
-        dragDistance = 0;
-        carousel.style.cursor = 'grabbing';
-        carousel.style.transition = 'none';
-    });
-
-    wrapper.addEventListener('mousemove', (e) => {
-        if (!isDragging) return;
-        e.preventDefault();
-
-        const x = e.pageX;
-        const walk = x - startX;
-        dragDistance = walk;
-
-        const { total } = getCardMetrics();
-        const currentTranslate = -currentOffset * total + walk;
-        carousel.style.transform = `translateX(${currentTranslate}px)`;
-    });
-
-    wrapper.addEventListener('mouseup', endDrag);
-    wrapper.addEventListener('mouseleave', endDrag);
-
-    function endDrag() {
-        if (!isDragging) return;
-        isDragging = false;
-        carousel.style.cursor = 'grab';
-
-        const { total } = getCardMetrics();
-        const threshold = total / 3; // Need to drag 1/3 of card width
-
-        if (Math.abs(dragDistance) > threshold) {
-            if (dragDistance > 0 && currentOffset > 0) {
-                currentOffset--;
-            } else if (dragDistance < 0 && currentOffset < getMaxOffset()) {
-                currentOffset++;
-            }
-        }
-
-        updateCarousel(true);
-    }
-
-    // Touch swipe support
-    let touchStartX = 0;
-    let touchDragDistance = 0;
-
-    wrapper.addEventListener('touchstart', (e) => {
-        if (window.innerWidth <= 768) return; // Mobile uses collapsible
-        if (getMaxOffset() === 0) return;
-
-        touchStartX = e.touches[0].pageX;
-        touchDragDistance = 0;
-        carousel.style.transition = 'none';
-    }, { passive: true });
-
-    wrapper.addEventListener('touchmove', (e) => {
-        if (window.innerWidth <= 768) return;
-        if (!touchStartX) return;
-
-        const x = e.touches[0].pageX;
-        touchDragDistance = x - touchStartX;
-
-        const { total } = getCardMetrics();
-        const currentTranslate = -currentOffset * total + touchDragDistance;
-        carousel.style.transform = `translateX(${currentTranslate}px)`;
-    }, { passive: true });
-
-    wrapper.addEventListener('touchend', () => {
-        if (window.innerWidth <= 768) return;
-
-        const { total } = getCardMetrics();
-        const threshold = total / 3;
-
-        if (Math.abs(touchDragDistance) > threshold) {
-            if (touchDragDistance > 0 && currentOffset > 0) {
-                currentOffset--;
-            } else if (touchDragDistance < 0 && currentOffset < getMaxOffset()) {
-                currentOffset++;
-            }
-        }
-
-        touchStartX = 0;
-        updateCarousel(true);
-    });
-
-    // Set initial cursor style
-    if (getMaxOffset() > 0) {
-        wrapper.style.cursor = 'grab';
-    }
-
-    // Mobile expand/collapse
-    if (expandBtn) {
-        expandBtn.addEventListener('click', () => {
-            const isExpanded = versionsCard.classList.toggle('expanded');
-            expandBtn.setAttribute('aria-expanded', isExpanded.toString());
-        });
-    }
-
-    // Handle window resize
-    let resizeTimeout;
-    window.addEventListener('resize', () => {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
-            const maxOffset = getMaxOffset();
-            if (currentOffset > maxOffset) {
-                currentOffset = maxOffset;
-            }
-            updateCarousel(false);
-
-            // Update cursor
-            wrapper.style.cursor = maxOffset > 0 ? 'grab' : 'default';
-        }, 100);
-    });
-
-    // Initial update
-    updateButtons();
-})();
+{{ read_file('js/common.js') }}
+</script>
+<script>
+{{ read_file('js/model.js') }}
 </script>
 {% endblock %}
