@@ -275,6 +275,8 @@ class JobExecutor:
                     logger.debug("Traceback:", exc_info=True)
                     summary["errors"] += 1
 
+            temp_processor.file_processor.flush()
+
             # PHASE 1.5: Enrich with parent model data (deduplicated by modelId).
             # Run enrichment if any file's sibling versions are missing or stale
             # (TTL). Skipped entirely for offline cached-metadata jobs
