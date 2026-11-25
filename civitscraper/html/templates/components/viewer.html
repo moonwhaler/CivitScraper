@@ -1,0 +1,61 @@
+<div class="viewer" id="viewer" role="dialog" aria-modal="true" aria-labelledby="viewer-title" hidden>
+    <div class="viewer-stage">
+        <div class="viewer-top">
+            <span class="eyebrow viewer-count" aria-live="polite"></span>
+            <span class="topbar-spacer"></span>
+            <button type="button" class="btn ghost icon-only" data-action="viewer-panel" aria-pressed="true" title="Show or hide details (I)" aria-label="Show or hide details">
+                <svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg>
+            </button>
+            <button type="button" class="btn ghost icon-only" data-action="viewer-close" title="Close (Esc)" aria-label="Close viewer">
+                <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+            </button>
+        </div>
+        <button type="button" class="viewer-nav prev" data-action="viewer-prev" aria-label="Previous preview">
+            <svg class="icon lg" aria-hidden="true"><use href="#i-left"/></svg>
+        </button>
+        <figure class="viewer-media">
+            <img alt="" hidden>
+            <video muted loop playsinline controls hidden></video>
+        </figure>
+        <button type="button" class="viewer-nav next" data-action="viewer-next" aria-label="Next preview">
+            <svg class="icon lg" aria-hidden="true"><use href="#i-right"/></svg>
+        </button>
+        <div class="viewer-strip" role="list"></div>
+    </div>
+
+    <aside class="viewer-panel">
+        <h2 id="viewer-title" class="viewer-title">Preview</h2>
+        <div class="viewer-actions">
+            <button type="button" class="btn primary" data-action="copy-infotext" title="Prompt and settings in the format Forge and A1111 read: paste into the prompt box, then use “Read generation parameters”">
+                <svg class="icon sm" aria-hidden="true"><use href="#i-terminal"/></svg>Copy for Forge
+            </button>
+            <button type="button" class="btn" data-action="copy-prompt">
+                <svg class="icon sm" aria-hidden="true"><use href="#i-copy"/></svg>Copy prompt
+            </button>
+        </div>
+        <section class="viewer-block" data-block="prompt">
+            <h3 class="eyebrow">Prompt</h3>
+            <p class="viewer-prompt"></p>
+        </section>
+        <section class="viewer-block" data-block="negative">
+            <div class="viewer-block-head">
+                <h3 class="eyebrow">Negative prompt</h3>
+                <button type="button" class="btn ghost sm icon-only" data-action="copy-negative" aria-label="Copy negative prompt" title="Copy negative prompt">
+                    <svg class="icon sm" aria-hidden="true"><use href="#i-copy"/></svg>
+                </button>
+            </div>
+            <p class="viewer-prompt negative"></p>
+        </section>
+        <section class="viewer-block" data-block="params">
+            <h3 class="eyebrow">Settings</h3>
+            <dl class="viewer-params"></dl>
+        </section>
+        <p class="viewer-empty" hidden>This preview has no generation data.</p>
+        <p class="viewer-keys" aria-hidden="true">
+            <span><kbd>←</kbd><kbd>→</kbd> browse</span>
+            <span><kbd>C</kbd> copy for Forge</span>
+            <span><kbd>I</kbd> details</span>
+            <span><kbd>Esc</kbd> close</span>
+        </p>
+    </aside>
+</div>

@@ -12,7 +12,7 @@ Tired of digging through messy folders to find your AI models? **CivitScraper** 
 *   **Gets Model Info:** Downloads details like creator, type, trigger words, and ratings from CivitAI.
 *   **Downloads Previews:** Grabs preview images so you can see what the model does.
 *   **Organizes Files (Optional):** Arranges your models, info files, and images into a clean folder structure.
-*   **Creates Visual Previews:** Generates HTML pages for each model and a main gallery page to easily browse your collection: search by name, trigger word, tag or creator, copy trigger words and file paths with one click, and spot available updates, missing previews, duplicates and files CivitAI doesn't know.
+*   **Creates Visual Previews:** Generates HTML pages for each model and a main gallery page to easily browse your collection (light and dark theme, cards, image wall or table): search by name, trigger word, tag or creator, peek at a model without leaving the gallery, copy trigger words and file paths with one click, copy a preview's prompt and settings straight into Forge, and spot available updates, missing previews, duplicates and files CivitAI doesn't know.
 
 ---
 

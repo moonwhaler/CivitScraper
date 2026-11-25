@@ -113,15 +113,26 @@ output:
 
 ### Gallery Features
 
--   **Search** matches model name, trigger words, tags, creator, type, base model, folder and the description.
--   **Facets** filter by health, model type, base model, creator and folder. Within one facet any selected value matches; across facets all must match.
--   **Copy buttons** on each card copy the trigger words (comma-separated, ready to paste into a prompt) or the model file path.
--   **Collection health** (summary line above the results, and the *Health* facet):
+-   **Views**: *Cards*, *Wall* (dense image wall) and *Table* (sortable columns). A slider sets the card size.
+-   **Search** matches model name, trigger words, tags, creator, type, base model, folder, version and the description. Words are combined (`anime style` finds models matching both); `"blue hair"` matches the exact phrase. Press `/` to search.
+-   **Filters** by health, model type, base model, folder and creator. Within one filter any selected value matches; across filters all must match.
+-   **Quick look**: press `Space` on a card (or click its eye button) for a side panel with every trigger word, the file path, versions, duplicates, tags and the description. `←`/`→` step through the results. Click a tag to search for it.
+-   **Copy buttons** copy one trigger word, all of them (comma-separated, ready to paste into a prompt), the model file path or its folder.
+-   **Collection health** (chips above the results, and the *Health* filter):
     -   *Update available*: CivitAI has a version newer than every local version on the same base model. A new SDXL release does not flag a model you only keep for SD 1.5.
     -   *No preview*: no preview image was found.
     -   *Duplicate*: the same CivitAI version is stored at two or more locations. Organized copies and symlinks (copy/symlink mode) are not counted.
     -   *Not on CivitAI*: scanned files that have no sidecar because CivitAI answered "not found" for their hash. Other files without a sidecar (never looked up, or the lookup failed) are listed as *No metadata yet*. Both are in the collapsible panel above the results.
+-   **Blur NSFW** blurs previews of models above `api.nsfw.level_threshold` until you hover them. The setting is remembered.
+-   **Light and dark theme**: follows the system setting; the moon/sun button switches it.
+-   Filters, search, sort and view are part of the page address, so a filtered view can be bookmarked. Going back from a model page returns to the same place in the gallery.
 -   Version lists (and so *Update available*) are as fresh as each model's last lookup. With `skip_existing: true` only new files are looked up, so run a job with `skip_existing: false` now and then to refresh them. Tags come from the parent model data, so older sidecars show them after such a refresh.
+
+### Model Pages
+
+-   The first screen holds what you need to use a model: previews, trigger words (click to copy), the file with "Copy path" / "Copy folder", all versions (local ones link to their page) and tags.
+-   Click a preview for the viewer: prompt, negative prompt and settings. **Copy for Forge** (or `C`) copies them in the A1111/Forge format; paste into the prompt box and use "Read generation parameters". `←`/`→` browse, `I` hides the details, `Esc` closes.
+-   Pages are self-contained (styles and scripts inlined) and keep working when the collection is moved together with them.
 
 ### HTML Regeneration Without API Calls
 

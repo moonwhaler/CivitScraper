@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="generator" content="CivitScraper">
+    <title>{% block title %}Model Gallery{% endblock %}</title>
+    <script>
+    /* Theme before first paint: saved choice, else the system setting. */
+    (function () {
+        var theme = null;
+        try { theme = localStorage.getItem('civitscraper_theme'); } catch (e) {}
+        if (theme !== 'light' && theme !== 'dark') {
+            theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.dataset.theme = theme;
+    })();
+    </script>
+    {% block styles %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+    {% include "components/icons.html" %}
+    <a class="skip-link" href="#main">Skip to content</a>
+    {% block topbar %}{% endblock %}
+    <main id="main" tabindex="-1">
+        {% block content %}{% endblock %}
+    </main>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
