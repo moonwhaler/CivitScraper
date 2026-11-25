@@ -12,7 +12,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..api.client import CivitAIClient
 from ..config.loader import merge_configs
 from ..html.generator import HTMLGenerator
-from ..organization import FileOrganizer
+from ..organization import FileOrganizer, OrganizationConfig
+from ..organization.organizer import is_in_organized_output
 from ..scanner.discovery import filter_files, find_model_files, get_metadata_path
 from ..scanner.processor import ModelProcessor
 
@@ -172,6 +173,29 @@ class JobExecutor:
 
             job_specific_config = self._build_job_config(job_config)
 
+            # Copies/symlinks in the organization output mirror originals that are
+            # scanned anyway; rescanning them duplicates hashing and gallery cards
+            # (and recursive scans would organize the copies again). Moved files are
+            # the only copy, so they stay in the scan and the organizer leaves them
+            # in place.
+            org_settings = OrganizationConfig.from_dict(job_specific_config)
+            mirror_mode = org_settings.enabled and org_settings.operation_mode in (
+                "copy",
+                "symlink",
+            )
+            if mirror_mode:
+                before = len(files)
+                files = [
+                    f
+                    for f in files
+                    if not is_in_organized_output(f, org_settings, job_specific_config)
+                ]
+                if len(files) != before:
+                    logger.info(
+                        f"Ignoring {before - len(files)} {org_settings.operation_mode} "
+                        f"files inside the organization output"
+                    )
+
             # Filter files based on mode
             logger.info(f"Found {len(files)} files, filtering...")
             if use_cached_metadata:
@@ -291,15 +315,27 @@ class JobExecutor:
 
             # Prepare items for processing
             items_to_process = []
+            originals_needing_sidecar = []
             for file_path, metadata in metadata_dict.items():
                 process_path = organized_files_mapping.get(file_path, file_path) or file_path
                 items_to_process.append((process_path, metadata))
+                if mirror_mode and process_path != file_path:
+                    originals_needing_sidecar.append((file_path, metadata))
 
             # PHASE 4a: Flush every sidecar to disk first (using the resolved,
             # possibly-organized process_path), then rebuild the version index against
             # the complete sidecar set. This makes the per-model version union on each
             # detail page deterministic regardless of HTML generation order in 4b.
             from ..html.context import _version_index_cache, invalidate_version_index
+
+            # Copy/symlink mode: the original stays where it is and is what the next
+            # scan finds, so it needs its own sidecar or skip_existing never skips it.
+            # Written first (on a copy carrying the enricher's dirty flag) because
+            # save_metadata consumes that flag.
+            for original_path, metadata in originals_needing_sidecar:
+                temp_processor.metadata_manager.save_metadata(
+                    original_path, dict(metadata), temp_processor.dry_run
+                )
 
             for process_path, metadata in items_to_process:
                 temp_processor.metadata_manager.save_metadata(

@@ -106,7 +106,7 @@ class HTMLGenerator:
 
         for file_path in file_paths:
             model_name = os.path.splitext(os.path.basename(file_path))[0]
-            is_organized = "/organized/" in file_path
+            is_organized = self.context_builder._is_organized(file_path)
             if model_name not in unique_models or (
                 is_organized and not unique_models[model_name][1]
             ):
@@ -126,7 +126,7 @@ class HTMLGenerator:
                 logger.info(f"Found {len(html_files)} existing model card HTML files")
                 for html_path in html_files:
                     model_name = os.path.splitext(os.path.basename(html_path))[0]
-                    is_organized = "/organized/" in html_path
+                    is_organized = self.context_builder._is_organized(html_path)
                     if model_name not in unique_models or (
                         is_organized and not unique_models[model_name][1]
                     ):

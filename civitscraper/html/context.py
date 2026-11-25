@@ -11,6 +11,12 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TypedDict
 
 from ..api.domains import DEFAULT_DOMAINS, build_model_url, get_domain_settings, is_nsfw
+from ..organization.config import OrganizationConfig
+from ..organization.organizer import (
+    is_in_organized_output,
+    organized_output_root,
+    original_dir_for,
+)
 from ..scanner.discovery import get_metadata_path, list_preview_files
 from .images import ImageHandler
 from .paths import PathManager
@@ -214,6 +220,7 @@ class ContextBuilder:
         self.path_manager = PathManager(config)
         self.image_handler = ImageHandler(config, model_processor)
         self.sanitizer = DataSanitizer()
+        self.org_config = OrganizationConfig.from_dict(config)
 
     def build_model_context(self, file_path: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -700,55 +707,31 @@ class ContextBuilder:
                 logger.error(f"Error loading metadata from {metadata_path}: {e}")
                 return None
 
-        # If metadata not found at direct path, try alternative paths
+        # If metadata not found at direct path, try the matching original/organized
+        # location derived from the organization settings.
         try:
             filename = os.path.basename(metadata_path)
-            is_in_organized_dir = "/organized/" in metadata_path
+            metadata_dir = os.path.dirname(os.path.abspath(metadata_path))
+            candidates: List[str] = []
 
-            if is_in_organized_dir:
-                # We're in an organized directory, try to find the original
-                organized_idx = metadata_path.find("/organized/")
-                if organized_idx != -1:
-                    original_base = metadata_path[:organized_idx]
-                    original_path = os.path.join(original_base, filename)
-
-                    if os.path.isfile(original_path):
-                        try:
-                            with open(original_path, "r", encoding="utf-8") as f:
-                                original_metadata: Dict[str, Any] = json.load(f)
-                                logger.debug(
-                                    f"Found metadata in original location: {original_path}"
-                                )
-                                return original_metadata
-                        except Exception as e:
-                            logger.error(
-                                f"Error loading metadata from original path {original_path}: {e}"
-                            )
+            if self._is_organized(metadata_path):
+                original_dir = original_dir_for(metadata_dir, self.org_config, self.config)
+                if original_dir:
+                    candidates.append(os.path.join(original_dir, filename))
             else:
-                # We're in an original path, try to find organized version
-                # This handles the case where HTML files may have been left in the original location
-                # but metadata was moved to organized locations
-                organized_idx = metadata_path.rfind("/")
-                if organized_idx != -1:
-                    parent_dir = metadata_path[:organized_idx]
-                    organized_dir = os.path.join(parent_dir, "organized")
+                found = self._find_in_organized_output(metadata_dir, filename)
+                if found:
+                    candidates.append(found)
 
-                    if os.path.isdir(organized_dir):
-                        for root, _, files in os.walk(organized_dir):
-                            organized_path = os.path.join(root, filename)
-                            if os.path.isfile(organized_path):
-                                try:
-                                    with open(organized_path, "r", encoding="utf-8") as f:
-                                        organized_metadata: Dict[str, Any] = json.load(f)
-                                        logger.debug(
-                                            f"Found metadata in new location: {organized_path}"
-                                        )
-                                        return organized_metadata
-                                except Exception as e:
-                                    logger.error(
-                                        f"Error loading metadata from path {organized_path}: {e}"
-                                    )
-                                break
+            for candidate in candidates:
+                if os.path.isfile(candidate):
+                    try:
+                        with open(candidate, "r", encoding="utf-8") as f:
+                            alt_metadata: Dict[str, Any] = json.load(f)
+                        logger.debug(f"Found metadata in alternative location: {candidate}")
+                        return alt_metadata
+                    except Exception as e:
+                        logger.error(f"Error loading metadata from {candidate}: {e}")
 
         except Exception as e:
             logger.error(f"Error trying to find alternative metadata path for {metadata_path}: {e}")
@@ -761,7 +744,7 @@ class ContextBuilder:
         self, file_path: str, metadata: Dict[str, Any], output_dir: str, is_html_file: bool
     ) -> PreviewImageResult:
         """Find preview image for a model."""
-        is_organized = "/organized/" in file_path
+        is_organized = self._is_organized(file_path)
 
         # If this is an HTML file in the original location, try to find its organized version first
         if is_html_file and not is_organized:
@@ -793,27 +776,25 @@ class ContextBuilder:
 
         return None
 
-    def _find_organized_version(self, file_path: str) -> Optional[str]:
-        """Find organized version of a file."""
-        base_dir = file_path
-        while "/models/" in base_dir:
-            base_dir = os.path.dirname(base_dir)
+    def _is_organized(self, path: str) -> bool:
+        """Whether ``path`` lies inside the organization output."""
+        return is_in_organized_output(path, self.org_config, self.config)
 
-        if not base_dir:
-            return None
-
-        model_name = os.path.splitext(os.path.basename(file_path))[0]
-
-        organized_base = os.path.join(base_dir, "organized")
+    def _find_in_organized_output(self, source_dir: str, filename: str) -> Optional[str]:
+        """Search the organization output of ``source_dir`` for ``filename``."""
+        organized_base = organized_output_root(source_dir, self.org_config)
         if not os.path.isdir(organized_base):
             return None
-
         for root, _, files in os.walk(organized_base):
-            for filename in files:
-                if filename == f"{model_name}.html":
-                    return os.path.join(root, filename)
-
+            if filename in files:
+                return os.path.join(root, filename)
         return None
+
+    def _find_organized_version(self, file_path: str) -> Optional[str]:
+        """Find the organized copy of a model card in its directory's organization output."""
+        return self._find_in_organized_output(
+            os.path.dirname(os.path.abspath(file_path)), os.path.basename(file_path)
+        )
 
     def _sidecar_dir(self, file_path: str) -> str:
         """
@@ -937,7 +918,7 @@ class ContextBuilder:
 
                 # Check both original and organized locations
                 paths_to_check = [file_path]
-                if "/organized/" not in file_path:
+                if not self._is_organized(file_path):
                     # If we're in the original location, also check organized
                     organized_path = self._find_organized_version(file_path)
                     if organized_path:

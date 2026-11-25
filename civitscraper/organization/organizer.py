@@ -8,7 +8,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..scanner.discovery import get_html_path, get_image_path, get_metadata_path
+from ..scanner.discovery import get_html_path, get_image_path, get_metadata_path, is_within
 from .config import OrganizationConfig
 from .operations import FileOperationHandler
 from .path_formatter import PathFormatter
@@ -19,6 +19,107 @@ logger = logging.getLogger(__name__)
 def _same_path(a: str, b: str) -> bool:
     """Compare two paths after normalization (case-insensitive on Windows)."""
     return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+
+DEFAULT_OUTPUT_DIR = "{model_dir}/organized"
+
+
+def _path_parts(path: str) -> List[str]:
+    """Split a path into normalized components, accepting forward and back slashes."""
+    normalized = os.path.normcase(path).replace("\\", "/")
+    return [part for part in normalized.split("/") if part and part != "."]
+
+
+def is_in_organized_output(
+    file_path: str, org_config: OrganizationConfig, config: Optional[Dict[str, Any]] = None
+) -> bool:
+    """
+    Check whether a file already lives inside the organization output.
+
+    For ``{model_dir}/<suffix>`` output dirs (default ``{model_dir}/organized``) the
+    suffix components are searched in the file's directory *below its input root*,
+    so a library that itself lives under e.g. ``/data/organized/`` is not mistaken
+    for organized output. For an absolute output dir, real path containment is used.
+
+    Args:
+        file_path: Path to a model (or related) file
+        org_config: Organization configuration
+        config: Full configuration (for ``input_paths``)
+
+    Returns:
+        True if the file is inside an organization output directory
+    """
+    output_dir = org_config.output_dir or DEFAULT_OUTPUT_DIR
+
+    if "{model_dir}" not in output_dir:
+        return is_within(file_path, os.path.expanduser(output_dir))
+
+    suffix = _path_parts(output_dir.split("{model_dir}", 1)[1])
+    if not suffix or any("{" in part for part in suffix):
+        # Organizing into the model dir itself (or an unresolvable template):
+        # there is no distinguishable output subtree.
+        return False
+
+    file_dir = os.path.dirname(os.path.abspath(file_path))
+    root = _containing_input_root(file_dir, config)
+    if root is None:
+        return False
+    return _suffix_index(os.path.relpath(file_dir, root), suffix) is not None
+
+
+def organized_output_root(model_dir: str, org_config: OrganizationConfig) -> str:
+    """Return the organization output directory for models in ``model_dir``."""
+    output_dir = org_config.output_dir or DEFAULT_OUTPUT_DIR
+    return os.path.expanduser(output_dir.replace("{model_dir}", model_dir))
+
+
+def _containing_input_root(path: str, config: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Return the most specific configured input root containing ``path``."""
+    roots = [
+        os.path.abspath(os.path.expanduser(pc["path"]))
+        for pc in (config or {}).get("input_paths", {}).values()
+        if isinstance(pc, dict) and isinstance(pc.get("path"), str)
+    ]
+    containing = [root for root in roots if is_within(path, root)]
+    return max(containing, key=len) if containing else None
+
+
+def _suffix_index(rel_dir: str, suffix: List[str]) -> Optional[int]:
+    """Index of the first occurrence of ``suffix`` in ``rel_dir``'s components."""
+    parts = _path_parts(rel_dir)
+    width = len(suffix)
+    for i in range(len(parts) - width + 1):
+        if parts[i : i + width] == suffix:
+            return i
+    return None
+
+
+def original_dir_for(
+    organized_dir: str, org_config: OrganizationConfig, config: Optional[Dict[str, Any]] = None
+) -> Optional[str]:
+    """
+    Map a directory inside ``{model_dir}/<suffix>`` output back to ``{model_dir}``.
+
+    Returns None for absolute output dirs (the source location is not derivable)
+    or when the directory is not inside organization output.
+    """
+    output_dir = org_config.output_dir or DEFAULT_OUTPUT_DIR
+    if "{model_dir}" not in output_dir:
+        return None
+    suffix = _path_parts(output_dir.split("{model_dir}", 1)[1])
+    if not suffix:
+        return None
+
+    organized_dir = os.path.abspath(organized_dir)
+    root = _containing_input_root(organized_dir, config)
+    if root is None:
+        return None
+    rel_dir = os.path.relpath(organized_dir, root)
+    index = _suffix_index(rel_dir, suffix)
+    if index is None:
+        return None
+    raw_parts = [p for p in rel_dir.replace("\\", "/").split("/") if p and p != "."]
+    return os.path.join(root, *raw_parts[:index])
 
 
 class FileOrganizer:
@@ -60,7 +161,7 @@ class FileOrganizer:
             output_dir = self.org_config.output_dir
             if not output_dir:
                 # Use default output directory
-                output_dir = "{model_dir}/organized"
+                output_dir = DEFAULT_OUTPUT_DIR
                 logger.debug(
                     f"Using default output directory '{output_dir}' because none was specified"
                 )
@@ -106,9 +207,18 @@ class FileOrganizer:
             return None
 
         try:
+            if is_in_organized_output(file_path, self.org_config, self.config):
+                # Already organized (e.g. moved on an earlier run). Re-organizing
+                # would nest it one level deeper on every run.
+                logger.debug(f"Already in organization output, leaving in place: {file_path}")
+                return file_path
+
             target_path = self.get_target_path(file_path, metadata)
             if not target_path:
                 return None
+
+            if _same_path(file_path, target_path):
+                return file_path
 
             if os.path.exists(target_path):
                 logger.warning(
