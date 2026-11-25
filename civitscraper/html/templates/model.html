@@ -179,6 +179,28 @@
 
 <!-- Inline script for image viewer functionality -->
 <script>
+// Detail pages are opened from file://, which not every browser treats as a secure
+// context; fall back to a hidden textarea + execCommand when the Clipboard API is
+// unavailable or refuses.
+window.copyToClipboard = function (text) {
+  function legacyCopy() {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(area);
+    return ok ? Promise.resolve() : Promise.reject(new Error('Copy failed'));
+  }
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text).catch(legacyCopy);
+  }
+  return legacyCopy();
+};
 // Immediately executing function for image viewer functionality
 (function() {
   const galleryItems = document.querySelectorAll('.gallery-item');
@@ -465,7 +487,7 @@
 
       const text = targetElement.textContent;
 
-      navigator.clipboard.writeText(text)
+      copyToClipboard(text)
         .then(() => {
           button.classList.add('copied');
           showToast('Copied to clipboard!');
@@ -490,7 +512,7 @@
       if (data.seed) text += `Seed: ${data.seed}\n`;
       if (data.model) text += `Model: ${data.model}\n`;
 
-      navigator.clipboard.writeText(text.trim())
+      copyToClipboard(text.trim())
         .then(() => showToast('All metadata copied!'))
         .catch(e => console.error('Error copying:', e));
     });
@@ -625,7 +647,7 @@ document.querySelectorAll('.trigger-word-group').forEach(group => {
     group.addEventListener('click', () => {
         const word = group.getAttribute('data-word') || group.querySelector('.trigger-text').textContent.trim();
 
-        navigator.clipboard.writeText(word)
+        copyToClipboard(word)
             .then(() => {
                 group.classList.add('copied');
                 showToast(`Copied: ${word}`);
@@ -643,7 +665,7 @@ if (copyAllBtn) {
         const allWords = wordsContainer ? wordsContainer.getAttribute('data-all-words') : '';
 
         if (allWords) {
-            navigator.clipboard.writeText(allWords)
+            copyToClipboard(allWords)
                 .then(() => showToast('All trigger words copied!'))
                 .catch(err => console.error('Failed to copy:', err));
         }
@@ -658,7 +680,7 @@ document.querySelectorAll('.copy-location-btn').forEach(button => {
         const textEl = button.querySelector('.copy-text');
 
         if (path) {
-            navigator.clipboard.writeText(path)
+            copyToClipboard(path)
                 .then(() => {
                     const originalText = textEl.textContent;
                     textEl.textContent = 'Copied!';
