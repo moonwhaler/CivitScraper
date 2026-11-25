@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..api.client import CivitAIClient
 from ..config.loader import merge_configs
+from ..html.gallery_data import UNMATCHED_NO_METADATA, UNMATCHED_NOT_ON_CIVITAI
 from ..html.generator import HTMLGenerator
 from ..organization import FileOrganizer, OrganizationConfig
 from ..organization.organizer import is_in_organized_output
@@ -447,7 +448,30 @@ class ScanJob:
             gallery_path,
             gallery_title,
             include_existing=include_existing,
+            unmatched=self.unmatched_files(),
         )
+
+    def unmatched_files(self) -> List[Tuple[str, str]]:
+        """
+        List scanned model files that still have no sidecar, with the reason.
+
+        "Not on CivitAI" only when CivitAI answered 404 for the file's (cached)
+        hash; anything else (never looked up, temporary error, unreadable) is
+        "no metadata".
+        """
+        processor = self.processor
+        unmatched: List[Tuple[str, str]] = []
+        for file_path in self.files:
+            if file_path in self.metadata_dict or not os.path.isfile(file_path):
+                continue
+            if has_metadata(file_path, self.job_specific_config):
+                continue
+            file_hash = processor.file_processor.cached_hash(file_path)
+            if file_hash and processor.metadata_manager.is_known_not_found(file_hash):
+                unmatched.append((file_path, UNMATCHED_NOT_ON_CIVITAI))
+            else:
+                unmatched.append((file_path, UNMATCHED_NO_METADATA))
+        return unmatched
 
     # --- Summary ---------------------------------------------------------------
 

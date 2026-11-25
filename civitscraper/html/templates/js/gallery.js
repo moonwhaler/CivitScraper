@@ -35,23 +35,49 @@
   let currentFilteredSortedModels = [];
   let renderedModelCount = 0;
 
-  // Multi-filter state
+  let unmatchedData = [];
+
+  // Filter state; every facet below adds an array of selected values.
   const filterState = {
-    types: [],
-    baseModels: [],
-    folders: [],
     searchText: '',
     sortBy: 'name',
     sortDir: 'desc',
     viewMode: 'grid'
   };
 
-  // Facet metadata for rendering
-  const facetConfig = {
-    types: { label: 'Model Type', icon: '🏷️', key: 'type' },
-    baseModels: { label: 'Base Model', icon: '🧩', key: 'base' },
-    folders: { label: 'Folder', icon: '📁', key: 'folder' }
+  const HEALTH_LABELS = {
+    update: 'Update available',
+    no_preview: 'No preview',
+    duplicate: 'Duplicate'
   };
+
+  // Facets. values(model) lists a model's values for the facet; a model can have
+  // several (health flags) and matches when any of them is selected. param is the
+  // URL hash key. Empty facets are not shown.
+  const facetConfig = {
+    health: { label: 'Health', icon: '🩺', param: 'health',
+              values: m => (m.health || []).map(flag => HEALTH_LABELS[flag] || flag) },
+    types: { label: 'Model Type', icon: '🏷️', param: 'type', values: m => [m.type || 'Unknown'] },
+    baseModels: { label: 'Base Model', icon: '🧩', param: 'base', values: m => [m.base_model || 'Unknown'] },
+    creators: { label: 'Creator', icon: '👤', param: 'creator', values: m => [m.creator || 'Unknown'],
+                collapsed: true },
+    folders: { label: 'Folder', icon: '📁', param: 'folder', values: m => [m.folder_name || 'Unknown'] }
+  };
+  const facetKeys = Object.keys(facetConfig);
+  facetKeys.forEach(key => { filterState[key] = []; });
+
+  function facetValues(model, key) {
+    if (!model._facets) {
+      model._facets = {};
+      facetKeys.forEach(k => { model._facets[k] = facetConfig[k].values(model); });
+    }
+    return model._facets[key];
+  }
+
+  function passesFacet(model, key) {
+    const selected = filterState[key];
+    return selected.length === 0 || facetValues(model, key).some(v => selected.includes(v));
+  }
 
   // --- Helper Functions ---
 
@@ -111,6 +137,180 @@
     return prefix + encoded;
   }
 
+  // Absolute filesystem path for a (possibly gallery-relative) path, for copying.
+  // Relative paths are resolved against the gallery's own file:// location.
+  function absolutePath(path) {
+    if (!path) return '';
+    const str = String(path);
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(str)) return str;
+    if (str.startsWith('/') || str.startsWith('\\\\') || /^[A-Za-z]:[\\/]/.test(str)) return str;
+    let url;
+    try {
+      url = new URL(toFileUrl(str), window.location.href);
+    } catch (e) {
+      return str;
+    }
+    if (url.protocol !== 'file:') return str;
+    const resolved = decodeURIComponent(url.pathname);
+    if (url.host) return '\\\\' + url.host + resolved.replace(/\//g, '\\');  // UNC
+    if (/^\/[A-Za-z]:\//.test(resolved)) return resolved.slice(1).replace(/\//g, '\\');  // C:\...
+    return resolved;
+  }
+
+  function legacyCopy(text) {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch (e) {
+      ok = false;
+    }
+    document.body.removeChild(area);
+    return ok;
+  }
+
+  // file:// pages are not a secure context in every browser, so fall back to the
+  // old textarea + execCommand route when the Clipboard API is unavailable.
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text).then(() => true, () => legacyCopy(text));
+    }
+    return Promise.resolve(legacyCopy(text));
+  }
+
+  function flashCopied(button, ok) {
+    if (!button.dataset.label) button.dataset.label = button.innerHTML;
+    button.textContent = ok ? 'Copied' : 'Copy failed';
+    button.classList.add(ok ? 'copied' : 'copy-failed');
+    clearTimeout(button._copyTimer);
+    button._copyTimer = setTimeout(() => {
+      button.innerHTML = button.dataset.label;
+      button.classList.remove('copied', 'copy-failed');
+    }, 1200);
+  }
+
+  function textToCopy(button) {
+    const idx = parseInt(button.dataset.idx, 10);
+    switch (button.dataset.copy) {
+      case 'triggers':
+        return (allModelsData[idx].trigger_words || []).join(', ');
+      case 'path':
+        return absolutePath(allModelsData[idx].file_path);
+      case 'duplicate':
+        return absolutePath((allModelsData[idx].duplicates || [])[parseInt(button.dataset.dup, 10)]);
+      case 'unmatched':
+        return absolutePath(unmatchedData[idx].file_path);
+      default:
+        return '';
+    }
+  }
+
+  // Capture phase: runs before the card's own link/video handlers.
+  function handleCopyClick(event) {
+    const button = event.target.closest('[data-copy]');
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const text = textToCopy(button);
+    if (!text) return;
+    copyText(text).then(ok => flashCopied(button, ok));
+  }
+
+  // --- Collection health ---
+
+  function renderHealthSummary() {
+    const el = document.querySelector('.health-summary');
+    if (!el) return;
+    const countFlag = flag => allModelsData.filter(m => (m.health || []).includes(flag)).length;
+    const parts = [];
+    [['update', 'with updates'], ['no_preview', 'without preview'], ['duplicate', 'with duplicates']]
+      .forEach(([flag, text]) => {
+        const n = countFlag(flag);
+        if (n) parts.push(`<button type="button" class="health-link" data-health="${flag}">${n} ${text}</button>`);
+      });
+    const notOnCivitai = unmatchedData.filter(u => u.reason === 'not_on_civitai').length;
+    const noMetadata = unmatchedData.length - notOnCivitai;
+    if (notOnCivitai) parts.push(`<button type="button" class="health-link" data-unmatched="1">${notOnCivitai} not on CivitAI</button>`);
+    if (noMetadata) parts.push(`<button type="button" class="health-link" data-unmatched="1">${noMetadata} without metadata</button>`);
+
+    if (parts.length === 0) {
+      el.style.display = 'none';
+      return;
+    }
+    el.innerHTML = `<span class="health-total">${allModelsData.length} models</span>` +
+      parts.map(p => `<span class="health-sep">·</span>${p}`).join('');
+    el.style.display = 'flex';
+
+    el.querySelectorAll('[data-health]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        filterState.health = [HEALTH_LABELS[btn.dataset.health]];
+        syncUrlState();
+        updateGallery();
+        renderFacets();
+        renderActiveFilters();
+      });
+    });
+    el.querySelectorAll('[data-unmatched]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const panel = document.querySelector('.unmatched-panel');
+        if (!panel) return;
+        panel.open = true;
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  }
+
+  const UNMATCHED_GROUPS = [
+    ['not_on_civitai', 'Not on CivitAI',
+     'CivitAI answered "not found" for these files: deleted, private, or from another site.'],
+    ['no_metadata', 'No metadata yet',
+     'Not looked up yet, or the lookup failed (see the log). Running the scan again retries them.']
+  ];
+  const MAX_UNMATCHED_ROWS = 1000;
+
+  function renderUnmatchedPanel() {
+    const panel = document.querySelector('.unmatched-panel');
+    if (!panel) return;
+    if (!unmatchedData.length) {
+      panel.style.display = 'none';
+      return;
+    }
+    panel.querySelector('.unmatched-summary').textContent =
+      `${unmatchedData.length} scanned file${unmatchedData.length === 1 ? '' : 's'} without a gallery card`;
+
+    let html = '';
+    UNMATCHED_GROUPS.forEach(([reason, title, help]) => {
+      const rows = [];
+      unmatchedData.forEach((entry, idx) => {
+        if (entry.reason === reason) rows.push([entry, idx]);
+      });
+      if (!rows.length) return;
+      const shown = rows.slice(0, MAX_UNMATCHED_ROWS).map(([entry, idx]) => `
+          <div class="unmatched-row">
+            <span class="unmatched-name">${escapeHTML(entry.name)}</span>
+            <span class="unmatched-folder">${escapeHTML(entry.folder)}</span>
+            <button type="button" class="card-action small" data-copy="unmatched" data-idx="${idx}"
+                    title="${escapeHTML(absolutePath(entry.file_path))}">📋 Path</button>
+          </div>`).join('');
+      const more = rows.length > MAX_UNMATCHED_ROWS
+        ? `<div class="unmatched-more">… and ${rows.length - MAX_UNMATCHED_ROWS} more</div>` : '';
+      html += `
+        <section class="unmatched-group">
+          <h4>${escapeHTML(title)} (${rows.length})</h4>
+          <p class="unmatched-help">${escapeHTML(help)}</p>
+          ${shown}${more}
+        </section>`;
+    });
+    panel.querySelector('.unmatched-groups').innerHTML = html;
+    panel.style.display = 'block';
+  }
+
   function formatDate(dateString) {
     if (!dateString) return '';
     try {
@@ -131,21 +331,11 @@
 
     const params = new URLSearchParams(hash);
 
-    // Parse array parameters
-    const typeParam = params.get('type');
-    if (typeParam) {
-      filterState.types = typeParam.split(',').map(decodeURIComponent).filter(Boolean);
-    }
-
-    const baseParam = params.get('base');
-    if (baseParam) {
-      filterState.baseModels = baseParam.split(',').map(decodeURIComponent).filter(Boolean);
-    }
-
-    const folderParam = params.get('folder');
-    if (folderParam) {
-      filterState.folders = folderParam.split(',').map(decodeURIComponent).filter(Boolean);
-    }
+    // Facet selections
+    facetKeys.forEach(key => {
+      const value = params.get(facetConfig[key].param);
+      filterState[key] = value ? value.split(',').map(decodeURIComponent).filter(Boolean) : [];
+    });
 
     // Parse single value parameters
     const searchParam = params.get('q');
@@ -174,15 +364,11 @@
   function syncUrlState() {
     const params = new URLSearchParams();
 
-    if (filterState.types.length > 0) {
-      params.set('type', filterState.types.map(encodeURIComponent).join(','));
-    }
-    if (filterState.baseModels.length > 0) {
-      params.set('base', filterState.baseModels.map(encodeURIComponent).join(','));
-    }
-    if (filterState.folders.length > 0) {
-      params.set('folder', filterState.folders.map(encodeURIComponent).join(','));
-    }
+    facetKeys.forEach(key => {
+      if (filterState[key].length > 0) {
+        params.set(facetConfig[key].param, filterState[key].map(encodeURIComponent).join(','));
+      }
+    });
     if (filterState.searchText) {
       params.set('q', encodeURIComponent(filterState.searchText));
     }
@@ -206,55 +392,30 @@
   // --- Facet Count Computation ---
 
   function computeFacetCounts() {
-    const counts = {
-      types: new Map(),
-      baseModels: new Map(),
-      folders: new Map()
-    };
+    const counts = {};
+    facetKeys.forEach(key => { counts[key] = new Map(); });
 
-    // Initialize all known values with 0 counts
+    // Every known value is listed (count 0 if the other filters exclude it)
     allModelsData.forEach(model => {
-      const type = model.type || 'Unknown';
-      const baseModel = model.base_model || 'Unknown';
-      const folder = model.folder_name || 'Unknown';
-
-      if (!counts.types.has(type)) counts.types.set(type, 0);
-      if (!counts.baseModels.has(baseModel)) counts.baseModels.set(baseModel, 0);
-      if (!counts.folders.has(folder)) counts.folders.set(folder, 0);
+      facetKeys.forEach(key => {
+        facetValues(model, key).forEach(v => {
+          if (!counts[key].has(v)) counts[key].set(v, 0);
+        });
+      });
     });
 
-    // For each facet, compute counts based on OTHER facets' filters
-    // This shows "what would be available if I select this value"
+    // A facet's counts honor the search and every OTHER facet's selection: "what
+    // would be available if I select this value".
     allModelsData.forEach(model => {
-      const type = model.type || 'Unknown';
-      const baseModel = model.base_model || 'Unknown';
-      const folder = model.folder_name || 'Unknown';
-
-      // Check if model passes base model and folder filters (for type counts)
-      const passesBaseModelFilter = filterState.baseModels.length === 0 ||
-        filterState.baseModels.includes(baseModel);
-      const passesFolderFilter = filterState.folders.length === 0 ||
-        filterState.folders.includes(folder);
-      const passesTypeFilter = filterState.types.length === 0 ||
-        filterState.types.includes(type);
-
-      // Check search filter
-      const passesSearch = !filterState.searchText || modelMatchesSearch(model, filterState.searchText);
-
-      // Count for types: must pass baseModel, folder, and search filters
-      if (passesBaseModelFilter && passesFolderFilter && passesSearch) {
-        counts.types.set(type, (counts.types.get(type) || 0) + 1);
-      }
-
-      // Count for baseModels: must pass type, folder, and search filters
-      if (passesTypeFilter && passesFolderFilter && passesSearch) {
-        counts.baseModels.set(baseModel, (counts.baseModels.get(baseModel) || 0) + 1);
-      }
-
-      // Count for folders: must pass type, baseModel, and search filters
-      if (passesTypeFilter && passesBaseModelFilter && passesSearch) {
-        counts.folders.set(folder, (counts.folders.get(folder) || 0) + 1);
-      }
+      if (filterState.searchText && !modelMatchesSearch(model, filterState.searchText)) return;
+      const passes = {};
+      facetKeys.forEach(key => { passes[key] = passesFacet(model, key); });
+      facetKeys.forEach(key => {
+        if (!facetKeys.every(other => other === key || passes[other])) return;
+        facetValues(model, key).forEach(v => {
+          counts[key].set(v, counts[key].get(v) + 1);
+        });
+      });
     });
 
     return counts;
@@ -264,7 +425,10 @@
   // for every model on every keystroke).
   function searchTextOf(model) {
     if (model._search === undefined) {
-      model._search = [model.name, model.type, model.base_model, model.folder_name, model.description]
+      model._search = [
+        model.name, model.type, model.base_model, model.folder_name, model.creator,
+        ...(model.tags || []), ...(model.trigger_words || []), model.description
+      ]
         .filter(Boolean)
         .join('\n')
         .toLowerCase();
@@ -298,8 +462,9 @@
           return a[0].localeCompare(b[0]);
         });
 
-      const isExpanded = sortedEntries.some(([value]) => selectedValues.includes(value)) ||
-                         selectedValues.length === 0;
+      if (sortedEntries.length === 0) return;
+
+      const isExpanded = selectedValues.length > 0 || !config.collapsed;
 
       html += `
         <div class="facet-section" data-facet="${facetKey}">
@@ -386,9 +551,7 @@
   function renderActiveFilters() {
     if (!filterPillsContainer || !activeFiltersBar) return;
 
-    const hasFilters = filterState.types.length > 0 ||
-                       filterState.baseModels.length > 0 ||
-                       filterState.folders.length > 0;
+    const hasFilters = facetKeys.some(key => filterState[key].length > 0);
 
     let pillsHtml = '';
 
@@ -485,6 +648,47 @@
     console.log(`Appended batch of ${modelsToRender.length} models.`);
   }
 
+  // Badges for health flags (inside the card link; purely informational)
+  function healthBadgesHtml(model) {
+    const health = model.health || [];
+    let html = '';
+    if (health.includes('update')) {
+      const title = model.update_version ? `Newer version on CivitAI: ${model.update_version}` : 'Newer version on CivitAI';
+      html += `<span class="health-badge update" title="${escapeHTML(title)}">Update</span>`;
+    }
+    if (health.includes('duplicate')) {
+      const n = (model.duplicates || []).length;
+      html += `<span class="health-badge duplicate" title="Same version stored ${n} times">${n}× copies</span>`;
+    }
+    return html ? `<div class="health-badges">${html}</div>` : '';
+  }
+
+  // Copy buttons. They sit outside the card's <a>, and the click handler stops the
+  // event, so copying never opens the detail page.
+  function cardActionsHtml(model) {
+    const idx = model._idx;
+    const words = model.trigger_words || [];
+    let html = '';
+    if (words.length) {
+      html += `<button type="button" class="card-action" data-copy="triggers" data-idx="${idx}"
+                 title="Copy trigger words: ${escapeHTML(words.join(', '))}">📋 Triggers</button>`;
+    }
+    if (model.file_path) {
+      html += `<button type="button" class="card-action" data-copy="path" data-idx="${idx}"
+                 title="Copy model file path">📋 Path</button>`;
+    }
+    const duplicates = model.duplicates || [];
+    if (duplicates.length > 1) {
+      const rows = duplicates.map((p, i) => `
+          <div class="duplicate-row">
+            <span class="duplicate-path" title="${escapeHTML(absolutePath(p))}">${escapeHTML(absolutePath(p))}</span>
+            <button type="button" class="card-action small" data-copy="duplicate" data-idx="${idx}" data-dup="${i}">📋</button>
+          </div>`).join('');
+      html += `<details class="duplicate-list"><summary>${duplicates.length} copies</summary>${rows}</details>`;
+    }
+    return html ? `<div class="card-actions">${html}</div>` : '';
+  }
+
   function renderModelCard(model) {
     const rating = model.stats?.rating ? parseFloat(model.stats.rating).toFixed(1) : '0';
     const ratingCount = model.stats?.rating_count || 0;
@@ -537,6 +741,7 @@
                     </div>`
                   : `<div class="model-preview no-image"><div class="no-image-text">No Preview</div></div>`
               }
+              ${healthBadgesHtml(model)}
               <div class="model-info">
                   <h3 class="model-name">${escapeHTML(model.name)}</h3>
                   <div class="model-meta">
@@ -560,6 +765,7 @@
               </div>
           </a>
           ${mergedVersionsHtml}
+          ${cardActionsHtml(model)}
       </div>`;
   }
 
@@ -578,10 +784,12 @@
                     </div>`
                   : `<div class="focused-preview no-image"></div>`
               }
+              ${healthBadgesHtml(model)}
               <div class="focused-overlay">
                   <h3 class="focused-name">${escapeHTML(model.name)}</h3>
               </div>
           </a>
+          ${cardActionsHtml(model)}
       </div>`;
   }
 
@@ -640,6 +848,8 @@
                   </span>` : ''}
               </div>
           </a>
+          ${healthBadgesHtml(model)}
+          ${cardActionsHtml(model)}
       </div>`;
   }
 
@@ -672,29 +882,8 @@
   function filterAndSortModels() {
     let filteredModels = [...allModelsData];
 
-    // 1. Apply Type Filter (AND with other facets)
-    if (filterState.types.length > 0) {
-      filteredModels = filteredModels.filter(model => {
-        const modelType = model.type || 'Unknown';
-        return filterState.types.includes(modelType);
-      });
-    }
-
-    // 2. Apply Base Model Filter (AND with other facets)
-    if (filterState.baseModels.length > 0) {
-      filteredModels = filteredModels.filter(model => {
-        const modelBase = model.base_model || 'Unknown';
-        return filterState.baseModels.includes(modelBase);
-      });
-    }
-
-    // 3. Apply Folder Filter (AND with other facets)
-    if (filterState.folders.length > 0) {
-      filteredModels = filteredModels.filter(model => {
-        const modelFolder = model.folder_name || 'Unknown';
-        return filterState.folders.includes(modelFolder);
-      });
-    }
+    // 1. Facets (AND across facets, OR within one)
+    filteredModels = filteredModels.filter(model => facetKeys.every(key => passesFacet(model, key)));
 
     // 4. Apply Search Filter
     if (filterState.searchText) {
@@ -903,13 +1092,11 @@
   }
 
   function handleClearAllFilters() {
-    filterState.types = [];
-    filterState.baseModels = [];
-    filterState.folders = [];
+    facetKeys.forEach(key => {
+      filterState[key] = [];
+      storePreference(key, '[]');
+    });
     syncUrlState();
-    storePreference('types', '[]');
-    storePreference('baseModels', '[]');
-    storePreference('folders', '[]');
     updateGallery();
     renderFacets();
     renderActiveFilters();
@@ -1039,6 +1226,8 @@
     // 4. Get Data from External Script
     if (typeof window.allModelsData !== 'undefined' && Array.isArray(window.allModelsData)) {
       allModelsData = window.allModelsData;
+      allModelsData.forEach((model, i) => { model._idx = i; });
+      unmatchedData = Array.isArray(window.galleryUnmatched) ? window.galleryUnmatched : [];
       console.log(`Successfully loaded ${allModelsData.length} models from external data script.`);
     } else {
       console.error("External models data (window.allModelsData) not found or not an array.");
@@ -1052,6 +1241,9 @@
     }
 
     // 5. Initial Render
+    document.addEventListener('click', handleCopyClick, true);
+    renderHealthSummary();
+    renderUnmatchedPanel();
     if (allModelsData.length > 0) {
       if (emptyGalleryEl) emptyGalleryEl.style.display = 'none';
       renderFacets();

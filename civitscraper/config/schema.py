@@ -75,6 +75,7 @@ _OUTPUT = {
             "gallery_path": LEAF,
             "gallery_title": LEAF,
             "include_existing_in_gallery": LEAF,
+            "portable_paths": LEAF,
         },
     },
     "images": {
