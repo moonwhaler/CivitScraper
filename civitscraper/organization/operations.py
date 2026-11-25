@@ -7,7 +7,9 @@ This module handles file operations (copy, move, symlink) for the organization f
 import logging
 import os
 import shutil
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+from ..scanner.discovery import get_html_path, get_metadata_path, list_preview_files
 
 logger = logging.getLogger(__name__)
 
@@ -24,32 +26,32 @@ class FileOperationHandler:
         """
         self.config = config
 
-    def get_related_files(self, file_path: str) -> List[Tuple[str, str]]:
+    def get_related_files(self, file_path: str) -> List[Tuple[str, str, Optional[int]]]:
         """
         Get related files (metadata, HTML, previews) for a model file.
+
+        Locations follow the configured output settings (``output.base_dir``,
+        metadata/HTML/image path and filename templates).
 
         Args:
             file_path: Path to model file
 
         Returns:
-            List of (file_path, file_type) tuples
+            List of ``(file_path, file_type, preview_index)`` tuples; ``preview_index``
+            is None for non-preview files
         """
-        related_files = []
-        base_path = os.path.splitext(file_path)[0]
+        related_files: List[Tuple[str, str, Optional[int]]] = []
 
-        metadata_path = f"{base_path}.json"
+        metadata_path = get_metadata_path(file_path, self.config)
         if os.path.isfile(metadata_path):
-            related_files.append((metadata_path, "metadata"))
+            related_files.append((metadata_path, "metadata", None))
 
-        html_path = f"{base_path}.html"
+        html_path = get_html_path(file_path, self.config)
         if os.path.isfile(html_path):
-            related_files.append((html_path, "html"))
+            related_files.append((html_path, "html", None))
 
-        for i in range(10):
-            for ext in [".jpeg", ".jpg", ".png", ".webp", ".mp4"]:
-                preview_path = f"{base_path}.preview{i}{ext}"
-                if os.path.isfile(preview_path):
-                    related_files.append((preview_path, "preview"))
+        for preview_path, index, _ in list_preview_files(file_path, self.config):
+            related_files.append((preview_path, "preview", index))
 
         return related_files
 

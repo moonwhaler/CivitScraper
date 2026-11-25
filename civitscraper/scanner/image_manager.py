@@ -4,14 +4,12 @@ Image manager for CivitScraper.
 This module handles downloading and managing images for models.
 """
 
-import glob
 import logging
 import os
-import re
 from typing import Any, Dict, List, Optional
 
 from ..api.client import CivitAIClient
-from .discovery import get_html_path, get_image_path
+from .discovery import get_html_path, get_image_path, list_preview_files
 
 logger = logging.getLogger(__name__)
 
@@ -74,26 +72,20 @@ class ImageManager:
             else:
                 logger.debug(f"No image limit configured for file: {file_path}")
 
-        # Get model directory
-        model_dir = os.path.dirname(file_path)
-
-        # Get model name
-        model_name = os.path.splitext(os.path.basename(file_path))[0]
-
         # Clean up existing preview images if not in dry
         # run mode and we're not skipping existing files
         if not self.dry_run and (force_refresh or not skip_existing):
-            self._clean_up_old_previews(model_dir, model_name, max_count)
+            self._clean_up_old_previews(file_path, max_count)
         else:
             # Only log if there are actually images to clean up
-            if self._count_existing_previews(model_dir, model_name) > 0:
+            if self._count_existing_previews(file_path) > 0:
                 logger.info(
                     f"Dry run or skipping existing: Would not remove old "
                     f"preview images for {file_path}"
                 )
 
         # Count existing preview images
-        existing_count = self._count_existing_previews(model_dir, model_name)
+        existing_count = self._count_existing_previews(file_path)
 
         # Only skip if we have existing previews AND they meet the max_count requirement
         if skip_existing and not force_refresh and existing_count > 0:
@@ -101,7 +93,7 @@ class ImageManager:
                 logger.info(
                     f"Skipping image downloads - already have {existing_count} preview images"
                 )
-                return self._get_existing_image_info(file_path, model_dir, model_name, max_count)
+                return self._get_existing_image_info(file_path, max_count)
             logger.debug(
                 f"Found {existing_count} existing previews, but less than max_count ({max_count})"
             )
@@ -118,7 +110,7 @@ class ImageManager:
             if existing_count > max_count:
                 # Need to remove excess images
                 if not self.dry_run and (force_refresh or not skip_existing):
-                    self._clean_up_old_previews(model_dir, model_name, max_count)
+                    self._clean_up_old_previews(file_path, max_count)
                 existing_count = max_count
 
             # For new models (no existing previews), always download regardless of skip_existing
@@ -152,9 +144,7 @@ class ImageManager:
 
         # Get info for all images (existing + newly downloaded)
         if skip_existing and not force_refresh:
-            all_image_info = self._get_existing_image_info(
-                file_path, model_dir, model_name, max_count
-            )
+            all_image_info = self._get_existing_image_info(file_path, max_count)
             # Add any newly downloaded images that aren't already included
             for img in downloaded_images:
                 if img not in all_image_info:
@@ -163,132 +153,64 @@ class ImageManager:
 
         return downloaded_images
 
-    def _count_existing_previews(self, model_dir: str, model_name: str) -> int:
+    def _count_existing_previews(self, file_path: str) -> int:
         """
-        Count existing preview files.
+        Count existing numbered preview files for a model.
 
         Args:
-            model_dir: Model directory
-            model_name: Model name
+            file_path: Path to model file
 
         Returns:
             Number of existing preview files
         """
-        # Check all possible preview file formats
-        count = 0
-        for ext in [".jpeg", ".jpg", ".png", ".webp", ".mp4"]:
-            pattern = os.path.join(model_dir, f"{model_name}.preview*{ext}")
-            count += len(glob.glob(pattern))
-        return count
+        return len(list_preview_files(file_path, self.config))
 
     def _get_existing_image_info(
-        self, file_path: str, model_dir: str, model_name: str, max_count: Optional[int]
+        self, file_path: str, max_count: Optional[int]
     ) -> List[Dict[str, Any]]:
         """
         Get image info for existing preview files.
 
         Args:
             file_path: Path to model file
-            model_dir: Model directory
-            model_name: Model name
             max_count: Maximum number of images
 
         Returns:
             List of image info dictionaries
         """
-        # Get HTML path for relative path calculation
-        html_path = get_html_path(file_path, self.config)
-        html_dir = os.path.dirname(html_path)
+        html_dir = os.path.dirname(get_html_path(file_path, self.config))
 
-        def extract_preview_number(filename: str) -> Optional[int]:
-            match = re.search(r"preview(\d+)", os.path.basename(filename))
-            return int(match.group(1)) if match else None
-
-        # Collect all preview files first, ignoring any that don't follow the
-        # "previewN" naming convention (e.g. leftover files from another tool
-        # or an earlier misconfigured filename pattern)
-        preview_files = []
-        for ext in [".jpeg", ".jpg", ".png", ".webp", ".mp4"]:
-            pattern = os.path.join(model_dir, f"{model_name}.preview*{ext}")
-            for image_path in glob.glob(pattern):
-                if extract_preview_number(image_path) is None:
-                    logger.warning(f"Ignoring preview file with unexpected name: {image_path}")
-                    continue
-                preview_files.append((image_path, ext == ".mp4"))
-
-        # Sort by preview number (lowest to highest)
-        preview_files.sort(key=lambda x: extract_preview_number(x[0]))
-
-        # Take first max_count files
+        preview_files = list_preview_files(file_path, self.config)
         if max_count is not None:
             preview_files = preview_files[:max_count]
 
-        # Create info for each file
-        result = []
-        for image_path, is_video in preview_files:
-            result.append(self._create_image_info(image_path, html_dir, {}, is_video))
+        return [
+            self._create_image_info(image_path, html_dir, {}, is_video)
+            for image_path, _, is_video in preview_files
+        ]
 
-        return result
-
-    def _clean_up_old_previews(
-        self, model_dir: str, model_name: str, max_count: Optional[int] = None
-    ) -> None:
+    def _clean_up_old_previews(self, file_path: str, max_count: Optional[int] = None) -> None:
         """
-        Clean up old preview images while respecting max_count.
+        Remove preview files beyond max_count (all of them if max_count is None or 0).
+
+        Only files following the numbered preview naming scheme are touched; anything
+        else in the directory (e.g. leftovers from other tools) is left alone.
 
         Args:
-            model_dir: Model directory
-            model_name: Model name
+            file_path: Path to model file
             max_count: Maximum number of images to keep
         """
-        def extract_preview_number(filename: str) -> Optional[int]:
-            match = re.search(r"preview(\d+)", os.path.basename(filename))
-            return int(match.group(1)) if match else None
-
-        # Collect all preview files, ignoring any that don't follow the
-        # "previewN" naming convention (e.g. leftover files from another tool
-        # or an earlier misconfigured filename pattern)
-        preview_files = []
-        for ext in [".jpeg", ".jpg", ".png", ".webp", ".mp4"]:
-            pattern = os.path.join(model_dir, f"{model_name}.preview*{ext}")
-            for image_path in glob.glob(pattern):
-                if extract_preview_number(image_path) is None:
-                    logger.warning(f"Ignoring preview file with unexpected name: {image_path}")
-                    continue
-                preview_files.append(image_path)
-
+        preview_files = [path for path, _, _ in list_preview_files(file_path, self.config)]
         if not preview_files:
             return
 
-        # Sort by preview number (lowest to highest)
-        preview_files.sort(key=lambda x: extract_preview_number(x))
-
-        if max_count is not None:
-            if max_count > 0:
-                # Remove all files after max_count
-                files_to_remove = preview_files[max_count:]
-                for file in files_to_remove:
-                    try:
-                        os.remove(file)
-                        logger.debug(f"Removed excess preview image: {file}")
-                    except Exception as e:
-                        logger.warning(f"Failed to remove preview image {file}: {e}")
-            else:
-                # If max_count is 0, remove all files
-                for file in preview_files:
-                    try:
-                        os.remove(file)
-                        logger.debug(f"Removed preview image: {file}")
-                    except Exception as e:
-                        logger.warning(f"Failed to remove preview image {file}: {e}")
-        else:
-            # If no max_count, remove all files
-            for file in preview_files:
-                try:
-                    os.remove(file)
-                    logger.debug(f"Removed old preview image: {file}")
-                except Exception as e:
-                    logger.warning(f"Failed to remove preview image {file}: {e}")
+        keep = max_count if max_count else 0
+        for path in preview_files[keep:]:
+            try:
+                os.remove(path)
+                logger.debug(f"Removed preview image: {path}")
+            except Exception as e:
+                logger.warning(f"Failed to remove preview image {path}: {e}")
 
     def _download_single_image(
         self,

@@ -13,7 +13,7 @@ from ..api.client import CivitAIClient
 from ..config.loader import merge_configs
 from ..html.generator import HTMLGenerator
 from ..organization import FileOrganizer
-from ..scanner.discovery import filter_files, find_model_files
+from ..scanner.discovery import filter_files, find_model_files, get_metadata_path
 from ..scanner.processor import ModelProcessor
 
 logger = logging.getLogger(__name__)
@@ -101,6 +101,30 @@ class JobExecutor:
 
         return results
 
+    def _build_job_config(self, job_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Merge a job's settings over the global configuration.
+
+        Dict values are merged recursively; other values override.
+
+        Args:
+            job_config: Job configuration
+
+        Returns:
+            Job-specific configuration
+        """
+        job_specific_config = self.config.copy()
+        for key, value in job_config.items():
+            if (
+                key in job_specific_config
+                and isinstance(job_specific_config[key], dict)
+                and isinstance(value, dict)
+            ):
+                job_specific_config[key] = merge_configs(job_specific_config[key], value)
+            else:
+                job_specific_config[key] = value
+        return job_specific_config
+
     def _execute_scan_paths_job(self, job_name: str, job_config: Dict[str, Any]) -> bool:
         """
         Execute a scan-paths job.
@@ -146,31 +170,19 @@ class JobExecutor:
             for path_id, path_files_list in path_files.items():
                 files.extend(path_files_list)
 
+            job_specific_config = self._build_job_config(job_config)
+
             # Filter files based on mode
             logger.info(f"Found {len(files)} files, filtering...")
             if use_cached_metadata:
                 # Only include files that HAVE existing metadata
-                filtered_files = [f for f in files if self._has_cached_metadata(f)]
+                filtered_files = [
+                    f for f in files if self._has_cached_metadata(f, job_specific_config)
+                ]
                 logger.info(f"Found {len(filtered_files)} files with cached metadata")
             else:
-                filtered_files = filter_files(files, skip_existing)
+                filtered_files = filter_files(files, skip_existing, job_specific_config)
                 logger.info(f"Filtered to {len(filtered_files)} files")
-
-            # Use the job configuration directly
-            job_specific_config = self.config.copy()
-
-            # Apply job-specific configuration
-            for key, value in job_config.items():
-                if (
-                    key in job_specific_config
-                    and isinstance(job_specific_config[key], dict)
-                    and isinstance(value, dict)
-                ):
-                    # For dictionary values, merge them
-                    job_specific_config[key] = merge_configs(job_specific_config[key], value)
-                else:
-                    # For other values, override them
-                    job_specific_config[key] = value
 
             # Create a temporary HTML generator with job-specific configuration
             # This ensures the gallery_path and other job settings are used
@@ -196,7 +208,7 @@ class JobExecutor:
                 try:
                     # If using cached metadata, load from JSON file instead of API
                     if use_cached_metadata:
-                        metadata = self._load_cached_metadata(file_path)
+                        metadata = self._load_cached_metadata(file_path, job_specific_config)
                         if metadata:
                             logger.debug(f"Loaded cached metadata for {file_path}")
                             metadata_dict[file_path] = metadata
@@ -297,7 +309,8 @@ class JobExecutor:
             invalidate_version_index()
             if not temp_processor.dry_run:
                 index_dirs = {
-                    os.path.dirname(os.path.abspath(p)) for p, _ in items_to_process
+                    os.path.dirname(os.path.abspath(get_metadata_path(p, job_specific_config)))
+                    for p, _ in items_to_process
                 }
                 for index_dir in index_dirs:
                     _version_index_cache.ensure_indexed(index_dir)
@@ -412,18 +425,15 @@ class JobExecutor:
             for path_id, path_files_list in path_files.items():
                 files.extend(path_files_list)
 
-            # Filter to LORA files
-            lora_files = []
+            # Locate metadata with the same rules as scan jobs (output.base_dir,
+            # output.metadata.path/filename from the global config or this job),
+            # falling back to the legacy <model>.json next to the model file.
+            job_specific_config = self._build_job_config(job_config)
+            lora_files: List[Tuple[str, str]] = []
             for file_path in files:
-                # Get metadata path
-                metadata_path = os.path.splitext(file_path)[0] + ".json"
-
-                # Check if metadata exists
-                if not os.path.isfile(metadata_path):
-                    continue
-
-                # Add to LORA files
-                lora_files.append(file_path)
+                metadata_path = self._find_metadata_file(file_path, job_specific_config)
+                if metadata_path:
+                    lora_files.append((file_path, metadata_path))
 
             # Check if loras.json exists
             if not os.path.isfile(loras_file):
@@ -440,12 +450,9 @@ class JobExecutor:
             skipped_count = 0
             logger.debug(f"Total files to process: {len(lora_files)}")
 
-            for file_path in lora_files:
+            for file_path, metadata_path in lora_files:
                 processed_count += 1
                 logger.debug(f"Processing {file_path}")
-
-                # Get metadata path
-                metadata_path = os.path.splitext(file_path)[0] + ".json"
 
                 # Load metadata
                 with open(metadata_path, "r") as f:
@@ -524,30 +531,54 @@ class JobExecutor:
             logger.error(f"Error executing sync-lora-triggers job {job_name}: {e}")
             return False
 
-    def _has_cached_metadata(self, file_path: str) -> bool:
+    def _find_metadata_file(self, file_path: str, config: Dict[str, Any]) -> Optional[str]:
+        """
+        Find the metadata file for a model, honoring configured output locations.
+
+        Args:
+            file_path: Path to model file
+            config: Configuration used to locate the metadata file
+
+        Returns:
+            Path to an existing metadata file, or None
+        """
+        candidates = [
+            get_metadata_path(file_path, config),
+            os.path.splitext(file_path)[0] + ".json",
+        ]
+        for candidate in candidates:
+            if os.path.isfile(candidate):
+                return candidate
+        return None
+
+    def _has_cached_metadata(self, file_path: str, config: Optional[Dict[str, Any]] = None) -> bool:
         """
         Check if a model file has cached metadata.
 
         Args:
             file_path: Path to model file
+            config: Configuration used to locate the metadata file (defaults to global)
 
         Returns:
             True if metadata file exists, False otherwise
         """
-        metadata_path = os.path.splitext(file_path)[0] + ".json"
+        metadata_path = get_metadata_path(file_path, config or self.config)
         return os.path.isfile(metadata_path)
 
-    def _load_cached_metadata(self, file_path: str) -> Optional[Dict[str, Any]]:
+    def _load_cached_metadata(
+        self, file_path: str, config: Optional[Dict[str, Any]] = None
+    ) -> Optional[Dict[str, Any]]:
         """
         Load cached metadata from JSON file.
 
         Args:
             file_path: Path to model file
+            config: Configuration used to locate the metadata file (defaults to global)
 
         Returns:
             Metadata dictionary or None if not found
         """
-        metadata_path = os.path.splitext(file_path)[0] + ".json"
+        metadata_path = get_metadata_path(file_path, config or self.config)
         if not os.path.isfile(metadata_path):
             return None
 

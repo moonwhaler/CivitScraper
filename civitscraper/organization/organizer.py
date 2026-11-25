@@ -8,11 +8,17 @@ import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..scanner.discovery import get_html_path, get_image_path, get_metadata_path
 from .config import OrganizationConfig
 from .operations import FileOperationHandler
 from .path_formatter import PathFormatter
 
 logger = logging.getLogger(__name__)
+
+
+def _same_path(a: str, b: str) -> bool:
+    """Compare two paths after normalization (case-insensitive on Windows)."""
+    return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
 
 
 class FileOrganizer:
@@ -111,6 +117,7 @@ class FileOrganizer:
 
             # Only process pre-existing files
             if self.should_process_file(file_path):
+                related_files = self.file_handler.get_related_files(file_path)
                 success = self.file_handler.perform_operation(
                     source_path=file_path,
                     target_path=target_path,
@@ -123,17 +130,17 @@ class FileOrganizer:
                     # we don't proceed with related files and return None for the target path.
                     return None
 
-                # Process related files that exist
-                related_files = self.file_handler.get_related_files(file_path)
-                for related_path, file_type in related_files:
+                # Process related files that exist. Each target is computed with the
+                # same path rules used to find it, so central (base_dir) sidecars and
+                # custom templates map consistently and never get mangled paths.
+                for related_path, file_type, preview_index in related_files:
                     if self.should_process_file(related_path):
-                        related_target_path = (
-                            os.path.splitext(target_path)[0]
-                            + os.path.splitext(related_path)[0].replace(
-                                os.path.splitext(file_path)[0], ""
-                            )
-                            + os.path.splitext(related_path)[1]
+                        related_target_path = self._related_target_path(
+                            target_path, related_path, file_type, preview_index
                         )
+                        if _same_path(related_path, related_target_path):
+                            logger.debug(f"Related file already in place: {related_path}")
+                            continue
 
                         self.file_handler.perform_operation(
                             source_path=related_path,
@@ -148,6 +155,21 @@ class FileOrganizer:
         except Exception as e:
             logger.error(f"Error organizing {file_path}: {e}")
             return None
+
+    def _related_target_path(
+        self,
+        target_path: str,
+        related_path: str,
+        file_type: str,
+        preview_index: Optional[int],
+    ) -> str:
+        """Compute where a related file belongs once the model lives at target_path."""
+        if file_type == "metadata":
+            return get_metadata_path(target_path, self.config)
+        if file_type == "html":
+            return get_html_path(target_path, self.config)
+        ext = os.path.splitext(related_path)[1]
+        return get_image_path(target_path, self.config, f"preview{preview_index}", ext)
 
     def get_target_paths(
         self,

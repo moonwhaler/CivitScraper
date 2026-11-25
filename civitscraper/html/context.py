@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TypedDict
 
 from ..api.domains import DEFAULT_DOMAINS, build_model_url, get_domain_settings, is_nsfw
+from ..scanner.discovery import get_metadata_path, list_preview_files
 from .images import ImageHandler
 from .paths import PathManager
 from .sanitizer import DataSanitizer
@@ -328,7 +329,11 @@ class ContextBuilder:
     ) -> Optional[Dict[str, Any]]:
         """Process a single model file for gallery context."""
         is_html_file = file_path.lower().endswith(".html")
-        metadata_path = os.path.splitext(file_path)[0] + ".json"
+        if is_html_file:
+            # Model cards live next to their sidecar (default layout and base_dir)
+            metadata_path = os.path.splitext(file_path)[0] + ".json"
+        else:
+            metadata_path = get_metadata_path(file_path, self.config)
         html_path = file_path if is_html_file else self.path_manager.get_html_path(file_path)
 
         metadata = self._load_metadata(metadata_path)
@@ -598,7 +603,7 @@ class ContextBuilder:
         if not sibling_versions:
             return 1  # At least the current version is local
 
-        current_dir = os.path.dirname(os.path.abspath(current_file_path))
+        current_dir = self._sidecar_dir(current_file_path)
         count = 0
 
         for version in sibling_versions:
@@ -629,7 +634,7 @@ class ContextBuilder:
         Returns:
             List of sibling version dicts with local availability info
         """
-        current_dir = os.path.dirname(os.path.abspath(current_file_path))
+        current_dir = self._sidecar_dir(current_file_path)
 
         # Preferred path: union of every version of this model across all local
         # sidecars in the directory, so every version's detail page shows the same
@@ -810,34 +815,49 @@ class ContextBuilder:
 
         return None
 
+    def _sidecar_dir(self, file_path: str) -> str:
+        """
+        Directory holding a model's metadata sidecar (the version index directory).
+
+        For model files this honors ``output.base_dir`` and custom metadata paths;
+        HTML model cards always sit next to their sidecar.
+        """
+        if file_path.lower().endswith(".html"):
+            return os.path.dirname(os.path.abspath(file_path))
+        return os.path.dirname(os.path.abspath(get_metadata_path(file_path, self.config)))
+
     def _try_standard_preview_path(
         self, file_path: str, output_dir: str, is_html_file: bool
     ) -> PreviewImageResult:
-        """Try finding preview image at standard path."""
+        """Return the lowest-numbered downloaded preview for a model file or model card."""
         if is_html_file:
             model_file = self._find_model_file(file_path)
-            base_preview_path = (
-                os.path.splitext(self.path_manager.get_preview_path(model_file, 0))[0]
-                if model_file
-                else os.path.join(
-                    os.path.dirname(file_path),
-                    f"{os.path.splitext(os.path.basename(file_path))[0]}.preview0",
-                )
-            )
-        else:
-            base_preview_path = self.path_manager.get_preview_base_path(file_path)
-
-        for ext in [".jpeg", ".jpg", ".png", ".webp", ".mp4"]:
-            preview_path = base_preview_path + ext
-            if os.path.isfile(preview_path):
-                is_video = ext.lower() == ".mp4"
-                result: PreviewImageDict = {
-                    "path": os.path.abspath(preview_path),  # Use absolute path
-                    "is_video": is_video,
+            if model_file:
+                previews = list_preview_files(model_file, self.config)
+            else:
+                # No model file next to the card (e.g. base_dir): previews sit in
+                # the card's directory, named after the card.
+                html_dir = os.path.dirname(file_path)
+                stem = os.path.splitext(os.path.basename(file_path))[0]
+                output_cfg = self.config.get("output", {})
+                local_cfg = dict(self.config)
+                local_cfg["output"] = {
+                    **output_cfg,
+                    "base_dir": None,
+                    "images": {**output_cfg.get("images", {}), "path": html_dir},
                 }
-                return result
+                previews = list_preview_files(
+                    os.path.join(html_dir, stem + ".safetensors"), local_cfg
+                )
+        else:
+            previews = list_preview_files(file_path, self.config)
 
-        return None
+        if not previews:
+            return None
+
+        path, _, is_video = previews[0]
+        result: PreviewImageDict = {"path": os.path.abspath(path), "is_video": is_video}
+        return result
 
     def _find_model_file(self, html_file: str) -> Optional[str]:
         """Find corresponding model file for an HTML file."""
