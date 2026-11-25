@@ -7,6 +7,7 @@ This module handles executing jobs defined in the configuration.
 import json
 import logging
 import os
+import shutil
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..api.client import CivitAIClient
@@ -16,6 +17,7 @@ from ..organization import FileOrganizer, OrganizationConfig
 from ..organization.organizer import is_in_organized_output
 from ..scanner.discovery import filter_files, find_model_files, get_metadata_path
 from ..scanner.processor import ModelProcessor
+from ..utils.fs import atomic_write
 
 logger = logging.getLogger(__name__)
 
@@ -552,9 +554,15 @@ class JobExecutor:
                 else:
                     logger.debug(f"No matching entry found in loras.json for {filename}")
 
-            # Save loras.json
-            with open(loras_file, "w") as f:
-                json.dump(loras_data, f, indent=2)
+            # Save loras.json (Krita's own file): never in dry run, keep one backup of
+            # the previous version, and write atomically so a crash can't truncate it.
+            if self.config.get("dry_run", False) or job_config.get("dry_run", False):
+                logger.info(f"Dry run: Would update {updated_count} entries in {loras_file}")
+            elif updated_count:
+                shutil.copy2(loras_file, loras_file + ".bak")
+                atomic_write(loras_file, json.dumps(loras_data, indent=2))
+            else:
+                logger.info(f"No trigger changes; {loras_file} left untouched")
 
             logger.info(f"Files processed: {processed_count}")
             logger.info(f"Updated {updated_count} entries in loras.json")

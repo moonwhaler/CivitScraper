@@ -6,13 +6,13 @@ This module handles making HTTP requests with rate limiting, circuit breaking, a
 
 import json
 import logging
-import os
 import time
 from typing import Any, Dict, Optional, Tuple
 
 import requests
 
 from ..utils.cache import CacheManager
+from ..utils.fs import atomic_write
 from .circuit_breaker import CircuitBreaker
 from .exceptions import (
     CircuitBreakerOpenError,
@@ -326,11 +326,9 @@ class RequestHandler:
             content_type = str(content_type_raw) if content_type_raw is not None else None
             logger.debug(f"Content-Type for {url}: {content_type}")
 
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-            with open(output_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
+            # Streamed to a temp file and moved into place only when complete, so an
+            # interrupted download never leaves a truncated preview behind.
+            atomic_write(output_path, response.iter_content(chunk_size=65536))
 
             return True, content_type
 

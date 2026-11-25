@@ -249,3 +249,37 @@ def test_move_default_layout_moves_related_files_with_model(tmp_path):
     assert not os.path.exists(sidecar)
     # preview12 used to be left behind (range(10) lookup)
     assert [i for _, i, _ in list_preview_files(target, config)] == [1, 12]
+
+
+def _sync_setup(tmp_path, dry_run=False):
+    config, models = make_config(tmp_path)
+    model = make_model(models)
+    write_sidecar(config, model, {"id": 1, "trainedWords": ["alpha"], "images": []})
+    loras_file = tmp_path / "loras.json"
+    original = json.dumps([{"id": "loras/foo.safetensors", "metadata": {"lora_triggers": "x"}}])
+    loras_file.write_text(original)
+    config["jobs"] = {
+        "sync": {"type": "sync-lora-triggers", "paths": ["l"], "loras_file": str(loras_file)}
+    }
+    config["dry_run"] = dry_run
+    executor = JobExecutor.__new__(JobExecutor)
+    executor.config = config
+    return executor, loras_file, original
+
+
+def test_sync_lora_triggers_dry_run_leaves_file_untouched(tmp_path):
+    executor, loras_file, original = _sync_setup(tmp_path, dry_run=True)
+
+    assert executor.execute_job("sync")
+
+    assert loras_file.read_text() == original
+    assert not (tmp_path / "loras.json.bak").exists()
+
+
+def test_sync_lora_triggers_keeps_backup(tmp_path):
+    executor, loras_file, original = _sync_setup(tmp_path)
+
+    assert executor.execute_job("sync")
+
+    assert (tmp_path / "loras.json.bak").read_text() == original
+    assert json.loads(loras_file.read_text())[0]["metadata"]["lora_triggers"] == "alpha"

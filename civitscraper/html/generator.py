@@ -11,6 +11,7 @@ import shutil
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..scanner.discovery import find_html_files
+from ..utils.fs import atomic_write
 from .context import ContextBuilder
 from .paths import PathManager
 from .renderer import TemplateRenderer
@@ -68,8 +69,7 @@ class HTMLGenerator:
 
         html = self.renderer.render_model(context)
 
-        with open(html_path, "w", encoding="utf-8") as f:
-            f.write(html)
+        atomic_write(html_path, html)
 
         logger.debug(f"Generated HTML for {file_path} at {html_path}")
 
@@ -230,8 +230,7 @@ class HTMLGenerator:
             # js_content remains "const allModelsData = [];"
 
         try:
-            with open(data_js_path, "w", encoding="utf-8") as f:
-                f.write(js_content)
+            atomic_write(data_js_path, js_content)
             logger.debug(f"Wrote models data to {data_js_path}")
         except Exception as e:
             logger.error(f"Error writing models data JS file {data_js_path}: {e}")
@@ -244,8 +243,7 @@ class HTMLGenerator:
 
         html = self.renderer.render_gallery(context)
 
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(html)
+        atomic_write(output_path, html)
 
         logger.debug(f"Generated gallery at {output_path}")
 

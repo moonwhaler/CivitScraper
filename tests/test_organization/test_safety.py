@@ -53,6 +53,10 @@ def make_executor(config):
     """Executor with a fake API client that counts lookups."""
     api = MagicMock()
     api.get_model_version_by_hash.return_value = dict(METADATA)
+    api.get_parent_model_with_versions.return_value = {
+        "parentModel": {"id": 22, "name": "Foo"},
+        "siblingVersions": [{"id": 11, "name": "v1"}],
+    }
     executor = JobExecutor(config, api)
     return executor, api
 
