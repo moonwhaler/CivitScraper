@@ -10,7 +10,7 @@ import os
 import shutil
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..scanner.discovery import find_html_files
+from ..scanner.discovery import cached_listings, find_html_files
 from ..utils.fs import atomic_write
 from .context import ContextBuilder
 from .paths import PathManager
@@ -188,29 +188,35 @@ class HTMLGenerator:
 
         models_data = []
 
-        # Use parallel processing for large collections
-        if len(all_file_paths) > 10:
-            max_workers = min(8, len(all_file_paths))
-            logger.debug(f"Processing {len(all_file_paths)} models with {max_workers} workers")
+        # Building cards only reads existing files, so directory listings can be
+        # shared across all models (one listing per folder instead of one per model).
+        with cached_listings():
+            # Use parallel processing for large collections
+            if len(all_file_paths) > 10:
+                max_workers = min(8, len(all_file_paths))
+                logger.debug(f"Processing {len(all_file_paths)} models with {max_workers} workers")
 
-            def process_model(fp: str) -> Optional[Dict[str, Any]]:
-                return self.context_builder._process_gallery_model(fp, output_path)
+                def process_model(fp: str) -> Optional[Dict[str, Any]]:
+                    return self.context_builder._process_gallery_model(fp, output_path)
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {executor.submit(process_model, fp): fp for fp in all_file_paths}
-                for future in concurrent.futures.as_completed(futures):
-                    try:
-                        model_data = future.result()
-                        if model_data:
-                            models_data.append(model_data)
-                    except Exception as e:
-                        logger.error(f"Error processing model for gallery: {e}")
-        else:
-            # Sequential processing for small collections
-            for file_path in all_file_paths:
-                model_data = self.context_builder._process_gallery_model(file_path, output_path)
-                if model_data:
-                    models_data.append(model_data)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {executor.submit(process_model, fp): fp for fp in all_file_paths}
+                    for future in concurrent.futures.as_completed(futures):
+                        try:
+                            model_data = future.result()
+                            if model_data:
+                                models_data.append(model_data)
+                        except Exception as e:
+                            logger.error(f"Error processing model for gallery: {e}")
+            else:
+                # Sequential processing for small collections
+                for file_path in all_file_paths:
+                    model_data = self.context_builder._process_gallery_model(file_path, output_path)
+                    if model_data:
+                        models_data.append(model_data)
+
+        # as_completed order is arbitrary; sort for a deterministic gallery file.
+        models_data.sort(key=lambda card: (str(card.get("name")), str(card.get("html_path"))))
 
         # Merge per-file cards so each CivitAI model is a single gallery card
         # (collapses multiple local versions; attaches local+remote version list).

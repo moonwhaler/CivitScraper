@@ -959,7 +959,6 @@ class ContextBuilder:
                 # Use remote URL as last resort
                 logger.debug(f"No local file found, using remote URL: {preview_url}")
                 logger.debug(f"Checking file_path directory: {os.path.dirname(file_path)}")
-                logger.debug(f"Directory contents: {os.listdir(os.path.dirname(file_path))}")
 
                 # For CivitAI URLs, handle width parameter
                 if preview_url and "image.civitai.com" in preview_url:

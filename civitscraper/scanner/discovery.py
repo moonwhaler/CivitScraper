@@ -4,11 +4,14 @@ File discovery for CivitScraper.
 This module handles discovering model files in the configured directories.
 """
 
+import bisect
 import glob
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple
+import threading
+from contextlib import contextmanager
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +127,61 @@ PREVIEW_EXTENSIONS = (".jpeg", ".jpg", ".png", ".webp", ".mp4")
 # Sentinels used to turn a rendered preview filename back into a match pattern.
 _INDEX_SENTINEL = "987654321"
 _EXT_SENTINEL = ".civitscraperext"
+
+
+# Directory listings shared by read-only bulk passes (gallery generation). Outside a
+# ``cached_listings()`` scope every call lists the directory fresh, so code that writes
+# or deletes previews never sees a stale view.
+_listing_lock = threading.Lock()
+_listing_depth = 0
+_listing_cache: Dict[str, List[str]] = {}
+
+
+@contextmanager
+def cached_listings() -> Iterator[None]:
+    """
+    Cache sorted directory listings for the duration of a read-only bulk pass.
+
+    Use only around code that does not create or delete files in the scanned
+    directories (e.g. building the gallery from existing sidecars and previews).
+    """
+    global _listing_depth
+    with _listing_lock:
+        _listing_depth += 1
+    try:
+        yield
+    finally:
+        with _listing_lock:
+            _listing_depth -= 1
+            if _listing_depth == 0:
+                _listing_cache.clear()
+
+
+def _names_with_prefix(directory: str, prefix: str) -> List[str]:
+    """Return directory entries starting with ``prefix`` (empty list if unreadable)."""
+    with _listing_lock:
+        caching = _listing_depth > 0
+        names = _listing_cache.get(directory) if caching else None
+
+    if names is None:
+        try:
+            listing = os.listdir(directory)
+        except OSError:
+            return []
+        if not caching:
+            return [name for name in listing if name.startswith(prefix)]
+        names = sorted(listing)
+        with _listing_lock:
+            _listing_cache[directory] = names
+
+    # Sorted listing: jump straight to the prefix instead of scanning every entry.
+    start = bisect.bisect_left(names, prefix)
+    result = []
+    for name in names[start:]:
+        if not name.startswith(prefix):
+            break
+        result.append(name)
+    return result
 
 
 def _norm(path: str) -> str:
@@ -358,13 +416,8 @@ def list_preview_files(file_path: str, config: Dict[str, Any]) -> List[Tuple[str
         re.escape(before) + r"(\d+)" + re.escape(after) + r"\.(?i:(" + ext_group + r"))"
     )
 
-    try:
-        entries = os.listdir(directory)
-    except OSError:
-        return []
-
     previews: List[Tuple[str, int, bool]] = []
-    for name in entries:
+    for name in _names_with_prefix(directory, before):
         match = pattern.fullmatch(name)
         if not match:
             continue
