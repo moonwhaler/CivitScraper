@@ -7,6 +7,7 @@
   const esc = CS.escapeHTML;
   const BATCH_SIZE = 60;
   const SEARCH_DELAY = 180;
+  const LOAD_AHEAD = 1200; // px below the viewport that are rendered in advance
   const RETURN_KEY = 'civitscraper_gallery_return';
   const PREF = 'civitscraper_gallery_';
 
@@ -142,9 +143,14 @@
         default: return m[state.sort] ? Date.parse(m[state.sort]) || 0 : 0;
       }
     };
+    if (state.sort === 'name') {
+      filtered.sort((a, b) => mul * byName(a, b));
+      return filtered;
+    }
+    // One key per model, not one Date.parse per comparison.
+    const keys = new Map(filtered.map(m => [m, value(m)]));
     filtered.sort((a, b) => {
-      if (state.sort === 'name') return mul * byName(a, b);
-      const d = value(a) - value(b);
+      const d = keys.get(a) - keys.get(b);
       return d ? mul * d : byName(a, b);
     });
     return filtered;
@@ -368,6 +374,24 @@
     }
     rendered += batch.length;
     observeVideos();
+    fillViewport();
+  }
+
+  // The sentinel observer only fires when the sentinel enters the load-ahead
+  // zone. If a batch leaves it still inside (small tiles, tall screen), keep
+  // rendering, one batch per frame, until the zone is filled. At most one check
+  // per frame, however often it is requested.
+  let fillPending = false;
+  function fillViewport() {
+    if (fillPending) return;
+    fillPending = true;
+    requestAnimationFrame(() => {
+      fillPending = false;
+      if (rendered < results.length &&
+          sentinel.getBoundingClientRect().top < window.innerHeight + LOAD_AHEAD) {
+        renderBatch();
+      }
+    });
   }
 
   function renderResults() {
@@ -583,7 +607,7 @@
     const model = models[idx];
     if (!model) return;
     if (peekEl.hidden) peekReturnFocus = document.activeElement;
-    state.peek = String(model.version_id || idx);
+    state.peek = peekKey(model);
     peekEl.dataset.idx = idx;
     $('.peek-body', peekEl).innerHTML = peekHtml(model);
     $('.peek-body', peekEl).scrollTop = 0;
@@ -614,8 +638,14 @@
     scrim.hidden = true;
   }
 
+  // The URL key of a model in quick look: its version id (stable across
+  // regenerations), else its position in the data.
+  function peekKey(model) {
+    return String(model.version_id || model._idx);
+  }
+
   function syncPeekWithState() {
-    const target = state.peek && models.find(m => String(m.version_id) === state.peek);
+    const target = state.peek && models.find(m => peekKey(m) === state.peek);
     if (target) openPeek(target._idx, { focus: false });
     else if (!peekEl.hidden) closeOverlay();
   }
@@ -886,7 +916,11 @@
     if ('IntersectionObserver' in window) {
       new IntersectionObserver(entries => {
         if (entries.some(e => e.isIntersecting) && rendered < results.length) renderBatch();
-      }, { rootMargin: '1200px 0px' }).observe(sentinel);
+      }, { rootMargin: `${LOAD_AHEAD}px 0px` }).observe(sentinel);
+      // Previews that load or fail later change the layout without moving the
+      // sentinel across the zone edge; scrolling and resizing re-check it.
+      window.addEventListener('scroll', fillViewport, { passive: true });
+      window.addEventListener('resize', fillViewport);
       videoObserver = new IntersectionObserver(entries => {
         entries.forEach(e => {
           if (!e.isIntersecting) return;
