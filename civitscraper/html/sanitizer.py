@@ -8,7 +8,9 @@ import base64
 import json
 import logging
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+import nh3
 
 logger = logging.getLogger(__name__)
 
@@ -66,3 +68,74 @@ class DataSanitizer:
         # TODO: Add more sanitization rules if other issues arise
 
         return value
+
+
+# Markup CivitAI model descriptions actually use (rich-text editor output).
+_DESCRIPTION_TAGS = {
+    "p",
+    "br",
+    "hr",
+    "span",
+    "div",
+    "a",
+    "b",
+    "i",
+    "u",
+    "s",
+    "del",
+    "strong",
+    "em",
+    "sub",
+    "sup",
+    "ul",
+    "ol",
+    "li",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "code",
+    "pre",
+    "blockquote",
+    "img",
+    "table",
+    "thead",
+    "tbody",
+    "tr",
+    "th",
+    "td",
+}
+_DESCRIPTION_ATTRIBUTES = {
+    "a": {"href", "title"},
+    "img": {"src", "alt", "width", "height"},
+    "th": {"colspan", "rowspan"},
+    "td": {"colspan", "rowspan"},
+}
+
+
+def sanitize_description(html: Optional[str]) -> str:
+    """
+    Sanitize a model description (creator-supplied HTML) for safe rendering.
+
+    Scripts, event handlers, styles and non-http(s) URLs (``javascript:``,
+    ``data:``) are removed; links get ``rel="noopener noreferrer"``.
+
+    Args:
+        html: Raw description HTML from the CivitAI API
+
+    Returns:
+        Sanitized HTML ("" for empty input)
+    """
+    if not html:
+        return ""
+    return str(
+        nh3.clean(
+            str(html),
+            tags=_DESCRIPTION_TAGS,
+            attributes=_DESCRIPTION_ATTRIBUTES,
+            url_schemes={"http", "https"},
+            link_rel="noopener noreferrer",
+        )
+    )

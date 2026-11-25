@@ -20,7 +20,7 @@ from ..organization.organizer import (
 from ..scanner.discovery import get_metadata_path, list_preview_files
 from .images import ImageHandler
 from .paths import PathManager
-from .sanitizer import DataSanitizer
+from .sanitizer import DataSanitizer, sanitize_description
 
 
 # Define a typed dictionary for the preview image result
@@ -237,7 +237,7 @@ class ContextBuilder:
         model_name = model_info.get("name", metadata.get("name", "Unknown"))
         model_type = model_info.get("type", "Unknown")
         creator = model_info.get("creator", {}).get("username", "Unknown")
-        description = metadata.get("description", "")
+        description = sanitize_description(metadata.get("description", ""))
         tags = model_info.get("tags", [])
         stats = metadata.get("stats", {})
         image_paths = self.image_handler.get_image_paths(file_path, metadata)

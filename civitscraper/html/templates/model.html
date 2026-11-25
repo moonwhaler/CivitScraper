@@ -332,13 +332,28 @@
 
     // Format additional info with grid layout
     if (additionalInfo) {
-      let infoHTML = '';
-      if (data.sampler) infoHTML += `<div><strong>Sampler</strong>${data.sampler}</div>`;
-      if (data.cfg_scale) infoHTML += `<div><strong>CFG Scale</strong>${data.cfg_scale}</div>`;
-      if (data.steps) infoHTML += `<div><strong>Steps</strong>${data.steps}</div>`;
-      if (data.seed) infoHTML += `<div><strong>Seed</strong>${data.seed}</div>`;
-      if (data.model) infoHTML += `<div><strong>Model</strong>${data.model}</div>`;
-      additionalInfo.innerHTML = infoHTML || '<div>No additional information available</div>';
+      // Image metadata is free text typed by uploaders: build nodes, never innerHTML.
+      const rows = [
+        ['Sampler', data.sampler],
+        ['CFG Scale', data.cfg_scale],
+        ['Steps', data.steps],
+        ['Seed', data.seed],
+        ['Model', data.model],
+      ].filter(([, value]) => value);
+      additionalInfo.replaceChildren();
+      if (rows.length === 0) {
+        const empty = document.createElement('div');
+        empty.textContent = 'No additional information available';
+        additionalInfo.appendChild(empty);
+      }
+      rows.forEach(([label, value]) => {
+        const row = document.createElement('div');
+        const strong = document.createElement('strong');
+        strong.textContent = label;
+        row.appendChild(strong);
+        row.appendChild(document.createTextNode(String(value)));
+        additionalInfo.appendChild(row);
+      });
     }
 
     // Update counter
