@@ -10,6 +10,7 @@ import sys
 
 from .api.client import CivitAIClient
 from .config.loader import load_and_validate_config
+from .config.schema import warn_unknown_keys
 from .jobs.executor import JobExecutor
 from .utils.logging import setup_logging
 
@@ -44,6 +45,12 @@ def parse_args():
         "--force-refresh", action="store_true", help="Ignore cache and force refresh metadata"
     )
 
+    parser.add_argument(
+        "--rehash",
+        action="store_true",
+        help="Re-hash model files even if their cached hash is still valid",
+    )
+
     # Logging
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     parser.add_argument("--quiet", action="store_true", help="Suppress console output")
@@ -73,6 +80,9 @@ def main():
                 config["scanner"] = {}
             config["scanner"]["force_refresh"] = True
 
+        if args.rehash:
+            config.setdefault("scanner", {})["rehash"] = True
+
         # Set up logging
         if args.debug:
             if "logging" not in config:
@@ -92,6 +102,7 @@ def main():
             config["logging"]["console"]["enabled"] = False
 
         logger = setup_logging(config)
+        warn_unknown_keys(config)
 
         if args.force_refresh:
             logger.info("Force refresh enabled: Cache will be ignored")
@@ -142,6 +153,7 @@ def main():
 
     except Exception as e:
         logger.error(f"Error: {e}")
+        logger.debug("Traceback:", exc_info=True)
         return 1
 
 

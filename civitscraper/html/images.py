@@ -6,41 +6,88 @@ This module handles image discovery, processing, and metadata extraction.
 
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
+from ..api.domains import get_domain_settings
 from .paths import PathManager
 
 logger = logging.getLogger(__name__)
 
 
+# CivitAI image meta keys -> A1111/Forge infotext labels, in infotext order.
+# Size is built from width/height. Several keys have two spellings in the wild.
+_INFOTEXT_KEYS: List[Tuple[str, Tuple[str, ...]]] = [
+    ("Steps", ("steps",)),
+    ("Sampler", ("sampler",)),
+    ("Schedule type", ("Schedule type", "scheduler")),
+    ("CFG scale", ("cfgScale",)),
+    ("Seed", ("seed",)),
+    ("Size", ()),
+    ("Model hash", ("Model hash",)),
+    ("Model", ("Model",)),
+    ("Denoising strength", ("Denoising strength", "denoise")),
+    ("Clip skip", ("clipSkip", "Clip skip")),
+    ("Hires upscale", ("Hires upscale",)),
+    ("Hires steps", ("Hires steps",)),
+    ("Hires upscaler", ("Hires upscaler",)),
+    ("RNG", ("RNG",)),
+]
+
+
+def _positive_int(value: Any) -> Optional[int]:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def generation_params(meta: Dict[str, Any]) -> List[List[str]]:
+    """
+    Return a preview image's generation settings as ordered (label, value) pairs.
+
+    Labels follow the A1111/Forge infotext ("Steps", "CFG scale", "Size", ...),
+    so the page can rebuild text that Forge's "Read generation parameters" parses.
+    Nested values (dicts, lists) are skipped.
+    """
+    params: List[List[str]] = []
+    for label, keys in _INFOTEXT_KEYS:
+        if label == "Size":
+            width, height = _positive_int(meta.get("width")), _positive_int(meta.get("height"))
+            if width and height:
+                params.append([label, f"{width}x{height}"])
+            continue
+        for key in keys:
+            value = meta.get(key)
+            if value is None or value == "" or isinstance(value, (dict, list)):
+                continue
+            params.append([label, str(value)])
+            break
+    return params
+
+
 class ImageHandler:
     """Handler for images used in HTML generation."""
 
-    def __init__(self, config: Dict[str, Any], model_processor=None):
+    def __init__(self, config: Dict[str, Any]):
         """
         Initialize image handler.
 
         Args:
             config: Configuration dictionary
-            model_processor: ModelProcessor instance for downloading images (optional)
         """
         self.config = config
-        self.model_processor = model_processor
         self.path_manager = PathManager(config)
-
-        # For backward compatibility with the refactored code
-        self.image_manager = None
-        if model_processor and hasattr(model_processor, "image_manager"):
-            self.image_manager = model_processor.image_manager
 
         # Get max_count from configuration, default to None for no limit
         self.max_count = self.config.get("output", {}).get("images", {}).get("max_count", None)
 
         self.dry_run = config.get("dry_run", False)
+        _, self.nsfw_threshold, _ = get_domain_settings(config)
 
     def get_image_paths(self, file_path: str, metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Get image paths for a model.
+        Get the already-downloaded preview images of a model.
 
         Args:
             file_path: Path to model file
@@ -49,31 +96,7 @@ class ImageHandler:
         Returns:
             List of image data dictionaries
         """
-        if self.max_count is not None:
-            logger.debug(
-                f"ImageHandler using max_count limit: {self.max_count} for file: {file_path}"
-            )
-        else:
-            logger.debug(f"ImageHandler processing all images for file: {file_path}")
-
-        image_paths = []
-
-        # If we have an ImageManager, use it to download images
-        if self.image_manager:
-            logger.debug(f"Using ImageManager to download images for {file_path}")
-            image_paths = self.image_manager.download_images(file_path, metadata, self.max_count)
-        # For backward compatibility, try using ModelProcessor if available
-        elif self.model_processor and hasattr(self.model_processor, "download_images"):
-            logger.debug(f"Using ModelProcessor to download images for {file_path}")
-            image_paths = self.model_processor.download_images(file_path, metadata, self.max_count)
-        else:
-            # Fallback to checking for existing images
-            logger.debug(
-                "No ModelProcessor available, checking for existing images for " f"{file_path}"
-            )
-            image_paths = self._get_existing_images(file_path, metadata)
-
-        return image_paths
+        return self._get_existing_images(file_path, metadata)
 
     def _get_existing_images(
         self, file_path: str, metadata: Dict[str, Any]
@@ -110,7 +133,7 @@ class ImageHandler:
 
             ext = os.path.splitext(image_url)[1]
 
-            # The ModelProcessor downloads images with filenames that include the index number
+            # Previews are downloaded with filenames that include the index number
             preview_index = i + 1
             image_path = self.path_manager.get_image_path(file_path, f"preview{preview_index}", ext)
             logger.debug(f"Looking for indexed image file ({preview_index}): {image_path}")
@@ -122,7 +145,7 @@ class ImageHandler:
             else:
                 # If the indexed image file doesn't exist, check if a version with a different
                 # extension exists. This handles the case where a video file was renamed from
-                # .jpeg to .mp4 by the ModelProcessor
+                # .jpeg to .mp4 by the image manager
                 base_path = os.path.splitext(image_path)[0]
                 video_path = f"{base_path}.mp4"
 
@@ -177,15 +200,20 @@ class ImageHandler:
                 is_video = image_path.lower().endswith(".mp4")
             logger.debug(f"File is video: {is_video}")
 
+            level = image.get("nsfwLevel")
             return {
-                "path": rel_path,
-                "prompt": image_meta.get("prompt", ""),
-                "negative_prompt": image_meta.get("negativePrompt", ""),
+                "path": rel_path.replace(os.sep, "/"),
+                "prompt": str(image_meta.get("prompt") or ""),
+                "negative_prompt": str(image_meta.get("negativePrompt") or ""),
                 "sampler": image_meta.get("sampler", ""),
                 "cfg_scale": image_meta.get("cfgScale", ""),
                 "steps": image_meta.get("steps", ""),
                 "seed": image_meta.get("seed", ""),
                 "model": image_meta.get("Model", ""),
+                "params": generation_params(image_meta),
+                "width": _positive_int(image.get("width")),
+                "height": _positive_int(image.get("height")),
+                "nsfw": isinstance(level, int) and level >= self.nsfw_threshold,
                 "is_video": is_video,
             }
         except Exception as e:

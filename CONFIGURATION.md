@@ -2,6 +2,8 @@
 
 This document details the advanced configuration options for CivitScraper, typically found in your `config/default.yaml` file (or a custom configuration file). For basic setup, refer to the main [README.md](readme.md).
 
+At start-up CivitScraper warns about keys it does not know, since those are ignored. A typo then shows up as, for example, `Unknown config key jobs.fetch-all.skip_exisiting (did you mean skip_existing?); it is ignored`. Unknown keys are only reported, never rejected.
+
 ## Table of Contents
 - [API Configuration](#api-configuration)
 - [Output Location Configuration](#output-location-configuration)
@@ -77,6 +79,9 @@ output:
 - `output.metadata.html.gallery_path` is unaffected — it's a separate, fixed path for the shared gallery index page, not per-model output. It can point at the same directory as `base_dir` with no conflict.
 - `organization.output_dir` is also unaffected — that setting relocates the model file itself, a separate feature from metadata/image/HTML output.
 - **Caveat**: two different model files that share the same name and model type, but live in different source folders, will collide under `base_dir/{model_type}/` — the second will overwrite the first's output.
+- `{model_type}` comes from the most specific `input_paths` entry that contains the model file. A model organized to an absolute `organization.output_dir` outside every input path resolves to `Unknown`.
+- Model cards (HTML) are expected in the same directory as their metadata sidecar (true for the default layout and for `base_dir`). Custom `output.metadata.path` and `output.metadata.html.path` values pointing at *different* directories work for writing, but the gallery's "existing model cards" scan and local version links only find cards that sit next to their sidecar.
+- All readers (skip_existing, cached-metadata jobs, the gallery, `sync-lora-triggers`, organization) use these same locations. For `sync-lora-triggers`, put `output.base_dir` / `output.metadata` either at the top level of the config or in the sync job itself; the legacy `<model>.json` next to the model is used as a fallback.
 
 ## HTML Generation Configuration
 
@@ -93,6 +98,7 @@ output:
       generate_gallery: true        # Generate a gallery page with all models
       gallery_path: "path/to/model_gallery.html"  # Gallery output path
       gallery_title: "Model Gallery"              # Gallery page title
+      portable_paths: true          # Gallery links relative to the gallery (default true)
 ```
 
 ### Key Settings
@@ -103,6 +109,30 @@ output:
 -   **`generate_gallery`**: Creates a gallery page that lists all processed models.
 -   **`gallery_path`**: Location for the gallery HTML file.
 -   **`gallery_title`**: Title displayed on the gallery page.
+-   **`portable_paths`** (default `true`): links in the gallery are relative to the gallery file. The gallery then keeps working when the whole tree moves together: the gallery and the model folders copied to another disk, or a NAS mounted at a different path or drive letter. A path on another Windows drive than the gallery stays absolute. Set it to `false` if you move only the gallery folder and leave the models where they are.
+
+### Gallery Features
+
+-   **Views**: *Cards*, *Wall* (dense image wall) and *Table* (sortable columns). A slider sets the card size.
+-   **Search** matches model name, trigger words, tags, creator, type, base model, folder, version and the description. Words are combined (`anime style` finds models matching both); `"blue hair"` matches the exact phrase. Press `/` to search.
+-   **Filters** by health, model type, base model, folder and creator. Within one filter any selected value matches; across filters all must match.
+-   **Quick look**: press `Space` on a card (or click its eye button) for a side panel with every trigger word, the file path, versions, duplicates, tags and the description. `←`/`→` step through the results. Click a tag to search for it.
+-   **Copy buttons** copy one trigger word, all of them (comma-separated, ready to paste into a prompt), the model file path or its folder.
+-   **Collection health** (chips above the results, and the *Health* filter):
+    -   *Update available*: CivitAI has a version newer than every local version on the same base model. A new SDXL release does not flag a model you only keep for SD 1.5.
+    -   *No preview*: no preview image was found.
+    -   *Duplicate*: the same CivitAI version is stored at two or more locations. Organized copies and symlinks (copy/symlink mode) are not counted.
+    -   *Not on CivitAI*: scanned files that have no sidecar because CivitAI answered "not found" for their hash. Other files without a sidecar (never looked up, or the lookup failed) are listed as *No metadata yet*. Both are in the collapsible panel above the results.
+-   **Blur NSFW** blurs previews of models above `api.nsfw.level_threshold` until you hover them. The setting is remembered.
+-   **Light and dark theme**: follows the system setting; the moon/sun button switches it.
+-   Filters, search, sort and view are part of the page address, so a filtered view can be bookmarked. Going back from a model page returns to the same place in the gallery.
+-   Version lists (and so *Update available*) are as fresh as each model's last lookup. With `skip_existing: true` only new files are looked up, so run a job with `skip_existing: false` now and then to refresh them. Tags come from the parent model data, so older sidecars show them after such a refresh.
+
+### Model Pages
+
+-   The first screen holds what you need to use a model: previews, trigger words (click to copy), the file with "Copy path" / "Copy folder", all versions (local ones link to their page) and tags.
+-   Click a preview for the viewer: prompt, negative prompt and settings. **Copy for Forge** (or `C`) copies them in the A1111/Forge format; paste into the prompt box and use "Read generation parameters". `←`/`→` browse, `I` hides the details, `Esc` closes.
+-   Pages are self-contained (styles and scripts inlined) and keep working when the collection is moved together with them.
 
 ### HTML Regeneration Without API Calls
 
@@ -117,8 +147,7 @@ The new `skip_existing_html` setting allows you to regenerate HTML files without
 ```yaml
 regenerate-html:
   type: scan-paths
-  skip_existing: true          # Skip metadata fetching - use cached files
-  verify_hashes: false         # Don't verify hashes to avoid API calls
+  use_cached_metadata: true    # Only models with an existing sidecar; no API calls
   paths: ["lora"]
   output:
     metadata:
@@ -131,10 +160,14 @@ regenerate-html:
 ```
 
 This configuration will:
-1. Use existing cached metadata files (no API calls)
+1. Use existing cached metadata files (no API calls, no hashing)
 2. Regenerate all HTML files even if they exist
 3. Skip image downloading
 4. Create a new gallery page
+
+### `verify_hashes`
+
+Models are identified on CivitAI by their file hash, so `scan-paths` jobs always hash files for API lookups. `verify_hashes: false` is ignored there (a warning is logged); use `use_cached_metadata: true` to work without hashing or API calls.
 
 ## Advanced Organization Settings
 
@@ -150,6 +183,12 @@ organization:
   output_dir: "{model_dir}/organized"  # Base directory for organized files
   operation_mode: "symlink"    # [copy/move/symlink] How to organize files
 ```
+
+Re-running organization is safe:
+
+- **copy / symlink**: files inside the organization output are not scanned again (the originals are), and the original keeps its own metadata sidecar so `skip_existing` works for it.
+- **move**: moved files stay in the scan (they are the only copy) but are never re-organized, so repeated runs cannot nest them deeper.
+- Metadata, HTML and previews move along with the model to the locations their path settings dictate. With `output.base_dir` they usually stay where they are.
 
 ### Custom Templates
 
@@ -181,6 +220,21 @@ The template string uses placeholders that will be replaced with metadata values
 
 **Path Sanitization:** The organizer automatically sanitizes generated paths to remove characters that are invalid in directory or file names.
 
+## Krita AI Diffusion Integration
+
+The `sync-lora-triggers` job copies each LoRA's trigger words (`trainedWords`) into Krita's `loras.json`:
+
+```yaml
+sync-triggers:
+  type: sync-lora-triggers
+  loras_file: "path/to/loras.json"
+  overwrite_triggers: true   # false keeps triggers already set in Krita
+  paths: ["lora"]
+```
+
+- `--dry-run` (or `dry_run: true`) reports what would change without touching the file.
+- Before changing `loras.json`, the previous version is saved as `loras.json.bak`; the file is written atomically and left untouched when nothing changed.
+
 ## Scanner Settings (Caching)
 
 The `scanner` section controls caching behavior to reduce redundant API calls.
@@ -190,11 +244,17 @@ scanner:
   cache_dir: ".civitscraper_cache"  # Directory to store cache files (API responses)
   cache_validity: 86400            # [seconds] How long cache entries are considered valid (default: 24 hours)
   force_refresh: false             # Global flag to ignore cache and always fetch fresh data
+  not_found_validity: 604800       # [seconds] Don't re-query hashes CivitAI answered 404 for (7 days)
+  hash_workers: 4                  # Parallel hash + lookup workers (set 1 for spinning HDDs)
 ```
 
 -   **`cache_dir`**: Specifies the directory where API responses are cached locally.
 -   **`cache_validity`**: Determines the maximum age (in seconds) of a cached response before it's considered stale and needs refreshing.
 -   **`force_refresh`**: If set to `true` globally (or via the `--force-refresh` command-line flag), the cache will be ignored entirely for the run.
+
+-   **File hashes**: a model's SHA-256 is cached in `cache_dir/file_hashes/` and reused while the file's size and modification time are unchanged, so unchanged models are never re-read. `--rehash` ignores the cached hashes.
+-   **`not_found_validity`**: models that are not on CivitAI (404 by hash) are remembered and not looked up again for this long. Network errors, server errors and rate limits are never remembered. A model uploaded to CivitAI only minutes ago can briefly 404 by hash; run with `--force-refresh` to look it up immediately.
+-   **`hash_workers`**: how many files are hashed and looked up in parallel. 4 suits SSD/NVMe; use 1 for spinning hard disks (parallel reads make them seek) and 2 for network shares.
 
 The API client uses an LRU (Least Recently Used) cache in memory (`api.batch.cache_size`) for frequently accessed items during a single run, while the `scanner.cache_dir` provides persistent caching between runs.
 
@@ -239,13 +299,17 @@ api:
     rate_limit: 100       # Target requests/minute
     retry_delay: 1000     # Base delay (ms) for retrying after rate limit (429 error)
     cache_size: 100       # In-memory LRU cache size for API responses during a run
+    download_rate_limit: 300  # Image downloads/minute (separate from API calls)
+    download_workers: 4   # Models whose previews download in parallel
     circuit_breaker:
       failure_threshold: 5 # Consecutive failures to trigger breaker
       reset_timeout: 60    # Seconds before retrying a broken circuit
 ```
 
--   **`enabled`**: Turns batch processing on or off. If off, requests are made sequentially.
--   **`max_concurrent`**: Limits the number of simultaneous API requests using a semaphore to avoid overwhelming the API or your network.
--   **`rate_limit`**: Uses a token bucket algorithm (per API endpoint) to smooth out requests and stay below the target rate (requests per minute). If the limit is hit, requests will pause and retry with exponential backoff (`retry_delay`).
+-   **`enabled`**: `false` makes hashing and metadata lookups sequential.
+-   **`max_concurrent`**: Maximum number of simultaneous metadata API requests. Files are hashed by `scanner.hash_workers` threads; this caps how many of them talk to the API at once.
+-   **`rate_limit`**: Token bucket for CivitAI API calls (requests per minute).
+-   **`download_rate_limit`** (default 300/min) and **`download_workers`** (default 4): preview downloads from the image CDN have their own bucket and run for several models at once. Your API key is only ever sent to the API host, never to image or other hosts.
+-   **HTTP 429**: CivitAI's `Retry-After` header (seconds or HTTP date, capped at 5 minutes) is honored; without it the client backs off exponentially from `retry_delay`. Rate limiting does not count toward the circuit breaker.
 -   **`cache_size`**: An in-memory LRU cache stores recent API responses during a run to avoid refetching the same data multiple times within that run.
 -   **`circuit_breaker`**: Monitors consecutive failures for each API endpoint (e.g., `/models/{id}`, `/images`). If an endpoint fails `failure_threshold` times in a row, the breaker "opens," and further requests to that specific endpoint are blocked for `reset_timeout` seconds to allow the API to recover. This prevents hammering a potentially failing service.

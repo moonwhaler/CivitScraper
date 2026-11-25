@@ -113,7 +113,7 @@ class VersionEnricher:
             return True
         if self._version_ttl <= 0:
             return True
-        return (time.time() - ts) >= self._version_ttl
+        return bool((time.time() - ts) >= self._version_ttl)
 
     def needs_enrichment(self, metadata: Dict[str, Any], force_refresh: bool = False) -> bool:
         """

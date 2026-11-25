@@ -10,11 +10,14 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, TypeVar
+from typing import Any, Dict, Generic, List, Optional, Tuple, TypeVar
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+# Prune expired API responses at start-up once the cache holds more entries than this.
+PRUNE_THRESHOLD = 1000
 
 
 class LRUCache(Generic[T]):
@@ -257,6 +260,13 @@ class CacheManager(Generic[T]):
         memory_cache_size = config.get("api", {}).get("batch", {}).get("cache_size", 100)
         self.memory_cache = LRUCache[T](memory_cache_size)
 
+        # Expired responses were never deleted, so the cache directory only grew.
+        # Prune once per run when it holds a meaningful number of entries. Only
+        # top-level *.json files are API responses; subdirectories (file hashes,
+        # not-found and failed-model caches) are untouched.
+        if self.disk_cache.get_item_count() > PRUNE_THRESHOLD:
+            self.disk_cache.clear_expired()
+
     def get(self, key: str, default: Optional[T] = None) -> Optional[T]:
         """
         Get value from cache.
@@ -327,27 +337,3 @@ class CacheManager(Generic[T]):
             Number of items
         """
         return self.disk_cache.get_item_count()
-
-
-def memoize(func: Callable[..., T]) -> Callable[..., T]:
-    """
-    Memoize decorator for caching function results.
-
-    Args:
-        func: Function to memoize
-
-    Returns:
-        Memoized function
-    """
-    cache: Dict[str, Any] = {}
-
-    def wrapper(*args: Any, **kwargs: Any) -> T:
-        key = str(args) + str(kwargs)
-        if key in cache:
-            return cache[key]  # type: ignore
-
-        result: T = func(*args, **kwargs)
-        cache[key] = result
-        return result
-
-    return wrapper

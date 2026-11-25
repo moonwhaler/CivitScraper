@@ -4,15 +4,18 @@ Request handler for CivitAI API client.
 This module handles making HTTP requests with rate limiting, circuit breaking, and caching.
 """
 
+import email.utils
 import json
 import logging
-import os
 import time
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
+from urllib.parse import urlparse
 
 import requests
 
 from ..utils.cache import CacheManager
+from ..utils.fs import atomic_write
 from .circuit_breaker import CircuitBreaker
 from .exceptions import (
     CircuitBreakerOpenError,
@@ -39,6 +42,7 @@ class RequestHandler:
         max_retries: int = 3,
         base_retry_delay: float = 2.0,
         headers: Optional[Dict[str, str]] = None,
+        download_rate_limiter: Optional[RateLimiter] = None,
     ):
         """
         Initialize request handler.
@@ -55,6 +59,9 @@ class RequestHandler:
         """
         self.base_url = base_url
         self.rate_limiter = rate_limiter
+        # Image/CDN downloads are throttled separately from API calls.
+        self.download_rate_limiter = download_rate_limiter or rate_limiter
+        self._api_host = urlparse(base_url).hostname
         self.circuit_breaker = circuit_breaker
         self.cache_manager = cache_manager
         self.timeout = timeout
@@ -128,6 +135,34 @@ class RequestHandler:
         data_json = json.dumps(data or empty_dict)
         return f"{method}: {url}: {params_json}: {data_json}"
 
+    @staticmethod
+    def _retry_after_seconds(header: Optional[str], fallback: float) -> float:
+        """
+        Parse a Retry-After header (delta-seconds or HTTP-date), capped at 5 minutes.
+
+        Args:
+            header: Raw Retry-After header value
+            fallback: Delay to use when the header is missing or malformed
+
+        Returns:
+            Seconds to wait
+        """
+        max_wait = 300.0
+        if not header:
+            return min(fallback, max_wait)
+        try:
+            return min(max(float(header), 0.0), max_wait)
+        except ValueError:
+            pass
+        try:
+            retry_at = email.utils.parsedate_to_datetime(header)
+            if retry_at.tzinfo is None:
+                retry_at = retry_at.replace(tzinfo=timezone.utc)
+            delta = (retry_at - datetime.now(timezone.utc)).total_seconds()
+            return min(max(delta, 0.0), max_wait)
+        except (TypeError, ValueError):
+            return min(fallback, max_wait)
+
     def request(
         self,
         method: str,
@@ -183,13 +218,17 @@ class RequestHandler:
                 )
 
                 if response.status_code == 429:
-                    retry_after = int(response.headers.get("Retry-After", 1))
-                    logger.warning(f"Rate limited, retrying after {retry_after} seconds")
-
-                    self.circuit_breaker.record_failure(endpoint_name)
+                    # Rate limiting is back-pressure, not an outage: back off and retry,
+                    # but don't trip the circuit breaker (that would silently skip every
+                    # remaining model for reset_timeout seconds).
+                    retry_after = self._retry_after_seconds(
+                        response.headers.get("Retry-After"),
+                        self.base_retry_delay * (2**retries),
+                    )
+                    logger.warning(f"Rate limited, retrying after {retry_after:.1f} seconds")
 
                     if retries >= self.max_retries:
-                        raise RateLimitError(retry_after)
+                        raise RateLimitError(int(retry_after))
 
                     time.sleep(retry_after)
                     retries += 1
@@ -317,20 +356,24 @@ class RequestHandler:
             return True, None
 
         try:
-            self.rate_limiter.acquire()
+            self.download_rate_limiter.acquire()
 
-            response = self.session.get(url, timeout=self.timeout, stream=True)
+            # The API key is only for the API host; never send it to image CDNs or
+            # other hosts a metadata URL may point at (None removes a session header).
+            headers = None
+            if urlparse(url).hostname != self._api_host:
+                headers = {"Authorization": None}
+
+            response = self.session.get(url, timeout=self.timeout, stream=True, headers=headers)
             response.raise_for_status()
 
             content_type_raw = response.headers.get("Content-Type")
             content_type = str(content_type_raw) if content_type_raw is not None else None
             logger.debug(f"Content-Type for {url}: {content_type}")
 
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-            with open(output_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
+            # Streamed to a temp file and moved into place only when complete, so an
+            # interrupted download never leaves a truncated preview behind.
+            atomic_write(output_path, response.iter_content(chunk_size=65536))
 
             return True, content_type
 

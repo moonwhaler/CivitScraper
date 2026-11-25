@@ -1,8 +1,6 @@
 # CivitScraper: Tidy Up Your AI Models!
 
-![Example of a generated HTML file (overview)](civiscraper_html_overview_001.jpg)
-![Example of a generated HTML file (single LoRA)](civiscraper_html_overview_002.jpg)
-![Example of a generated HTML file (example image)](civiscraper_html_overview_003.jpg)
+![The model gallery: cards with type, base model and version, trigger words and collection health](docs/screenshots/gallery_light.jpg)
 
 Tired of digging through messy folders to find your AI models? **CivitScraper** is here to help! It automatically organizes your downloaded models (like LoRAs, Checkpoints, etc.), fetches useful info and preview images from CivitAI, and creates easy-to-browse HTML pages for your collection.
 
@@ -12,7 +10,31 @@ Tired of digging through messy folders to find your AI models? **CivitScraper** 
 *   **Gets Model Info:** Downloads details like creator, type, trigger words, and ratings from CivitAI.
 *   **Downloads Previews:** Grabs preview images so you can see what the model does.
 *   **Organizes Files (Optional):** Arranges your models, info files, and images into a clean folder structure.
-*   **Creates Visual Previews:** Generates HTML pages for each model and a main gallery page to easily browse your collection.
+*   **Creates Visual Previews:** Generates HTML pages for each model and a main gallery page to easily browse your collection (light and dark theme, cards, image wall or table): search by name, trigger word, tag or creator, peek at a model without leaving the gallery, copy trigger words and file paths with one click, copy a preview's prompt and settings straight into Forge, and spot available updates, missing previews, duplicates and files CivitAI doesn't know.
+
+### Screenshots
+
+All screenshots show a demo catalogue with made-up models and generated preview art.
+
+**Quick look:** every trigger word, the file path, versions and tags, without leaving the gallery.
+
+![Quick look panel next to the gallery](docs/screenshots/gallery_peek.jpg)
+
+**Image wall in the dark theme:** collection health badges show available updates and duplicates.
+
+![Image wall view in the dark theme](docs/screenshots/gallery_wall_dark.jpg)
+
+**Model page:** previews, trigger words to copy, the file with *Copy path* / *Copy folder*, and all versions.
+
+![Model page with preview, trigger words, file and versions](docs/screenshots/model_light.jpg)
+
+**Preview viewer:** prompt and settings of each preview, and *Copy for Forge* to paste them straight into Forge.
+
+![Preview viewer with prompt, negative prompt and generation settings](docs/screenshots/viewer_dark.jpg)
+
+**On a phone:**
+
+![Gallery and model page on a phone](docs/screenshots/mobile.jpg)
 
 ---
 

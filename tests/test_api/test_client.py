@@ -5,7 +5,7 @@ This module contains tests for the CivitAI API client functionality.
 """
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -115,50 +115,25 @@ def test_get_model_by_id_rate_limited(mock_request, api_client):
 
 
 @patch("civitscraper.api.request.RequestHandler.request")
-def test_get_model_by_hash_success(mock_request, api_client):
+def test_get_model_version_by_hash_success(mock_request, api_client):
     """
-    Test getting a model by hash with a successful response.
+    Test looking up a model version by file hash.
 
     Args:
         mock_request: Mock for the RequestHandler.request method
         api_client: The API client instance
     """
-    # Mock response
-    response_data: Dict[str, List[Dict[str, Any]]] = {"items": [{"id": 123, "name": "Test Model"}]}
+    response_data: Dict[str, Any] = {"id": 123, "modelId": 7, "name": "v1"}
     mock_request.return_value = json.dumps(response_data)
 
-    # Call the method
-    result = api_client.get_model_by_hash("testhash123")
+    result = api_client.get_model_version_by_hash("testhash123")
 
-    # Verify the result
     assert result["id"] == 123
-    assert result["name"] == "Test Model"
-
-    # Verify the request was made correctly
+    assert result["modelId"] == 7
     mock_request.assert_called_once_with(
         method="GET",
-        endpoint="models",
-        params={"hashes[]": "testhash123"},
+        endpoint="model-versions/by-hash/testhash123",
+        params=None,
         data=None,
         force_refresh=False,
     )
-
-
-@patch("civitscraper.api.request.RequestHandler.request")
-def test_get_model_by_hash_not_found(mock_request, api_client):
-    """
-    Test getting a model by hash with no results.
-
-    Args:
-        mock_request: Mock for the RequestHandler.request method
-        api_client: The API client instance
-    """
-    # Mock response
-    response_data: Dict[str, List] = {"items": []}
-    mock_request.return_value = json.dumps(response_data)
-
-    # Call the method
-    result = api_client.get_model_by_hash("nonexistenthash")
-
-    # Verify the result is None
-    assert result is None

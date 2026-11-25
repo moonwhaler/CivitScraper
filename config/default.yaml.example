@@ -27,6 +27,8 @@ api:
     rate_limit: 100      # Requests/minute (uses token bucket with per-endpoint tracking)
     retry_delay: 1000    # Base delay (ms) for exponential backoff when rate limited
     cache_size: 100      # LRU cache size - evicts least recently used entries when full
+    download_rate_limit: 300  # Image downloads/minute (own token bucket, separate from API calls)
+    download_workers: 4  # Models whose preview images download in parallel
 
     # Advanced batch settings
     # Circuit breaker prevents API abuse during outages by tracking failures per endpoint
@@ -80,7 +82,8 @@ jobs:
   fetch-all:
     type: scan-paths
     recursive: false      # Search in subdirectories
-    skip_existing: false  # Skip files that already have metadata
+    skip_existing: true   # Skip files that already have metadata (false re-fetches metadata
+                          # and re-downloads every preview on each run)
     verify_hashes: true  # Verify file hashes against CivitAI data
     paths: ["lora"]      # Process these path types
     output:
@@ -187,7 +190,6 @@ jobs:
     skip_existing: true
     verify_hashes: true
     paths: ["lora"]
-    organize: false
     output:
       metadata:
         format: "json"
@@ -220,6 +222,8 @@ scanner:
   cache_dir: ".civitscraper_cache"  # Where to store cache files
   cache_validity: 86400            # [seconds] Cache lifetime (24 hours)
   force_refresh: false             # [true/false] Ignore cache and force refresh
+  not_found_validity: 604800       # [seconds] Skip re-querying hashes CivitAI answered 404 for
+  hash_workers: 4                  # Parallel hash + lookup workers (1 for HDD, 2 for NAS)
 
 # =============================================================================
 # Logging Configuration

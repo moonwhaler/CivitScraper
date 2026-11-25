@@ -11,9 +11,78 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TypedDict
 
 from ..api.domains import DEFAULT_DOMAINS, build_model_url, get_domain_settings, is_nsfw
+from ..organization.config import OrganizationConfig
+from ..organization.organizer import (
+    is_in_organized_output,
+    organized_output_root,
+    original_dir_for,
+)
+from ..scanner.discovery import get_metadata_path, list_preview_files
 from .images import ImageHandler
 from .paths import PathManager
-from .sanitizer import DataSanitizer
+from .sanitizer import description_excerpt, sanitize_description
+
+# Gallery card limits: the detail page shows everything, cards only need enough
+# to search and copy (keeps models_data.js small for big collections).
+MAX_CARD_TAGS = 20
+MAX_CARD_TRIGGER_WORDS = 10
+MAX_CARD_TRIGGER_CHARS = 300
+
+HEALTH_UPDATE = "update"
+HEALTH_NO_PREVIEW = "no_preview"
+HEALTH_DUPLICATE = "duplicate"
+
+
+def card_trigger_words(trained_words: Any) -> List[str]:
+    """Trigger words for a gallery card: at most 10 entries and 300 characters."""
+    if isinstance(trained_words, str):
+        trained_words = [trained_words]
+    if not isinstance(trained_words, list):
+        return []
+    words: List[str] = []
+    total = 0
+    for word in trained_words:
+        word = str(word).strip().rstrip(",").strip() if word else ""
+        if not word:
+            continue
+        if len(words) >= MAX_CARD_TRIGGER_WORDS or total + len(word) > MAX_CARD_TRIGGER_CHARS:
+            break
+        words.append(word)
+        total += len(word)
+    return words
+
+
+def update_available(versions: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """
+    Return the newest remote version that beats the local ones on its base model.
+
+    A remote version counts only if it is newer than every local version on the same
+    base model; returns None if there is no such version.
+
+    Comparing per base model keeps e.g. a new SDXL release from flagging a model the
+    user only has (and wants) for SD 1.5.
+    """
+    newest_local: Dict[Any, str] = {}
+    for version in versions:
+        if version.get("is_local"):
+            base = version.get("base_model")
+            created = version.get("created_at") or ""
+            if created > newest_local.get(base, ""):
+                newest_local[base] = created
+            else:
+                newest_local.setdefault(base, created)
+
+    best: Optional[Dict[str, Any]] = None
+    for version in versions:
+        if version.get("is_local"):
+            continue
+        base = version.get("base_model")
+        created = version.get("created_at") or ""
+        if base not in newest_local or not created or created <= newest_local[base]:
+            continue
+        if best is None or created > (best.get("created_at") or ""):
+            best = version
+    return best
 
 
 # Define a typed dictionary for the preview image result
@@ -196,23 +265,30 @@ def invalidate_version_index(search_dir: Optional[str] = None) -> None:
     _version_index_cache.invalidate(search_dir)
 
 
+def _relative_to(path: str, directory: str) -> str:
+    """``path`` relative to ``directory`` with forward slashes; absolute on another drive."""
+    absolute = os.path.abspath(path)
+    try:
+        return os.path.relpath(absolute, directory).replace(os.sep, "/")
+    except ValueError:
+        return absolute
+
+
 class ContextBuilder:
     """Builder for template context."""
 
-    def __init__(self, config: Dict[str, Any], model_processor=None):
+    def __init__(self, config: Dict[str, Any]):
         """
         Initialize context builder.
 
         Args:
             config: Configuration dictionary
-            model_processor: ModelProcessor instance for downloading images (optional)
         """
         self.config = config
         self.domains, self.nsfw_threshold, _ = get_domain_settings(config)
-        self.model_processor = model_processor
         self.path_manager = PathManager(config)
-        self.image_handler = ImageHandler(config, model_processor)
-        self.sanitizer = DataSanitizer()
+        self.image_handler = ImageHandler(config)
+        self.org_config = OrganizationConfig.from_dict(config)
 
     def build_model_context(self, file_path: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -225,17 +301,18 @@ class ContextBuilder:
             Returns:
             Template context
         """
-        model_info = metadata.get("model", {})
+        model_info = metadata.get("model") or {}
+        parent = metadata.get("parentModel") or {}
         model_name = model_info.get("name", metadata.get("name", "Unknown"))
         model_type = model_info.get("type", "Unknown")
-        creator = model_info.get("creator", {}).get("username", "Unknown")
-        description = metadata.get("description", "")
-        tags = model_info.get("tags", [])
+        # Version sidecars carry the creator on the parent model only.
+        creator = (model_info.get("creator") or {}).get("username") or (
+            parent.get("creator") or {}
+        ).get("username")
+        description = sanitize_description(metadata.get("description", ""))
+        tags = model_info.get("tags") or parent.get("tags") or []
         stats = metadata.get("stats", {})
         image_paths = self.image_handler.get_image_paths(file_path, metadata)
-
-        # Sanitize and encode image data to avoid JSON parsing issues
-        encoded_images = self.sanitizer.sanitize_json_data(image_paths)
 
         # Filter files to show only the current model's files and add local path info
         filtered_metadata = self._filter_model_files(file_path, metadata)
@@ -268,11 +345,24 @@ class ContextBuilder:
         gallery_path = "index.html"
         try:
             gallery_abs_path = os.path.abspath(gallery_output_path)
-            gallery_path = os.path.relpath(gallery_abs_path, html_dir)
+            gallery_path = os.path.relpath(gallery_abs_path, html_dir).replace(os.sep, "/")
         except ValueError:
             # On Windows, relpath can fail if paths are on different drives
             # Fall back to absolute path
             gallery_path = os.path.abspath(gallery_output_path)
+
+        # Local version links are absolute; make them relative to this page.
+        sibling_versions = [
+            (
+                dict(v, link=_relative_to(v["link"], html_dir))
+                if v.get("is_local") and v.get("link")
+                else v
+            )
+            for v in sibling_versions
+        ]
+
+        files = filtered_metadata.get("files") or []
+        hashes = (files[0].get("hashes") or {}) if files else {}
 
         context = {
             "title": model_name,
@@ -283,9 +373,13 @@ class ContextBuilder:
             "tags": tags,
             "stats": stats,
             "images": image_paths,
-            "images_encoded": encoded_images,
             "metadata": filtered_metadata,
+            "base_model": metadata.get("baseModel"),
+            "version_name": metadata.get("name"),
+            "hashes": {k: hashes[k] for k in ("AutoV2", "SHA256") if hashes.get(k)},
             "local_file_path": os.path.abspath(file_path),
+            # Relative to the page, so copying still works after the collection moves.
+            "file_rel_path": _relative_to(file_path, html_dir),
             "sibling_versions": sibling_versions,
             "parent_model": metadata.get("parentModel", {}),
             "gallery_path": gallery_path,
@@ -328,7 +422,11 @@ class ContextBuilder:
     ) -> Optional[Dict[str, Any]]:
         """Process a single model file for gallery context."""
         is_html_file = file_path.lower().endswith(".html")
-        metadata_path = os.path.splitext(file_path)[0] + ".json"
+        if is_html_file:
+            # Model cards live next to their sidecar (default layout and base_dir)
+            metadata_path = os.path.splitext(file_path)[0] + ".json"
+        else:
+            metadata_path = get_metadata_path(file_path, self.config)
         html_path = file_path if is_html_file else self.path_manager.get_html_path(file_path)
 
         metadata = self._load_metadata(metadata_path)
@@ -353,6 +451,12 @@ class ContextBuilder:
         }
 
         model_name = metadata.get("model", {}).get("name") or metadata.get("name", "Unknown")
+        parent = metadata.get("parentModel") or {}
+        model_info = metadata.get("model") or {}
+        creator = (parent.get("creator") or {}).get("username") or (
+            model_info.get("creator") or {}
+        ).get("username")
+        tags = parent.get("tags") or model_info.get("tags") or []
 
         parent_folder_path = os.path.dirname(file_path)
         folder_name = os.path.basename(parent_folder_path)
@@ -373,6 +477,7 @@ class ContextBuilder:
 
         # Get file modification time from the actual model file
         file_modified = None
+        model_file: Optional[str] = file_path
         if is_html_file:
             model_file = self._find_model_file(file_path)
             mtime_path = model_file if model_file else file_path
@@ -388,7 +493,9 @@ class ContextBuilder:
             "name": model_name,
             "type": metadata.get("model", {}).get("type", "Unknown"),
             "base_model": metadata.get("baseModel", "Unknown"),
-            "description": metadata.get("description", ""),
+            # Plain-text excerpt only: the gallery searches it, the detail page shows
+            # the full description. Keeps models_data.js small for big collections.
+            "description": description_excerpt(metadata.get("description", "")),
             "html_path": html_abs_path,  # Use absolute path
             "preview_image_path": preview_data.get("path"),
             "is_video": preview_data.get("is_video", False),
@@ -402,6 +509,10 @@ class ContextBuilder:
             "nsfw": is_nsfw(metadata, self.nsfw_threshold),
             "version_id": metadata.get("id"),
             "local_version_count": local_version_count,
+            "creator": creator,
+            "tags": [str(t) for t in tags if t][:MAX_CARD_TAGS],
+            "trigger_words": card_trigger_words(metadata.get("trainedWords")),
+            "file_path": os.path.abspath(model_file) if model_file else None,
             # Raw sibling versions for gallery merging (local + remote linking)
             "sibling_versions": metadata.get("siblingVersions", []),
         }
@@ -460,11 +571,22 @@ class ContextBuilder:
             representative = with_preview[0] if with_preview else by_newest[0]
             rep_version_id = representative.get("version_id")
 
-            # Build version entries from the actual local member cards.
+            # Build version entries from the actual local member cards. The same
+            # version at several local paths is one entry plus a duplicate list.
             member_ids = set()
             versions: List[Dict[str, Any]] = []
+            copies: Dict[Any, List[str]] = {}
             for member in members:
                 version_id = member.get("version_id")
+                paths = member.get("duplicates") or (
+                    [member["file_path"]] if member.get("file_path") else []
+                )
+                copies.setdefault(version_id, [])
+                for path in paths:
+                    if path not in copies[version_id]:
+                        copies[version_id].append(path)
+                if version_id in member_ids and version_id is not None:
+                    continue
                 member_ids.add(version_id)
                 versions.append(
                     {
@@ -474,6 +596,7 @@ class ContextBuilder:
                         "is_current": version_id == rep_version_id,
                         "link": member.get("html_path"),
                         "created_at": member.get("created_at"),
+                        "base_model": member.get("base_model"),
                     }
                 )
 
@@ -496,6 +619,7 @@ class ContextBuilder:
                                 model_id, sib_id, representative.get("nsfw", False), domains
                             ),
                             "created_at": sibling.get("createdAt"),
+                            "base_model": sibling.get("baseModel"),
                         }
                     )
 
@@ -504,6 +628,21 @@ class ContextBuilder:
 
             merged_card = dict(representative)
             merged_card["versions"] = versions
+            # Raw sibling lists are folded into "versions"; don't ship them twice.
+            merged_card.pop("sibling_versions", None)
+
+            duplicates = [paths for paths in copies.values() if len(paths) > 1]
+            merged_card["duplicates"] = [p for paths in duplicates for p in paths]
+            update = update_available(versions)
+            merged_card["update_version"] = update.get("name") if update else None
+            health = []
+            if update:
+                health.append(HEALTH_UPDATE)
+            if not merged_card.get("preview_image_path"):
+                health.append(HEALTH_NO_PREVIEW)
+            if duplicates:
+                health.append(HEALTH_DUPLICATE)
+            merged_card["health"] = health
             merged.append(merged_card)
 
         return merged
@@ -598,7 +737,7 @@ class ContextBuilder:
         if not sibling_versions:
             return 1  # At least the current version is local
 
-        current_dir = os.path.dirname(os.path.abspath(current_file_path))
+        current_dir = self._sidecar_dir(current_file_path)
         count = 0
 
         for version in sibling_versions:
@@ -629,7 +768,7 @@ class ContextBuilder:
         Returns:
             List of sibling version dicts with local availability info
         """
-        current_dir = os.path.dirname(os.path.abspath(current_file_path))
+        current_dir = self._sidecar_dir(current_file_path)
 
         # Preferred path: union of every version of this model across all local
         # sidecars in the directory, so every version's detail page shows the same
@@ -668,21 +807,6 @@ class ContextBuilder:
 
         return result
 
-    def _find_local_version_html(self, search_dir: str, version_id: Optional[int]) -> Optional[str]:
-        """
-        Find a local HTML file for a given version ID.
-
-        Uses the global version index cache for efficient lookups.
-
-        Args:
-            search_dir: Directory to search in
-            version_id: Version ID to find
-
-        Returns:
-            Absolute path to local HTML file if found, None otherwise
-        """
-        return _version_index_cache.get_html_path(search_dir, version_id)
-
     def _load_metadata(self, metadata_path: str) -> Optional[Dict[str, Any]]:
         """Load metadata from a JSON file, checking both organized and original locations."""
         # First try the direct path
@@ -695,55 +819,31 @@ class ContextBuilder:
                 logger.error(f"Error loading metadata from {metadata_path}: {e}")
                 return None
 
-        # If metadata not found at direct path, try alternative paths
+        # If metadata not found at direct path, try the matching original/organized
+        # location derived from the organization settings.
         try:
             filename = os.path.basename(metadata_path)
-            is_in_organized_dir = "/organized/" in metadata_path
+            metadata_dir = os.path.dirname(os.path.abspath(metadata_path))
+            candidates: List[str] = []
 
-            if is_in_organized_dir:
-                # We're in an organized directory, try to find the original
-                organized_idx = metadata_path.find("/organized/")
-                if organized_idx != -1:
-                    original_base = metadata_path[:organized_idx]
-                    original_path = os.path.join(original_base, filename)
-
-                    if os.path.isfile(original_path):
-                        try:
-                            with open(original_path, "r", encoding="utf-8") as f:
-                                original_metadata: Dict[str, Any] = json.load(f)
-                                logger.debug(
-                                    f"Found metadata in original location: {original_path}"
-                                )
-                                return original_metadata
-                        except Exception as e:
-                            logger.error(
-                                f"Error loading metadata from original path {original_path}: {e}"
-                            )
+            if self._is_organized(metadata_path):
+                original_dir = original_dir_for(metadata_dir, self.org_config, self.config)
+                if original_dir:
+                    candidates.append(os.path.join(original_dir, filename))
             else:
-                # We're in an original path, try to find organized version
-                # This handles the case where HTML files may have been left in the original location
-                # but metadata was moved to organized locations
-                organized_idx = metadata_path.rfind("/")
-                if organized_idx != -1:
-                    parent_dir = metadata_path[:organized_idx]
-                    organized_dir = os.path.join(parent_dir, "organized")
+                found = self._find_in_organized_output(metadata_dir, filename)
+                if found:
+                    candidates.append(found)
 
-                    if os.path.isdir(organized_dir):
-                        for root, _, files in os.walk(organized_dir):
-                            organized_path = os.path.join(root, filename)
-                            if os.path.isfile(organized_path):
-                                try:
-                                    with open(organized_path, "r", encoding="utf-8") as f:
-                                        organized_metadata: Dict[str, Any] = json.load(f)
-                                        logger.debug(
-                                            f"Found metadata in new location: {organized_path}"
-                                        )
-                                        return organized_metadata
-                                except Exception as e:
-                                    logger.error(
-                                        f"Error loading metadata from path {organized_path}: {e}"
-                                    )
-                                break
+            for candidate in candidates:
+                if os.path.isfile(candidate):
+                    try:
+                        with open(candidate, "r", encoding="utf-8") as f:
+                            alt_metadata: Dict[str, Any] = json.load(f)
+                        logger.debug(f"Found metadata in alternative location: {candidate}")
+                        return alt_metadata
+                    except Exception as e:
+                        logger.error(f"Error loading metadata from {candidate}: {e}")
 
         except Exception as e:
             logger.error(f"Error trying to find alternative metadata path for {metadata_path}: {e}")
@@ -756,7 +856,7 @@ class ContextBuilder:
         self, file_path: str, metadata: Dict[str, Any], output_dir: str, is_html_file: bool
     ) -> PreviewImageResult:
         """Find preview image for a model."""
-        is_organized = "/organized/" in file_path
+        is_organized = self._is_organized(file_path)
 
         # If this is an HTML file in the original location, try to find its organized version first
         if is_html_file and not is_organized:
@@ -788,56 +888,69 @@ class ContextBuilder:
 
         return None
 
-    def _find_organized_version(self, file_path: str) -> Optional[str]:
-        """Find organized version of a file."""
-        base_dir = file_path
-        while "/models/" in base_dir:
-            base_dir = os.path.dirname(base_dir)
+    def _is_organized(self, path: str) -> bool:
+        """Whether ``path`` lies inside the organization output."""
+        return is_in_organized_output(path, self.org_config, self.config)
 
-        if not base_dir:
-            return None
-
-        model_name = os.path.splitext(os.path.basename(file_path))[0]
-
-        organized_base = os.path.join(base_dir, "organized")
+    def _find_in_organized_output(self, source_dir: str, filename: str) -> Optional[str]:
+        """Search the organization output of ``source_dir`` for ``filename``."""
+        organized_base = organized_output_root(source_dir, self.org_config)
         if not os.path.isdir(organized_base):
             return None
-
         for root, _, files in os.walk(organized_base):
-            for filename in files:
-                if filename == f"{model_name}.html":
-                    return os.path.join(root, filename)
-
+            if filename in files:
+                return os.path.join(root, filename)
         return None
+
+    def _find_organized_version(self, file_path: str) -> Optional[str]:
+        """Find the organized copy of a model card in its directory's organization output."""
+        return self._find_in_organized_output(
+            os.path.dirname(os.path.abspath(file_path)), os.path.basename(file_path)
+        )
+
+    def _sidecar_dir(self, file_path: str) -> str:
+        """
+        Directory holding a model's metadata sidecar (the version index directory).
+
+        For model files this honors ``output.base_dir`` and custom metadata paths;
+        HTML model cards always sit next to their sidecar.
+        """
+        if file_path.lower().endswith(".html"):
+            return os.path.dirname(os.path.abspath(file_path))
+        return os.path.dirname(os.path.abspath(get_metadata_path(file_path, self.config)))
 
     def _try_standard_preview_path(
         self, file_path: str, output_dir: str, is_html_file: bool
     ) -> PreviewImageResult:
-        """Try finding preview image at standard path."""
+        """Return the lowest-numbered downloaded preview for a model file or model card."""
         if is_html_file:
             model_file = self._find_model_file(file_path)
-            base_preview_path = (
-                os.path.splitext(self.path_manager.get_preview_path(model_file, 0))[0]
-                if model_file
-                else os.path.join(
-                    os.path.dirname(file_path),
-                    f"{os.path.splitext(os.path.basename(file_path))[0]}.preview0",
-                )
-            )
-        else:
-            base_preview_path = self.path_manager.get_preview_base_path(file_path)
-
-        for ext in [".jpeg", ".jpg", ".png", ".webp", ".mp4"]:
-            preview_path = base_preview_path + ext
-            if os.path.isfile(preview_path):
-                is_video = ext.lower() == ".mp4"
-                result: PreviewImageDict = {
-                    "path": os.path.abspath(preview_path),  # Use absolute path
-                    "is_video": is_video,
+            if model_file:
+                previews = list_preview_files(model_file, self.config)
+            else:
+                # No model file next to the card (e.g. base_dir): previews sit in
+                # the card's directory, named after the card.
+                html_dir = os.path.dirname(file_path)
+                stem = os.path.splitext(os.path.basename(file_path))[0]
+                output_cfg = self.config.get("output", {})
+                local_cfg = dict(self.config)
+                local_cfg["output"] = {
+                    **output_cfg,
+                    "base_dir": None,
+                    "images": {**output_cfg.get("images", {}), "path": html_dir},
                 }
-                return result
+                previews = list_preview_files(
+                    os.path.join(html_dir, stem + ".safetensors"), local_cfg
+                )
+        else:
+            previews = list_preview_files(file_path, self.config)
 
-        return None
+        if not previews:
+            return None
+
+        path, _, is_video = previews[0]
+        result: PreviewImageDict = {"path": os.path.abspath(path), "is_video": is_video}
+        return result
 
     def _find_model_file(self, html_file: str) -> Optional[str]:
         """Find corresponding model file for an HTML file."""
@@ -917,7 +1030,7 @@ class ContextBuilder:
 
                 # Check both original and organized locations
                 paths_to_check = [file_path]
-                if "/organized/" not in file_path:
+                if not self._is_organized(file_path):
                     # If we're in the original location, also check organized
                     organized_path = self._find_organized_version(file_path)
                     if organized_path:
@@ -958,7 +1071,6 @@ class ContextBuilder:
                 # Use remote URL as last resort
                 logger.debug(f"No local file found, using remote URL: {preview_url}")
                 logger.debug(f"Checking file_path directory: {os.path.dirname(file_path)}")
-                logger.debug(f"Directory contents: {os.listdir(os.path.dirname(file_path))}")
 
                 # For CivitAI URLs, handle width parameter
                 if preview_url and "image.civitai.com" in preview_url:

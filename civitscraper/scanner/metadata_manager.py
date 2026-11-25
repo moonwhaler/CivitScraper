@@ -11,9 +11,15 @@ from typing import Any, Dict, List, Optional, cast
 
 from ..api.client import CivitAIClient
 from ..api.domains import get_domain_settings, is_nsfw
+from ..api.exceptions import ClientError
+from ..utils.cache import DiskCache
+from ..utils.fs import atomic_write
 from .discovery import get_metadata_path
 
 logger = logging.getLogger(__name__)
+
+# Hashes CivitAI answered 404 for are not looked up again for this long.
+NOT_FOUND_CACHE_VALIDITY = 7 * 24 * 60 * 60
 
 
 class MetadataManager:
@@ -39,9 +45,19 @@ class MetadataManager:
 
         _, self.nsfw_threshold, self.nsfw_browsing_level = get_domain_settings(config)
         # Preview count cap for the NSFW image feed (mirrors image download limit).
-        self.nsfw_feed_limit = (
-            self.output_config.get("images", {}).get("max_count") or 20
+        self.nsfw_feed_limit = self.output_config.get("images", {}).get("max_count") or 20
+
+        # Negative cache: hashes CivitAI does not know (404). Only a definite 404 is
+        # recorded; network errors, 5xx and rate limits are retried next run.
+        scanner_config = config.get("scanner", {})
+        self.not_found_cache = DiskCache[bool](
+            os.path.join(scanner_config.get("cache_dir", ".civitscraper_cache"), "not_found"),
+            validity=scanner_config.get("not_found_validity", NOT_FOUND_CACHE_VALIDITY),
         )
+
+    def is_known_not_found(self, file_hash: str) -> bool:
+        """Whether CivitAI recently answered 404 for this hash."""
+        return self.not_found_cache.get(f"hash_{file_hash}") is True
 
     def fetch_metadata(
         self, file_hash: str, force_refresh: bool = False
@@ -60,11 +76,22 @@ class MetadataManager:
             logger.warning("Cannot fetch metadata without file hash")
             return None
 
+        if not force_refresh and self.is_known_not_found(file_hash):
+            logger.debug(f"Hash {file_hash} was not found on CivitAI recently; skipping lookup")
+            return None
+
         try:
             logger.debug(f"Fetching metadata for hash {file_hash}")
-            response = self.api_client.get_model_version_by_hash(
-                file_hash, force_refresh=force_refresh
-            )
+            try:
+                response = self.api_client.get_model_version_by_hash(
+                    file_hash, force_refresh=force_refresh
+                )
+            except ClientError as e:
+                if e.status_code == 404:
+                    self.not_found_cache.set(f"hash_{file_hash}", True)
+                    logger.info(f"Hash {file_hash} is not known to CivitAI")
+                    return None
+                raise
             logger.debug(f"Got API response for hash {file_hash}: {type(response)}")
 
             # Convert response to metadata dict format
@@ -118,10 +145,10 @@ class MetadataManager:
                 if feed_images:
                     metadata["images"] = feed_images
 
-            # Validate required fields
+            # A model without preview images is still a valid CivitAI match: keep its
+            # metadata (otherwise it is treated as "not found" and re-queried forever).
             if not metadata.get("images"):
-                logger.warning(f"No images found in metadata for hash {file_hash}")
-                return None
+                logger.info(f"No preview images listed for hash {file_hash}")
 
             images = cast(List[Any], metadata.get("images", []))
             logger.debug(f"Processed hash: {file_hash}, found {len(images)} images")
@@ -155,8 +182,7 @@ class MetadataManager:
                         "id": item.get("id"),
                         "url": item.get("url"),
                         "nsfw": bool(
-                            isinstance(level, (int, float))
-                            and level >= self.nsfw_threshold
+                            isinstance(level, (int, float)) and level >= self.nsfw_threshold
                         ),
                         "width": item.get("width"),
                         "height": item.get("height"),
@@ -204,12 +230,8 @@ class MetadataManager:
             return True
 
         try:
-            # Create directory if it doesn't exist
-            os.makedirs(os.path.dirname(metadata_path), exist_ok=True)
-
             # Save metadata - always overwrite if we reached this point
-            with open(metadata_path, "w", encoding="utf-8") as f:
-                json.dump(metadata, f, indent=2)
+            atomic_write(metadata_path, json.dumps(metadata, indent=2))
 
             logger.debug(f"Saved metadata to {metadata_path}")
             return True

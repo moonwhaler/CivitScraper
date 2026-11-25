@@ -7,87 +7,44 @@ This module provides functions for computing file hashes using various algorithm
 import hashlib
 import logging
 import os
-from typing import Callable, Dict, List, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-# Hash function type
-# Removed HashFunction type alias to avoid mypy error
+# Names handled here in addition to anything hashlib provides
+_SPECIAL_ALGORITHMS = {"sha256", "autov2", "autov1", "blake3", "crc32"}
 
 
-def sha256_hash(data: bytes) -> str:
-    """Compute SHA-256 hash of data."""
-    return str(hashlib.sha256(data).hexdigest().upper())
+CHUNK_SIZE = 1024 * 1024  # 1 MiB: few syscalls, hashlib releases the GIL per chunk
 
 
-def blake3_hash(data: bytes) -> str:
-    """Compute BLAKE3 hash of data."""
-    try:
-        import blake3
-
-        return str(blake3.blake3(data).hexdigest().upper())
-    except ImportError:
-        logger.warning("blake3 module not installed, falling back to SHA-256")
-        return sha256_hash(data)
-
-
-def crc32_hash(data: bytes) -> str:
-    """Compute CRC32 hash of data."""
-    import zlib
-
-    crc = zlib.crc32(data) & 0xFFFFFFFF
-    return f"{crc: 08X}"
-
-
-def auto_v1_hash(data: bytes) -> str:
-    """Compute AutoV1 hash of data."""
-    return sha256_hash(data[: 1024 * 1024])
-
-
-def auto_v2_hash(data: bytes) -> str:
-    """Compute AutoV2 hash of data."""
-    return sha256_hash(data)
-
-
-def create_hash_function(name: str) -> Callable[[bytes], str]:
-    """Create a hash function that always returns a string."""
-    name = name.lower()
-    result: Callable[[bytes], str]
-    if name == "blake3":
-        result = blake3_hash
-    elif name == "crc32":
-        result = crc32_hash
-    elif name == "autov1":
-        result = auto_v1_hash
-    elif name == "autov2":
-        result = auto_v2_hash
-    else:
-        result = sha256_hash
-    return result
-
-
-# Map of hash algorithms to hash functions
-HASH_FUNCTIONS: Dict[str, Callable[[bytes], str]] = {
-    name: create_hash_function(name) for name in ["sha256", "blake3", "crc32", "autov1", "autov2"]
-}
+def _hash_stream(f: Any, hasher: Any, chunk_size: int) -> None:
+    """Feed a file object into a hashlib-style hasher in chunks."""
+    buffer = bytearray(chunk_size)
+    view = memoryview(buffer)
+    while True:
+        n = f.readinto(buffer)
+        if not n:
+            break
+        hasher.update(view[:n])
 
 
 def compute_file_hash(
-    file_path: str, algorithm: str = "sha256", chunk_size: int = 8192
+    file_path: str, algorithm: str = "sha256", chunk_size: int = CHUNK_SIZE
 ) -> Optional[str]:
     """
     Compute hash of a file.
 
     Args:
         file_path: Path to the file
-        algorithm: Hash algorithm to use
-        chunk_size: Chunk size for reading file
+        algorithm: Hash algorithm (sha256, autov2, autov1, blake3, crc32, or any hashlib name)
+        chunk_size: Read size in bytes
 
     Returns:
-        Hexadecimal hash string or None if file not found
+        Upper-case hexadecimal hash string, or None if the file is missing/unreadable
     """
-    hash_func: Optional[Callable[[bytes], str]] = HASH_FUNCTIONS.get(algorithm.lower())
-    if not hash_func:
+    algorithm = algorithm.lower()
+    if algorithm not in _SPECIAL_ALGORITHMS and algorithm not in hashlib.algorithms_available:
         logger.error(f"Unknown hash algorithm: {algorithm}")
         return None
 
@@ -96,92 +53,35 @@ def compute_file_hash(
             logger.error(f"File not found: {file_path}")
             return None
 
-        file_size = os.path.getsize(file_path)
-
-        # For small files, read the entire file at once
-        if file_size < 10 * 1024 * 1024:  # 10 MB
-            with open(file_path, "rb") as f:
-                data = f.read()
-            return hash_func(data)
-
-        # For large files, read in chunks
         with open(file_path, "rb") as f:
-            if algorithm.lower() in ["autov1", "autov2"]:
-                # For AutoV1/V2, we need to read specific parts of the file
-                if algorithm.lower() == "autov1":
-                    data = f.read(1024 * 1024)  # Read first 1 MB
-                    return create_hash_function("sha256")(data)
-                else:
-                    # For AutoV2, we'll use the full SHA-256 hash for simplicity
-                    hasher_obj = hashlib.sha256()
-                    while True:
-                        data = f.read(chunk_size)
-                        if not data:
-                            break
-                        hasher_obj.update(data)
-                    return hasher_obj.hexdigest().upper()
-            elif algorithm.lower() == "blake3":
+            if algorithm == "autov1":
+                return str(hashlib.sha256(f.read(1024 * 1024)).hexdigest().upper())
+
+            if algorithm == "crc32":
+                import zlib
+
+                crc = 0
+                for chunk in iter(lambda: f.read(chunk_size), b""):
+                    crc = zlib.crc32(chunk, crc)
+                return f"{crc & 0xFFFFFFFF:08X}"
+
+            if algorithm == "blake3":
                 try:
                     import blake3
 
-                    hasher = blake3.blake3()
-                    while True:
-                        data = f.read(chunk_size)
-                        if not data:
-                            break
-                        hasher.update(data)
-                    return str(hasher.hexdigest().upper())
+                    hasher: Any = blake3.blake3()
                 except ImportError:
                     logger.warning("blake3 module not installed, falling back to SHA-256")
-                    hasher_obj = hashlib.sha256()
-                    while True:
-                        data = f.read(chunk_size)
-                        if not data:
-                            break
-                        hasher_obj.update(data)
-                    return hasher_obj.hexdigest().upper()
+                    hasher = hashlib.sha256()
             else:
-                hash_instance = (
-                    hashlib.new(algorithm.lower())
-                    if algorithm.lower() in hashlib.algorithms_available
-                    else hashlib.sha256()
-                )
+                name = "sha256" if algorithm in ("sha256", "autov2") else algorithm
+                if hasattr(hashlib, "file_digest"):  # Python 3.11+
+                    return str(hashlib.file_digest(f, name).hexdigest().upper())
+                hasher = hashlib.new(name)
 
-                while True:
-                    data = f.read(chunk_size)
-                    if not data:
-                        break
-                    hash_instance.update(data)
-
-                result: str = hash_instance.hexdigest()  # hexdigest() always returns str
-                return result.upper()
+            _hash_stream(f, hasher, chunk_size)
+            return str(hasher.hexdigest().upper())
 
     except Exception as e:
         logger.error(f"Error computing hash for {file_path}: {e}")
         return None
-
-
-def compute_file_hashes(
-    file_path: str, algorithms: Optional[List[str]] = None, chunk_size: int = 8192
-) -> Dict[str, str]:
-    """
-    Compute multiple hashes of a file.
-
-    Args:
-        file_path: Path to the file
-        algorithms: List of hash algorithms to use
-        chunk_size: Chunk size for reading file
-
-    Returns:
-        Dictionary of algorithm -> hash
-    """
-    if algorithms is None:
-        algorithms = ["sha256", "blake3", "crc32", "autov1", "autov2"]
-
-    result = {}
-    for algorithm in algorithms:
-        hash_value = compute_file_hash(file_path, algorithm, chunk_size)
-        if hash_value:
-            result[algorithm] = hash_value
-
-    return result
