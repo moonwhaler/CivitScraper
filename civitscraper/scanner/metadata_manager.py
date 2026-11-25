@@ -117,10 +117,10 @@ class MetadataManager:
                 if feed_images:
                     metadata["images"] = feed_images
 
-            # Validate required fields
+            # A model without preview images is still a valid CivitAI match: keep its
+            # metadata (otherwise it is treated as "not found" and re-queried forever).
             if not metadata.get("images"):
-                logger.warning(f"No images found in metadata for hash {file_hash}")
-                return None
+                logger.info(f"No preview images listed for hash {file_hash}")
 
             images = cast(List[Any], metadata.get("images", []))
             logger.debug(f"Processed hash: {file_hash}, found {len(images)} images")

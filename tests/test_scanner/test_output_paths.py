@@ -283,3 +283,13 @@ def test_sync_lora_triggers_keeps_backup(tmp_path):
 
     assert (tmp_path / "loras.json.bak").read_text() == original
     assert json.loads(loras_file.read_text())[0]["metadata"]["lora_triggers"] == "alpha"
+
+
+def test_metadata_without_images_is_kept(tmp_path):
+    config, _ = make_config(tmp_path)
+    api = MagicMock()
+    api.get_model_version_by_hash.return_value = {"id": 5, "modelId": 6, "images": []}
+
+    metadata = MetadataManager(config, api).fetch_metadata("ABC")
+
+    assert metadata is not None and metadata["id"] == 5
