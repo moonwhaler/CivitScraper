@@ -492,7 +492,7 @@ def find_html_files(
         job_recursive: Override recursive setting from job config
 
     Returns:
-        List of valid model card HTML file paths, prioritizing organized locations
+        Model card HTML files (each once), organized locations first
     """
     # Get input paths
     input_paths = config.get("input_paths", {})
@@ -501,9 +501,11 @@ def find_html_files(
     if path_ids is None:
         path_ids = list(input_paths.keys())
 
-    # Dictionary to store unique model cards, keyed by model name
-    # Value is a tuple of (html_path, is_organized)
-    unique_models: Dict[str, Tuple[str, bool]] = {}
+    # Every model card once (normalized path). Same-named cards in different
+    # folders are different models; the gallery's collapse_candidates merges
+    # organized mirrors of one model and prefers the organized copy.
+    html_files: List[str] = []
+    seen = set()
 
     for path_id in path_ids:
         # Check if path ID exists
@@ -577,22 +579,15 @@ def find_html_files(
                 # Look for a metadata file with the same base name
                 metadata_path = os.path.join(html_dir, f"{model_name}.json")
 
-                if os.path.isfile(metadata_path):
-                    # Check if we already have this model
-                    if model_name not in unique_models or (
-                        is_organized and not unique_models[model_name][1]
-                    ):
-                        # Add model if it's new or if this is an organized version
-                        unique_models[model_name] = (html_file, is_organized)
-                        logger.debug(
-                            f"{'Updated' if model_name in unique_models else 'Added'} model card: "
-                            f"{html_file} (organized: {is_organized})"
-                        )
-                else:
+                if not os.path.isfile(metadata_path):
                     logger.debug(f"Skipping HTML file without metadata: {html_file}")
+                    continue
+                key = os.path.normcase(os.path.abspath(html_file))
+                if key not in seen:
+                    seen.add(key)
+                    html_files.append(html_file)
+                    logger.debug(f"Added model card: {html_file} (organized: {is_organized})")
 
-    # Extract final list of HTML files
-    html_files = [path for path, _ in unique_models.values()]
     logger.info(f"Found {len(html_files)} unique model card HTML files")
     return html_files
 

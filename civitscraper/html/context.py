@@ -7,6 +7,7 @@ This module handles preparing context data for templates.
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TypedDict
 
@@ -265,6 +266,31 @@ def invalidate_version_index(search_dir: Optional[str] = None) -> None:
     _version_index_cache.invalidate(search_dir)
 
 
+# Model file extensions tried when a model card is found without its model file
+_DEFAULT_MODEL_EXTENSIONS = (".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".gguf", ".sft")
+
+
+def model_file_extensions(config: Dict[str, Any]) -> List[str]:
+    """
+    Extensions a model file next to its card can have.
+
+    The plain ``*.ext`` patterns of every configured input path come first, then
+    the common model formats.
+    """
+    extensions: List[str] = []
+    for path_config in (config.get("input_paths") or {}).values():
+        if not isinstance(path_config, dict):
+            continue
+        for pattern in path_config.get("patterns") or []:
+            match = re.fullmatch(r"\*(\.[A-Za-z0-9_]+)", str(pattern))
+            if match and match.group(1).lower() not in extensions:
+                extensions.append(match.group(1).lower())
+    for ext in _DEFAULT_MODEL_EXTENSIONS:
+        if ext not in extensions:
+            extensions.append(ext)
+    return extensions
+
+
 def _relative_to(path: str, directory: str) -> str:
     """``path`` relative to ``directory`` with forward slashes; absolute on another drive."""
     absolute = os.path.abspath(path)
@@ -289,6 +315,7 @@ class ContextBuilder:
         self.path_manager = PathManager(config)
         self.image_handler = ImageHandler(config)
         self.org_config = OrganizationConfig.from_dict(config)
+        self.model_extensions = model_file_extensions(config)
 
     def build_model_context(self, file_path: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -541,7 +568,6 @@ class ContextBuilder:
         Returns:
             Merged list with one card per model (plus standalone cards).
         """
-
         domains = domains or DEFAULT_DOMAINS
 
         def sort_key(value: Optional[str]) -> str:
@@ -957,7 +983,7 @@ class ContextBuilder:
         html_dir = os.path.dirname(html_file)
         model_name = os.path.splitext(os.path.basename(html_file))[0]
 
-        for ext in [".safetensors", ".ckpt", ".pt", ".bin"]:
+        for ext in self.model_extensions:
             potential_path = os.path.join(html_dir, model_name + ext)
             if os.path.isfile(potential_path):
                 return potential_path
@@ -1075,8 +1101,6 @@ class ContextBuilder:
                 # For CivitAI URLs, handle width parameter
                 if preview_url and "image.civitai.com" in preview_url:
                     # Extract the width parameter if it exists
-                    import re
-
                     width_match = re.search(r"width=(\d+)", preview_url)
                     width = width_match.group(1) if width_match else "450"
 

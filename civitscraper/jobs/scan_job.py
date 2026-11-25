@@ -137,9 +137,16 @@ class ScanJob:
 
         logger.info(f"Finding model files for paths: {path_ids}")
         path_files = find_model_files(self.config, path_ids, job_config.get("recursive"))
+        # Nested input paths (e.g. a Lora folder and one of its subfolders) list the
+        # same file twice; keep it once so it is hashed and processed once.
         files: List[str] = []
+        seen = set()
         for path_files_list in path_files.values():
-            files.extend(path_files_list)
+            for file_path in path_files_list:
+                key = os.path.normcase(os.path.abspath(file_path))
+                if key not in seen:
+                    seen.add(key)
+                    files.append(file_path)
 
         self.job_specific_config = merge_configs(self.config, job_config)
 
