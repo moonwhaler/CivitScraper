@@ -194,7 +194,11 @@ class ScanJob:
     def fetch(self) -> None:
         """Hash and look up the filtered files in parallel."""
         filtered_files = self.filtered_files
-        logger.info(f"Fetching metadata for {len(filtered_files)} files")
+        if self.use_cached_metadata:
+            logger.info(f"Loading metadata sidecars of {len(filtered_files)} files")
+        else:
+            logger.info(f"Fetching metadata for {len(filtered_files)} files")
+        verb = "Loaded" if self.use_cached_metadata else "Looked up"
 
         # Hashing releases the GIL (hashlib), and API calls are additionally bounded
         # by api.batch.max_concurrent; the shared rate limiter, circuit breaker and
@@ -249,7 +253,8 @@ class ScanJob:
 
         fetched: Dict[str, Dict[str, Any]] = {}
         if workers > 1 and len(filtered_files) > 1:
-            logger.info(f"Hashing and looking up with {workers} workers")
+            if not self.use_cached_metadata:
+                logger.info(f"Hashing and looking up with {workers} workers")
             with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
                 futures = {pool.submit(fetch_one, f): f for f in filtered_files}
                 for done, future in enumerate(concurrent.futures.as_completed(futures), 1):
@@ -259,7 +264,7 @@ class ScanJob:
                     else:
                         self.summary[outcome] += 1
                     if done % 100 == 0 or done == len(filtered_files):
-                        logger.info(f"Looked up {done}/{len(filtered_files)} files")
+                        logger.info(f"{verb} {done}/{len(filtered_files)} files")
         else:
             for file_path in filtered_files:
                 outcome, metadata = fetch_one(file_path)
@@ -479,9 +484,22 @@ class ScanJob:
         """Log what the job did."""
         summary = self.summary
         summary["output_failed"] = sum(1 for _, meta in self.results if meta is None)
+        skipped = len(self.files) - len(self.filtered_files)
+        if self.use_cached_metadata:
+            # Offline job: files are skipped because they have NO sidecar yet, and
+            # nothing is looked up on CivitAI.
+            unreadable = summary["not_found"] + summary["errors"]
+            logger.info(
+                f"Job {self.job_name} summary: {len(self.files)} found, "
+                f"{skipped} skipped (no metadata yet), "
+                f"{len(self.metadata_dict)} loaded from sidecars, "
+                f"{unreadable} sidecars unreadable, "
+                f"{summary['output_failed']} failed while writing output"
+            )
+            return
         logger.info(
             f"Job {self.job_name} summary: {len(self.files)} found, "
-            f"{len(self.files) - len(self.filtered_files)} skipped (already have metadata), "
+            f"{skipped} skipped (already have metadata), "
             f"{len(self.metadata_dict)} matched, {summary['not_found']} not found on CivitAI "
             f"(+{summary['not_found_cached']} known unknown, not re-queried), "
             f"{summary['unreadable']} unreadable, {summary['errors']} lookup errors, "
