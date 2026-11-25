@@ -160,9 +160,10 @@ class HTMLGenerator:
         css_source_dir = os.path.join(template_dir, "css")
         js_source_dir = os.path.join(template_dir, "js")
 
+        # Context keys follow the file names: css_theme_path, js_gallery_path, ...
         assets_to_copy = {
-            "css": ["base.css", "components.css", "gallery.css"],
-            "js": ["base.js", "gallery.js"],  # Assuming gallery.js will be created
+            "css": ["theme.css", "gallery.css"],
+            "js": ["common.js", "gallery.js"],
         }
 
         logger.debug(f"Copying assets to {output_dir}")
