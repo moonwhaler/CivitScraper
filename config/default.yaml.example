@@ -80,7 +80,8 @@ jobs:
   fetch-all:
     type: scan-paths
     recursive: false      # Search in subdirectories
-    skip_existing: false  # Skip files that already have metadata
+    skip_existing: true   # Skip files that already have metadata (false re-fetches metadata
+                          # and re-downloads every preview on each run)
     verify_hashes: true  # Verify file hashes against CivitAI data
     paths: ["lora"]      # Process these path types
     output:

@@ -7,6 +7,7 @@ This module handles discovering model files in the configured directories.
 import glob
 import logging
 import os
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -37,10 +38,13 @@ def find_files(directory: str, patterns: List[str], recursive: bool = True) -> L
 
     for pattern in patterns:
         # Create glob pattern
+        # Escape the directory so names containing glob characters ([, ], *, ?)
+        # are matched literally; only the configured pattern is a glob.
+        escaped_dir = glob.escape(directory)
         if recursive:
-            glob_pattern = os.path.join(directory, "**", pattern)
+            glob_pattern = os.path.join(escaped_dir, "**", pattern)
         else:
-            glob_pattern = os.path.join(directory, pattern)
+            glob_pattern = os.path.join(escaped_dir, pattern)
 
         # Find matching files
         for file_path in glob.glob(glob_pattern, recursive=recursive):
@@ -115,21 +119,83 @@ def find_model_files(
     return result
 
 
-def has_metadata(file_path: str) -> bool:
+PREVIEW_EXTENSIONS = (".jpeg", ".jpg", ".png", ".webp", ".mp4")
+
+# Sentinels used to turn a rendered preview filename back into a match pattern.
+_INDEX_SENTINEL = "987654321"
+_EXT_SENTINEL = ".civitscraperext"
+
+
+def _norm(path: str) -> str:
+    """Return an absolute, case-normalized path for comparisons."""
+    return os.path.normcase(os.path.abspath(os.path.expanduser(path)))
+
+
+def is_within(path: str, root: str) -> bool:
+    """
+    Check whether ``path`` is ``root`` or lies inside it.
+
+    Uses real path-component containment (not string prefixes), so
+    ``/models/loras2/x`` is *not* inside ``/models/loras``. Windows-safe.
+    """
+    norm_path = _norm(path)
+    norm_root = _norm(root)
+    try:
+        return os.path.commonpath([norm_path, norm_root]) == norm_root
+    except ValueError:
+        # Different drives on Windows, or mixed absolute/relative paths
+        return False
+
+
+def has_metadata(file_path: str, config: Optional[Dict[str, Any]] = None) -> bool:
     """
     Check if file has metadata.
 
     Args:
         file_path: Path to file
+        config: Configuration; when given, the configured metadata location
+            (``output.base_dir``, ``output.metadata.path``/``filename``) is used.
+            Without it, the legacy ``<model>.json`` next to the model is checked.
 
     Returns:
         True if file has metadata, False otherwise
     """
-    # Get metadata file path
-    metadata_path = os.path.splitext(file_path)[0] + ".json"
+    if config is not None:
+        metadata_path = get_metadata_path(file_path, config)
+    else:
+        metadata_path = os.path.splitext(file_path)[0] + ".json"
 
-    # Check if metadata file exists
     return os.path.isfile(metadata_path)
+
+
+def _resolve_output_dir(
+    file_path: str, config: Dict[str, Any], section_config: Dict[str, Any], model_type: str
+) -> str:
+    """
+    Resolve the output directory for a model's metadata, HTML or images.
+
+    ``output.base_dir`` takes precedence (``base_dir/{model_type}``); otherwise the
+    section's ``path`` template is used (default ``{model_dir}``).
+    """
+    model_dir = os.path.dirname(file_path)
+    model_name = os.path.splitext(os.path.basename(file_path))[0]
+
+    base_dir = config.get("output", {}).get("base_dir")
+    if base_dir:
+        return os.path.join(os.path.expanduser(base_dir), model_type)
+
+    path_template = section_config.get("path", "{model_dir}")
+    path = path_template.replace("{model_dir}", model_dir)
+    path = path.replace("{model_name}", model_name)
+    path = path.replace("{model_type}", model_type)
+    return str(path)
+
+
+def _render_filename(template: str, file_path: str, model_type: str) -> str:
+    """Render ``{model_name}``/``{model_type}`` placeholders in a filename template."""
+    model_name = os.path.splitext(os.path.basename(file_path))[0]
+    filename = template.replace("{model_name}", model_name)
+    return filename.replace("{model_type}", model_type)
 
 
 def get_metadata_path(file_path: str, config: Dict[str, Any]) -> str:
@@ -143,44 +209,22 @@ def get_metadata_path(file_path: str, config: Dict[str, Any]) -> str:
     Returns:
         Path to metadata file
     """
-    # Get output configuration
     output_config = config.get("output", {}).get("metadata", {})
+    model_type = get_model_type(file_path, config)
 
-    # Get filename template
-    filename_template = output_config.get("filename", "{model_name}.json")
-
-    # Get model directory
-    model_dir = os.path.dirname(file_path)
-
-    # Get model name
-    model_name = os.path.splitext(os.path.basename(file_path))[0]
-
-    model_type: str = get_model_type(file_path, config)
-
-    base_dir = config.get("output", {}).get("base_dir")
-    if base_dir:
-        path = os.path.join(os.path.expanduser(base_dir), model_type)
-    else:
-        # Get path template
-        path_template = output_config.get("path", "{model_dir}")
-
-        # Format path
-        path = path_template.replace("{model_dir}", model_dir)
-        path = path.replace("{model_name}", model_name)
-        path = path.replace("{model_type}", model_type)
-
-    # Format filename
-    filename = filename_template.replace("{model_name}", model_name)
-    filename = filename.replace("{model_type}", model_type)
-
-    # Combine path and filename and ensure it's a string
-    result = os.path.join(path, filename)
-    return str(result)
+    path = _resolve_output_dir(file_path, config, output_config, model_type)
+    filename = _render_filename(
+        output_config.get("filename", "{model_name}.json"), file_path, model_type
+    )
+    return str(os.path.join(path, filename))
 
 
 def get_model_type(file_path: str, config: Dict[str, Any]) -> str:
     """
     Get model type for file.
+
+    The input path that contains the file is found by real path containment;
+    when input paths are nested, the most specific (longest) one wins.
 
     Args:
         file_path: Path to model file
@@ -189,35 +233,31 @@ def get_model_type(file_path: str, config: Dict[str, Any]) -> str:
     Returns:
         Model type
     """
-    # Get input paths
     input_paths = config.get("input_paths", {})
     if not input_paths or not isinstance(input_paths, dict):
         return "Unknown"
 
-    # Check each path
-    for path_id, path_config in input_paths.items():
+    best_match_len = -1
+    best_type = "Unknown"
+
+    for path_config in input_paths.values():
         if not isinstance(path_config, dict):
             continue
 
-        # Get directory
         directory = path_config.get("path")
         if not directory or not isinstance(directory, str):
             continue
 
-        # Normalize directory path
-        directory = os.path.normpath(directory)
+        if not is_within(file_path, directory):
+            continue
 
-        # Check if file is in directory
-        if os.path.normpath(file_path).startswith(directory):
-            # Get model type
+        match_len = len(_norm(directory))
+        if match_len > best_match_len:
+            best_match_len = match_len
             model_type = path_config.get("type")
-            if model_type is not None and isinstance(model_type, str):
-                return str(model_type)
-            else:
-                return "Unknown"
+            best_type = model_type if isinstance(model_type, str) else "Unknown"
 
-    # If no match found, return a default string
-    return "Unknown"
+    return str(best_type)
 
 
 def get_html_path(file_path: str, config: Dict[str, Any]) -> str:
@@ -231,40 +271,14 @@ def get_html_path(file_path: str, config: Dict[str, Any]) -> str:
     Returns:
         Path to HTML file
     """
-    # Get output configuration
     output_config = config.get("output", {}).get("metadata", {}).get("html", {})
-
-    # Get filename template
-    filename_template = output_config.get("filename", "{model_name}.html")
-
-    # Get model directory
-    model_dir = os.path.dirname(file_path)
-
-    # Get model name
-    model_name = os.path.splitext(os.path.basename(file_path))[0]
-
-    # Get model type
     model_type = get_model_type(file_path, config)
 
-    base_dir = config.get("output", {}).get("base_dir")
-    if base_dir:
-        path = os.path.join(os.path.expanduser(base_dir), model_type)
-    else:
-        # Get path template
-        path_template = output_config.get("path", "{model_dir}")
-
-        # Format path
-        path = path_template.replace("{model_dir}", model_dir)
-        path = path.replace("{model_name}", model_name)
-        path = path.replace("{model_type}", model_type)
-
-    # Format filename
-    filename = filename_template.replace("{model_name}", model_name)
-    filename = filename.replace("{model_type}", model_type)
-
-    # Combine path and filename and ensure it's a string
-    result = os.path.join(path, filename)
-    return str(result)
+    path = _resolve_output_dir(file_path, config, output_config, model_type)
+    filename = _render_filename(
+        output_config.get("filename", "{model_name}.html"), file_path, model_type
+    )
+    return str(os.path.join(path, filename))
 
 
 def get_image_path(
@@ -282,65 +296,85 @@ def get_image_path(
     Returns:
         Path to image file
     """
-    # Get output configuration
     output_config = config.get("output", {}).get("images", {})
 
-    # Extract the base image type and index number
-    import re
-
+    # Split the image type into its base and index number ("preview12" -> "preview", "12")
     match = re.match(r"([a-zA-Z_]+)(\d*)", image_type)
     if match:
-        base_image_type = match.group(1)  # The non-digit part (e.g., "preview")
-        index_number = match.group(2)  # The digit part (e.g., "0", "1", etc.)
+        base_image_type = match.group(1)
+        index_number = match.group(2)
     else:
-        base_image_type = image_type  # No digits found, use the full image_type
+        base_image_type = image_type
         index_number = ""
 
-    # Get the filename template using the base image type
     filename_template = output_config.get("filenames", {}).get(
         base_image_type, "{model_name}.{image_type}{ext}"
     )
 
-    # Get model directory
-    model_dir = os.path.dirname(file_path)
-
-    # Get model name
-    model_name = os.path.splitext(os.path.basename(file_path))[0]
-
-    # Get model type
     model_type = get_model_type(file_path, config)
+    path = _resolve_output_dir(file_path, config, output_config, model_type)
 
-    base_dir = config.get("output", {}).get("base_dir")
-    if base_dir:
-        path = os.path.join(os.path.expanduser(base_dir), model_type)
-    else:
-        # Get path template
-        path_template = output_config.get("path", "{model_dir}")
-
-        # Format path
-        path = path_template.replace("{model_dir}", model_dir)
-        path = path.replace("{model_name}", model_name)
-        path = path.replace("{model_type}", model_type)
-
-    # Format filename
-    filename = filename_template.replace("{model_name}", model_name)
-    filename = filename.replace("{model_type}", model_type)
-    filename = filename.replace(
-        "{image_type}", base_image_type
-    )  # Use base_image_type without index
+    filename = _render_filename(filename_template, file_path, model_type)
+    filename = filename.replace("{image_type}", base_image_type)
     filename = filename.replace("{ext}", ext)
 
     # Insert the index number before the extension
     if index_number:
-        # Find the position of the extension in the filename
         ext_pos = filename.rfind(ext)
         if ext_pos != -1:
-            # Insert the index number before the extension
             filename = filename[:ext_pos] + index_number + filename[ext_pos:]
 
-    # Combine path and filename and ensure it's a string
-    result = os.path.join(path, filename)
-    return str(result)
+    return str(os.path.join(path, filename))
+
+
+def list_preview_files(file_path: str, config: Dict[str, Any]) -> List[Tuple[str, int, bool]]:
+    """
+    List a model's downloaded, numbered preview files.
+
+    The match pattern is derived from the configured ``images.filenames.preview``
+    template and output location, so custom templates, ``output.base_dir`` and
+    file names containing glob characters (``[``, ``]``) all work. Files that do
+    not follow the numbered naming scheme are ignored.
+
+    Args:
+        file_path: Path to model file
+        config: Configuration
+
+    Returns:
+        List of ``(path, index, is_video)`` sorted by preview index
+    """
+    probe = get_image_path(file_path, config, f"preview{_INDEX_SENTINEL}", _EXT_SENTINEL)
+    directory = os.path.dirname(probe)
+    probe_name = os.path.basename(probe)
+
+    if _INDEX_SENTINEL not in probe_name or not probe_name.endswith(_EXT_SENTINEL):
+        logger.debug(f"Preview filename template has no index/extension slot: {probe_name}")
+        return []
+
+    stem = probe_name[: -len(_EXT_SENTINEL)]
+    before, _, after = stem.rpartition(_INDEX_SENTINEL)
+    ext_group = "|".join(re.escape(e[1:]) for e in PREVIEW_EXTENSIONS)
+    pattern = re.compile(
+        re.escape(before) + r"(\d+)" + re.escape(after) + r"\.(?i:(" + ext_group + r"))"
+    )
+
+    try:
+        entries = os.listdir(directory)
+    except OSError:
+        return []
+
+    previews: List[Tuple[str, int, bool]] = []
+    for name in entries:
+        match = pattern.fullmatch(name)
+        if not match:
+            continue
+        full_path = os.path.join(directory, name)
+        if not os.path.isfile(full_path):
+            continue
+        previews.append((full_path, int(match.group(1)), match.group(2).lower() == "mp4"))
+
+    previews.sort(key=lambda item: item[1])
+    return previews
 
 
 def find_html_files(
@@ -415,6 +449,17 @@ def find_html_files(
         # Add original directory last (lower priority)
         directories_to_scan.append((directory, False))
 
+        # With a central output directory, model cards live in base_dir/{type}
+        base_dir = config.get("output", {}).get("base_dir")
+        if base_dir:
+            central_dir = os.path.join(
+                os.path.expanduser(base_dir), str(path_config.get("type") or "Unknown")
+            )
+            if os.path.isdir(central_dir) and central_dir not in [
+                d for d, _ in directories_to_scan
+            ]:
+                directories_to_scan.append((central_dir, False))
+
         # Scan all directories
         for scan_dir, is_organized in directories_to_scan:
             # Find HTML files
@@ -451,27 +496,27 @@ def find_html_files(
     return html_files
 
 
-def filter_files(files: List[str], skip_existing: bool = True) -> List[str]:
+def filter_files(
+    files: List[str], skip_existing: bool = True, config: Optional[Dict[str, Any]] = None
+) -> List[str]:
     """
     Filter files based on criteria.
 
     Args:
         files: List of file paths
         skip_existing: Whether to skip files that already have metadata
+        config: Configuration used to locate metadata (see ``has_metadata``)
 
     Returns:
         Filtered list of file paths
     """
-    # Filter files
     filtered_files = []
 
     for file_path in files:
-        # Check if file should be skipped
-        if skip_existing and has_metadata(file_path):
+        if skip_existing and has_metadata(file_path, config):
             logger.debug(f"Skipping file with existing metadata: {file_path}")
             continue
 
-        # Add to filtered files
         filtered_files.append(file_path)
 
     return filtered_files

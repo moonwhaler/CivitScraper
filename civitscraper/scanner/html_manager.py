@@ -96,7 +96,7 @@ class HTMLManager:
                 temp_html_generator.output_config = self.output_config
 
                 # Generate HTML using the temporary HTMLGenerator
-                html_path = temp_html_generator.generate_html(file_path, metadata)
+                html_path = str(temp_html_generator.generate_html(file_path, metadata))
                 logger.debug(f"Generated HTML using templates at {html_path}")
                 return html_path
             except Exception as e:

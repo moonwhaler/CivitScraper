@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "civitscraper"
 version = "0.2.0"
 description = "A tool for fetching and managing CivitAI model metadata"
-readme = "README.md"
+readme = "readme.md"
 requires-python = ">=3.8"
 license = {text = "AGPL-3.0"}
 dependencies = [
@@ -14,6 +14,7 @@ dependencies = [
     "pyyaml>=5.4.0",
     "jinja2>=3.0.0",
     "blake3>=0.3.0",
+    "nh3>=0.2.14",
 ]
 
 [project.scripts]

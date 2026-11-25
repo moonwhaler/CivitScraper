@@ -86,6 +86,31 @@
     });
   }
 
+  // Turn a local filesystem path (POSIX, Windows drive or UNC) into a file:// URL with
+  // every path segment percent-encoded, so names containing #, %, ? or spaces still
+  // link correctly. Existing URLs (http/https/file/data) are returned unchanged.
+  function toFileUrl(path) {
+    if (!path) return '';
+    const str = String(path);
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(str) || str.startsWith('data:')) return str;
+    let normalized = str.replace(/\\/g, '/');
+    let prefix = 'file://';
+    if (normalized.startsWith('//')) {
+      // UNC path: //server/share/... -> file://server/share/...
+      normalized = normalized.slice(2);
+    } else if (/^[A-Za-z]:\//.test(normalized)) {
+      prefix = 'file:///';
+    } else if (!normalized.startsWith('/')) {
+      // Relative path: encode segments, keep it relative
+      prefix = '';
+    }
+    const encoded = normalized
+      .split('/')
+      .map((segment, i) => (i === 0 && /^[A-Za-z]:$/.test(segment) ? segment : encodeURIComponent(segment)))
+      .join('/');
+    return prefix + encoded;
+  }
+
   function formatDate(dateString) {
     if (!dateString) return '';
     try {
@@ -472,7 +497,7 @@
           const cls = 'merged-version-link ' + (v.is_local ? 'local' : 'remote') +
                       (v.is_current ? ' current' : '');
           const target = v.is_local ? '' : ' target="_blank" rel="noopener"';
-          return `<a href="${encodeURI(v.link || '')}" class="${cls}"${target}>${escapeHTML(v.name || '')}</a>`;
+          return `<a href="${escapeHTML(toFileUrl(v.link || ''))}" class="${cls}"${target}>${escapeHTML(v.name || '')}</a>`;
         })
         .join('');
       mergedVersionsHtml = `
@@ -498,12 +523,12 @@
           data-downloads="${downloads}"
           data-rating="${rating}"
           data-file-modified="${escapeHTML(model.file_modified || '')}">
-          <a href="${model.html_path}" class="model-link">
+          <a href="${escapeHTML(toFileUrl(model.html_path))}" class="model-link">
               ${model.preview_image_path
                   ? `<div class="model-preview">
                       ${model.is_video
-                          ? `<video src="${model.preview_image_path}" preload="metadata" class="preview-video" muted loop playsinline></video><div class="video-indicator">VIDEO</div><div class="video-play-overlay"><svg class="play-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><svg class="pause-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg></div>`
-                          : `<img src="${PLACEHOLDER_IMAGE}" data-src="${model.preview_image_path}" alt="${escapeHTML(model.name)}" class="lazy-load-image">`
+                          ? `<video src="${escapeHTML(toFileUrl(model.preview_image_path))}" preload="metadata" class="preview-video" muted loop playsinline></video><div class="video-indicator">VIDEO</div><div class="video-play-overlay"><svg class="play-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><svg class="pause-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg></div>`
+                          : `<img src="${PLACEHOLDER_IMAGE}" data-src="${escapeHTML(toFileUrl(model.preview_image_path))}" alt="${escapeHTML(model.name)}" class="lazy-load-image">`
                       }
                     </div>`
                   : `<div class="model-preview no-image"><div class="no-image-text">No Preview</div></div>`
@@ -539,12 +564,12 @@
       <div class="model-focused-item"
           data-model-id="${escapeHTML(model.model_id)}"
           data-name="${escapeHTML(model.name?.toLowerCase())}">
-          <a href="${model.html_path}" class="model-link">
+          <a href="${escapeHTML(toFileUrl(model.html_path))}" class="model-link">
               ${model.preview_image_path
                   ? `<div class="focused-preview">
                       ${model.is_video
-                          ? `<video src="${model.preview_image_path}" preload="metadata" class="preview-video" muted loop playsinline></video><div class="video-indicator">VIDEO</div><div class="video-play-overlay"><svg class="play-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><svg class="pause-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg></div>`
-                          : `<img src="${PLACEHOLDER_IMAGE}" data-src="${model.preview_image_path}" alt="${escapeHTML(model.name)}" class="lazy-load-image">`
+                          ? `<video src="${escapeHTML(toFileUrl(model.preview_image_path))}" preload="metadata" class="preview-video" muted loop playsinline></video><div class="video-indicator">VIDEO</div><div class="video-play-overlay"><svg class="play-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><svg class="pause-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg></div>`
+                          : `<img src="${PLACEHOLDER_IMAGE}" data-src="${escapeHTML(toFileUrl(model.preview_image_path))}" alt="${escapeHTML(model.name)}" class="lazy-load-image">`
                       }
                     </div>`
                   : `<div class="focused-preview no-image"></div>`
@@ -575,12 +600,12 @@
           data-downloads="${downloads}"
           data-rating="${rating}"
           data-file-modified="${escapeHTML(model.file_modified || '')}">
-          <a href="${model.html_path}" class="model-link">
+          <a href="${escapeHTML(toFileUrl(model.html_path))}" class="model-link">
               <div class="model-list-preview">
                   ${model.preview_image_path
                       ? `${model.is_video
-                          ? `<video src="${model.preview_image_path}" preload="metadata" class="preview-video" muted loop playsinline></video><div class="video-indicator mini">VIDEO</div><div class="video-play-overlay mini"><svg class="play-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><svg class="pause-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg></div>`
-                          : `<img src="${PLACEHOLDER_IMAGE}" data-src="${model.preview_image_path}" alt="${escapeHTML(model.name)}" class="lazy-load-image">`
+                          ? `<video src="${escapeHTML(toFileUrl(model.preview_image_path))}" preload="metadata" class="preview-video" muted loop playsinline></video><div class="video-indicator mini">VIDEO</div><div class="video-play-overlay mini"><svg class="play-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><svg class="pause-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg></div>`
+                          : `<img src="${PLACEHOLDER_IMAGE}" data-src="${escapeHTML(toFileUrl(model.preview_image_path))}" alt="${escapeHTML(model.name)}" class="lazy-load-image">`
                         }`
                       : `<div class="no-image-text">No Preview</div>`
                   }

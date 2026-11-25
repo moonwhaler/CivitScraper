@@ -11,6 +11,7 @@ import shutil
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..scanner.discovery import find_html_files
+from ..utils.fs import atomic_write
 from .context import ContextBuilder
 from .paths import PathManager
 from .renderer import TemplateRenderer
@@ -68,8 +69,7 @@ class HTMLGenerator:
 
         html = self.renderer.render_model(context)
 
-        with open(html_path, "w", encoding="utf-8") as f:
-            f.write(html)
+        atomic_write(html_path, html)
 
         logger.debug(f"Generated HTML for {file_path} at {html_path}")
 
@@ -98,6 +98,9 @@ class HTMLGenerator:
             logger.info(f"Dry run: Would generate gallery at {output_path}")
             return output_path
 
+        # A bare filename ("gallery.html", as in the README quick start) has an empty
+        # dirname, which os.makedirs rejects; resolve against the working directory.
+        output_path = os.path.abspath(output_path)
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         # Dictionary to store unique models, keyed by model name
@@ -106,7 +109,7 @@ class HTMLGenerator:
 
         for file_path in file_paths:
             model_name = os.path.splitext(os.path.basename(file_path))[0]
-            is_organized = "/organized/" in file_path
+            is_organized = self.context_builder._is_organized(file_path)
             if model_name not in unique_models or (
                 is_organized and not unique_models[model_name][1]
             ):
@@ -126,7 +129,7 @@ class HTMLGenerator:
                 logger.info(f"Found {len(html_files)} existing model card HTML files")
                 for html_path in html_files:
                     model_name = os.path.splitext(os.path.basename(html_path))[0]
-                    is_organized = "/organized/" in html_path
+                    is_organized = self.context_builder._is_organized(html_path)
                     if model_name not in unique_models or (
                         is_organized and not unique_models[model_name][1]
                     ):
@@ -150,7 +153,7 @@ class HTMLGenerator:
         os.makedirs(js_output_dir, exist_ok=True)
         os.makedirs(data_output_dir, exist_ok=True)
 
-        template_dir = os.path.dirname(self.renderer.gallery_template.filename)
+        template_dir = self.renderer.template_dir
         css_source_dir = os.path.join(template_dir, "css")
         js_source_dir = os.path.join(template_dir, "js")
 
@@ -230,8 +233,7 @@ class HTMLGenerator:
             # js_content remains "const allModelsData = [];"
 
         try:
-            with open(data_js_path, "w", encoding="utf-8") as f:
-                f.write(js_content)
+            atomic_write(data_js_path, js_content)
             logger.debug(f"Wrote models data to {data_js_path}")
         except Exception as e:
             logger.error(f"Error writing models data JS file {data_js_path}: {e}")
@@ -244,8 +246,7 @@ class HTMLGenerator:
 
         html = self.renderer.render_gallery(context)
 
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(html)
+        atomic_write(output_path, html)
 
         logger.debug(f"Generated gallery at {output_path}")
 

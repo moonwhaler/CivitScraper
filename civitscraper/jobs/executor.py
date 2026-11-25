@@ -7,14 +7,17 @@ This module handles executing jobs defined in the configuration.
 import json
 import logging
 import os
+import shutil
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..api.client import CivitAIClient
 from ..config.loader import merge_configs
 from ..html.generator import HTMLGenerator
-from ..organization import FileOrganizer
-from ..scanner.discovery import filter_files, find_model_files
+from ..organization import FileOrganizer, OrganizationConfig
+from ..organization.organizer import is_in_organized_output
+from ..scanner.discovery import filter_files, find_model_files, get_metadata_path
 from ..scanner.processor import ModelProcessor
+from ..utils.fs import atomic_write
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +104,30 @@ class JobExecutor:
 
         return results
 
+    def _build_job_config(self, job_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Merge a job's settings over the global configuration.
+
+        Dict values are merged recursively; other values override.
+
+        Args:
+            job_config: Job configuration
+
+        Returns:
+            Job-specific configuration
+        """
+        job_specific_config = self.config.copy()
+        for key, value in job_config.items():
+            if (
+                key in job_specific_config
+                and isinstance(job_specific_config[key], dict)
+                and isinstance(value, dict)
+            ):
+                job_specific_config[key] = merge_configs(job_specific_config[key], value)
+            else:
+                job_specific_config[key] = value
+        return job_specific_config
+
     def _execute_scan_paths_job(self, job_name: str, job_config: Dict[str, Any]) -> bool:
         """
         Execute a scan-paths job.
@@ -133,6 +160,13 @@ class JobExecutor:
             # Get scan options
             skip_existing = job_config.get("skip_existing", True)
             verify_hashes = job_config.get("verify_hashes", True)
+            if not verify_hashes and not job_config.get("use_cached_metadata", False):
+                # CivitAI lookups are by file hash; without one every file would fail.
+                logger.warning(
+                    "verify_hashes: false is ignored for API lookups (the file hash is "
+                    "how models are identified on CivitAI)"
+                )
+                verify_hashes = True
             use_cached_metadata = job_config.get("use_cached_metadata", False)
 
             # Find model files
@@ -146,31 +180,42 @@ class JobExecutor:
             for path_id, path_files_list in path_files.items():
                 files.extend(path_files_list)
 
+            job_specific_config = self._build_job_config(job_config)
+
+            # Copies/symlinks in the organization output mirror originals that are
+            # scanned anyway; rescanning them duplicates hashing and gallery cards
+            # (and recursive scans would organize the copies again). Moved files are
+            # the only copy, so they stay in the scan and the organizer leaves them
+            # in place.
+            org_settings = OrganizationConfig.from_dict(job_specific_config)
+            mirror_mode = org_settings.enabled and org_settings.operation_mode in (
+                "copy",
+                "symlink",
+            )
+            if mirror_mode:
+                before = len(files)
+                files = [
+                    f
+                    for f in files
+                    if not is_in_organized_output(f, org_settings, job_specific_config)
+                ]
+                if len(files) != before:
+                    logger.info(
+                        f"Ignoring {before - len(files)} {org_settings.operation_mode} "
+                        f"files inside the organization output"
+                    )
+
             # Filter files based on mode
             logger.info(f"Found {len(files)} files, filtering...")
             if use_cached_metadata:
                 # Only include files that HAVE existing metadata
-                filtered_files = [f for f in files if self._has_cached_metadata(f)]
+                filtered_files = [
+                    f for f in files if self._has_cached_metadata(f, job_specific_config)
+                ]
                 logger.info(f"Found {len(filtered_files)} files with cached metadata")
             else:
-                filtered_files = filter_files(files, skip_existing)
+                filtered_files = filter_files(files, skip_existing, job_specific_config)
                 logger.info(f"Filtered to {len(filtered_files)} files")
-
-            # Use the job configuration directly
-            job_specific_config = self.config.copy()
-
-            # Apply job-specific configuration
-            for key, value in job_config.items():
-                if (
-                    key in job_specific_config
-                    and isinstance(job_specific_config[key], dict)
-                    and isinstance(value, dict)
-                ):
-                    # For dictionary values, merge them
-                    job_specific_config[key] = merge_configs(job_specific_config[key], value)
-                else:
-                    # For other values, override them
-                    job_specific_config[key] = value
 
             # Create a temporary HTML generator with job-specific configuration
             # This ensures the gallery_path and other job settings are used
@@ -191,17 +236,20 @@ class JobExecutor:
             metadata_dict = {}
             organized_files_mapping = {}
 
+            summary = {"not_found": 0, "unreadable": 0, "errors": 0, "output_failed": 0}
+
             # First, fetch metadata for all files without processing them
             for file_path in filtered_files:
                 try:
                     # If using cached metadata, load from JSON file instead of API
                     if use_cached_metadata:
-                        metadata = self._load_cached_metadata(file_path)
+                        metadata = self._load_cached_metadata(file_path, job_specific_config)
                         if metadata:
                             logger.debug(f"Loaded cached metadata for {file_path}")
                             metadata_dict[file_path] = metadata
                         else:
                             logger.warning(f"No cached metadata found for {file_path}")
+                            summary["not_found"] += 1
                         continue
 
                     result = temp_processor.file_processor.process(
@@ -209,6 +257,7 @@ class JobExecutor:
                     )
                     if not result.success or not result.file_hash:
                         logger.warning(f"Failed to process file {file_path}: {result.error}")
+                        summary["unreadable"] += 1
                         continue
 
                     # Get metadata from API
@@ -220,8 +269,11 @@ class JobExecutor:
                         metadata_dict[file_path] = metadata
                     else:
                         logger.warning(f"No metadata found for {file_path}")
+                        summary["not_found"] += 1
                 except Exception as e:
                     logger.error(f"Error fetching metadata for {file_path}: {e}")
+                    logger.debug("Traceback:", exc_info=True)
+                    summary["errors"] += 1
 
             # PHASE 1.5: Enrich with parent model data (deduplicated by modelId).
             # Run enrichment if any file's sibling versions are missing or stale
@@ -279,15 +331,27 @@ class JobExecutor:
 
             # Prepare items for processing
             items_to_process = []
+            originals_needing_sidecar = []
             for file_path, metadata in metadata_dict.items():
                 process_path = organized_files_mapping.get(file_path, file_path) or file_path
                 items_to_process.append((process_path, metadata))
+                if mirror_mode and process_path != file_path:
+                    originals_needing_sidecar.append((file_path, metadata))
 
             # PHASE 4a: Flush every sidecar to disk first (using the resolved,
             # possibly-organized process_path), then rebuild the version index against
             # the complete sidecar set. This makes the per-model version union on each
             # detail page deterministic regardless of HTML generation order in 4b.
             from ..html.context import _version_index_cache, invalidate_version_index
+
+            # Copy/symlink mode: the original stays where it is and is what the next
+            # scan finds, so it needs its own sidecar or skip_existing never skips it.
+            # Written first (on a copy carrying the enricher's dirty flag) because
+            # save_metadata consumes that flag.
+            for original_path, metadata in originals_needing_sidecar:
+                temp_processor.metadata_manager.save_metadata(
+                    original_path, dict(metadata), temp_processor.dry_run
+                )
 
             for process_path, metadata in items_to_process:
                 temp_processor.metadata_manager.save_metadata(
@@ -297,7 +361,8 @@ class JobExecutor:
             invalidate_version_index()
             if not temp_processor.dry_run:
                 index_dirs = {
-                    os.path.dirname(os.path.abspath(p)) for p, _ in items_to_process
+                    os.path.dirname(os.path.abspath(get_metadata_path(p, job_specific_config)))
+                    for p, _ in items_to_process
                 }
                 for index_dir in index_dirs:
                     _version_index_cache.ensure_indexed(index_dir)
@@ -367,10 +432,19 @@ class JobExecutor:
                     include_existing=include_existing,
                 )
 
+            summary["output_failed"] = sum(1 for _, meta in results if meta is None)
+            logger.info(
+                f"Job {job_name} summary: {len(files)} found, "
+                f"{len(files) - len(filtered_files)} skipped (already have metadata), "
+                f"{len(metadata_dict)} matched, {summary['not_found']} not found on CivitAI, "
+                f"{summary['unreadable']} unreadable, {summary['errors']} lookup errors, "
+                f"{summary['output_failed']} failed while writing output"
+            )
             return True
 
         except Exception as e:
             logger.error(f"Error executing scan-paths job {job_name}: {e}")
+            logger.debug("Traceback:", exc_info=True)
             return False
 
     def _execute_sync_lora_triggers_job(self, job_name: str, job_config: Dict[str, Any]) -> bool:
@@ -412,18 +486,15 @@ class JobExecutor:
             for path_id, path_files_list in path_files.items():
                 files.extend(path_files_list)
 
-            # Filter to LORA files
-            lora_files = []
+            # Locate metadata with the same rules as scan jobs (output.base_dir,
+            # output.metadata.path/filename from the global config or this job),
+            # falling back to the legacy <model>.json next to the model file.
+            job_specific_config = self._build_job_config(job_config)
+            lora_files: List[Tuple[str, str]] = []
             for file_path in files:
-                # Get metadata path
-                metadata_path = os.path.splitext(file_path)[0] + ".json"
-
-                # Check if metadata exists
-                if not os.path.isfile(metadata_path):
-                    continue
-
-                # Add to LORA files
-                lora_files.append(file_path)
+                metadata_path = self._find_metadata_file(file_path, job_specific_config)
+                if metadata_path:
+                    lora_files.append((file_path, metadata_path))
 
             # Check if loras.json exists
             if not os.path.isfile(loras_file):
@@ -440,12 +511,9 @@ class JobExecutor:
             skipped_count = 0
             logger.debug(f"Total files to process: {len(lora_files)}")
 
-            for file_path in lora_files:
+            for file_path, metadata_path in lora_files:
                 processed_count += 1
                 logger.debug(f"Processing {file_path}")
-
-                # Get metadata path
-                metadata_path = os.path.splitext(file_path)[0] + ".json"
 
                 # Load metadata
                 with open(metadata_path, "r") as f:
@@ -509,9 +577,15 @@ class JobExecutor:
                 else:
                     logger.debug(f"No matching entry found in loras.json for {filename}")
 
-            # Save loras.json
-            with open(loras_file, "w") as f:
-                json.dump(loras_data, f, indent=2)
+            # Save loras.json (Krita's own file): never in dry run, keep one backup of
+            # the previous version, and write atomically so a crash can't truncate it.
+            if self.config.get("dry_run", False) or job_config.get("dry_run", False):
+                logger.info(f"Dry run: Would update {updated_count} entries in {loras_file}")
+            elif updated_count:
+                shutil.copy2(loras_file, loras_file + ".bak")
+                atomic_write(loras_file, json.dumps(loras_data, indent=2))
+            else:
+                logger.info(f"No trigger changes; {loras_file} left untouched")
 
             logger.info(f"Files processed: {processed_count}")
             logger.info(f"Updated {updated_count} entries in loras.json")
@@ -522,32 +596,57 @@ class JobExecutor:
 
         except Exception as e:
             logger.error(f"Error executing sync-lora-triggers job {job_name}: {e}")
+            logger.debug("Traceback:", exc_info=True)
             return False
 
-    def _has_cached_metadata(self, file_path: str) -> bool:
+    def _find_metadata_file(self, file_path: str, config: Dict[str, Any]) -> Optional[str]:
+        """
+        Find the metadata file for a model, honoring configured output locations.
+
+        Args:
+            file_path: Path to model file
+            config: Configuration used to locate the metadata file
+
+        Returns:
+            Path to an existing metadata file, or None
+        """
+        candidates = [
+            get_metadata_path(file_path, config),
+            os.path.splitext(file_path)[0] + ".json",
+        ]
+        for candidate in candidates:
+            if os.path.isfile(candidate):
+                return candidate
+        return None
+
+    def _has_cached_metadata(self, file_path: str, config: Optional[Dict[str, Any]] = None) -> bool:
         """
         Check if a model file has cached metadata.
 
         Args:
             file_path: Path to model file
+            config: Configuration used to locate the metadata file (defaults to global)
 
         Returns:
             True if metadata file exists, False otherwise
         """
-        metadata_path = os.path.splitext(file_path)[0] + ".json"
+        metadata_path = get_metadata_path(file_path, config or self.config)
         return os.path.isfile(metadata_path)
 
-    def _load_cached_metadata(self, file_path: str) -> Optional[Dict[str, Any]]:
+    def _load_cached_metadata(
+        self, file_path: str, config: Optional[Dict[str, Any]] = None
+    ) -> Optional[Dict[str, Any]]:
         """
         Load cached metadata from JSON file.
 
         Args:
             file_path: Path to model file
+            config: Configuration used to locate the metadata file (defaults to global)
 
         Returns:
             Metadata dictionary or None if not found
         """
-        metadata_path = os.path.splitext(file_path)[0] + ".json"
+        metadata_path = get_metadata_path(file_path, config or self.config)
         if not os.path.isfile(metadata_path):
             return None
 

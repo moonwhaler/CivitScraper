@@ -34,7 +34,7 @@ def test_clean_up_ignores_non_numbered_preview_file(tmp_path):
     stray.write_bytes(b"data")
 
     # Must not raise ValueError("Invalid preview filename")
-    manager._clean_up_old_previews(str(tmp_path), "model", max_count=1)
+    manager._clean_up_old_previews(str(model_path), max_count=1)
 
     # The unrecognized file is left alone rather than deleted.
     assert stray.exists()
@@ -46,7 +46,7 @@ def test_get_existing_image_info_ignores_non_numbered_preview_file(tmp_path):
     stray.write_bytes(b"data")
 
     # Must not raise ValueError("Invalid preview filename")
-    result = manager._get_existing_image_info(str(model_path), str(tmp_path), "model", 1)
+    result = manager._get_existing_image_info(str(model_path), 1)
 
     assert result == []
 
