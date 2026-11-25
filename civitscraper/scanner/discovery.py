@@ -6,6 +6,7 @@ This module handles discovering model files in the configured directories.
 
 import bisect
 import glob
+import json
 import logging
 import os
 import re
@@ -224,6 +225,53 @@ def has_metadata(file_path: str, config: Optional[Dict[str, Any]] = None) -> boo
         metadata_path = os.path.splitext(file_path)[0] + ".json"
 
     return os.path.isfile(metadata_path)
+
+
+def find_metadata_file(file_path: str, config: Dict[str, Any]) -> Optional[str]:
+    """
+    Find an existing metadata file for a model, honoring configured output locations.
+
+    Falls back to the legacy ``<model>.json`` next to the model file.
+
+    Args:
+        file_path: Path to model file
+        config: Configuration used to locate the metadata file
+
+    Returns:
+        Path to an existing metadata file, or None
+    """
+    candidates = [
+        get_metadata_path(file_path, config),
+        os.path.splitext(file_path)[0] + ".json",
+    ]
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def load_cached_metadata(file_path: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Load a model's metadata from its sidecar at the configured location.
+
+    Args:
+        file_path: Path to model file
+        config: Configuration used to locate the metadata file
+
+    Returns:
+        Metadata dictionary, or None if missing or unreadable
+    """
+    metadata_path = get_metadata_path(file_path, config)
+    if not os.path.isfile(metadata_path):
+        return None
+
+    try:
+        with open(metadata_path, "r", encoding="utf-8") as f:
+            data: Dict[str, Any] = json.load(f)
+            return data
+    except Exception as e:
+        logger.error(f"Error loading cached metadata from {metadata_path}: {e}")
+        return None
 
 
 def _resolve_output_dir(
