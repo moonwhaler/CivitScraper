@@ -260,16 +260,21 @@
     return counts;
   }
 
+  // Lowercased search text, built once per model (search and facet counts run this
+  // for every model on every keystroke).
+  function searchTextOf(model) {
+    if (model._search === undefined) {
+      model._search = [model.name, model.type, model.base_model, model.folder_name, model.description]
+        .filter(Boolean)
+        .join('\n')
+        .toLowerCase();
+    }
+    return model._search;
+  }
+
   function modelMatchesSearch(model, searchText) {
     if (!searchText) return true;
-    const searchLower = searchText.toLowerCase();
-    return (
-      (model.name || '').toLowerCase().includes(searchLower) ||
-      (model.type || '').toLowerCase().includes(searchLower) ||
-      (model.base_model || '').toLowerCase().includes(searchLower) ||
-      (model.folder_name || '').toLowerCase().includes(searchLower) ||
-      (model.description || '').toLowerCase().includes(searchLower)
-    );
+    return searchTextOf(model).includes(searchText.toLowerCase());
   }
 
   // --- Facet Rendering ---
@@ -517,7 +522,6 @@
           data-type="${escapeHTML(model.type?.toLowerCase())}"
           data-base-model="${escapeHTML(model.base_model?.toLowerCase())}"
           data-folder-name="${escapeHTML(model.folder_name?.toLowerCase())}"
-          data-description="${escapeHTML(model.description?.toLowerCase())}"
           data-created-at="${escapeHTML(model.created_at || '')}"
           data-updated-at="${escapeHTML(model.updated_at || '')}"
           data-downloads="${downloads}"
@@ -594,7 +598,6 @@
           data-type="${escapeHTML(model.type?.toLowerCase())}"
           data-base-model="${escapeHTML(model.base_model?.toLowerCase())}"
           data-folder-name="${escapeHTML(model.folder_name?.toLowerCase())}"
-          data-description="${escapeHTML(model.description?.toLowerCase())}"
           data-created-at="${escapeHTML(model.created_at || '')}"
           data-updated-at="${escapeHTML(model.updated_at || '')}"
           data-downloads="${downloads}"

@@ -20,7 +20,7 @@ from ..organization.organizer import (
 from ..scanner.discovery import get_metadata_path, list_preview_files
 from .images import ImageHandler
 from .paths import PathManager
-from .sanitizer import DataSanitizer, sanitize_description
+from .sanitizer import DataSanitizer, description_excerpt, sanitize_description
 
 
 # Define a typed dictionary for the preview image result
@@ -400,7 +400,9 @@ class ContextBuilder:
             "name": model_name,
             "type": metadata.get("model", {}).get("type", "Unknown"),
             "base_model": metadata.get("baseModel", "Unknown"),
-            "description": metadata.get("description", ""),
+            # Plain-text excerpt only: the gallery searches it, the detail page shows
+            # the full description. Keeps models_data.js small for big collections.
+            "description": description_excerpt(metadata.get("description", "")),
             "html_path": html_abs_path,  # Use absolute path
             "preview_image_path": preview_data.get("path"),
             "is_video": preview_data.get("is_video", False),
@@ -516,6 +518,8 @@ class ContextBuilder:
 
             merged_card = dict(representative)
             merged_card["versions"] = versions
+            # Raw sibling lists are folded into "versions"; don't ship them twice.
+            merged_card.pop("sibling_versions", None)
             merged.append(merged_card)
 
         return merged

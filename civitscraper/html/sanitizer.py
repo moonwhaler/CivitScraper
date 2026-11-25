@@ -5,6 +5,7 @@ This module handles sanitizing and encoding data for HTML generation.
 """
 
 import base64
+import html as html_lib
 import json
 import logging
 import re
@@ -139,3 +140,28 @@ def sanitize_description(html: Optional[str]) -> str:
             link_rel="noopener noreferrer",
         )
     )
+
+
+def description_excerpt(html: Optional[str], limit: int = 300) -> str:
+    """
+    Plain-text excerpt of a description for gallery search.
+
+    Tags are stripped, entities decoded and whitespace collapsed; the text is cut
+    at a word boundary at most ``limit`` characters long.
+
+    Args:
+        html: Raw description HTML
+        limit: Maximum excerpt length
+
+    Returns:
+        Plain-text excerpt ("" for empty input)
+    """
+    if not html:
+        return ""
+    text = nh3.clean(str(html), tags=set())
+    text = re.sub(r"\s+", " ", html_lib.unescape(text)).strip()
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    space = cut.rfind(" ")
+    return (cut[:space] if space > limit // 2 else cut).rstrip()
