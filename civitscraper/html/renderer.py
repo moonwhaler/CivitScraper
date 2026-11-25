@@ -9,6 +9,9 @@ import os
 from typing import Any, Dict, Optional
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from markupsafe import Markup
+
+from .filters import FILTERS
 
 logger = logging.getLogger(__name__)
 
@@ -36,19 +39,24 @@ class TemplateRenderer:
 
         # Add a function to read css/js files
         self.env.globals["read_file"] = self._read_file
+        self.env.filters.update(FILTERS)
 
         self.model_template = self.env.get_template("model.html")
         self.gallery_template = self.env.get_template("gallery.html")
 
-    def _read_file(self, file_path: str) -> str:
+    def _read_file(self, file_path: str) -> Markup:
         """
-        Read file content for inclusion in templates.
+        Read a CSS/JS file for inlining into a ``<style>`` or ``<script>`` element.
+
+        The content is our own template asset, so it is marked safe: autoescaping
+        would turn quotes and ``>`` into entities, which browsers do not decode
+        inside ``<style>``/``<script>``.
 
         Args:
             file_path: Path to file relative to templates directory
 
         Returns:
-            File content as string
+            File content, marked safe for the template
         """
         loader = self.env.loader
         if not isinstance(loader, FileSystemLoader):
@@ -58,10 +66,10 @@ class TemplateRenderer:
 
         try:
             with open(full_path, "r", encoding="utf-8") as f:
-                return f.read()
+                return Markup(f.read())
         except Exception as e:
             logger.error(f"Error reading file {file_path}: {e}")
-            return f"/* Error reading {file_path}: {e} */"
+            return Markup(f"/* Error reading {os.path.basename(file_path)} */")
 
     def render_model(self, context: Dict[str, Any]) -> str:
         """
