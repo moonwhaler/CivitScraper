@@ -10,6 +10,7 @@ import sys
 
 from .api.client import CivitAIClient
 from .config.loader import load_and_validate_config
+from .config.schema import warn_unknown_keys
 from .jobs.executor import JobExecutor
 from .utils.logging import setup_logging
 
@@ -101,6 +102,7 @@ def main():
             config["logging"]["console"]["enabled"] = False
 
         logger = setup_logging(config)
+        warn_unknown_keys(config)
 
         if args.force_refresh:
             logger.info("Force refresh enabled: Cache will be ignored")
