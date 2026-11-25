@@ -5,17 +5,15 @@ This module provides the base client functionality for making API requests.
 
 import logging
 import os
-from typing import Any, Dict, Optional, Type, TypeVar
+from typing import Any, Dict, Optional
 
 from ..utils.cache import CacheManager
 from .circuit_breaker import CircuitBreaker
 from .rate_limiter import RateLimiter
 from .request import RequestHandler
-from .response import ResponseParser
+from .response import parse_json
 
 logger = logging.getLogger(__name__)
-
-T = TypeVar("T")
 
 
 class BaseClient:
@@ -75,8 +73,6 @@ class BaseClient:
             download_rate_limiter=self.download_rate_limiter,
         )
 
-        self.response_parser = ResponseParser()
-
         logger.debug(f"Initialized CivitAI API base client for {self.base_url}")
 
     def _make_request(
@@ -86,8 +82,7 @@ class BaseClient:
         params: Optional[Dict[str, Any]] = None,
         data: Optional[Dict[str, Any]] = None,
         force_refresh: bool = False,
-        response_type: Optional[Type[T]] = None,
-    ) -> Any:
+    ) -> Dict[str, Any]:
         """
         Make API request.
 
@@ -97,10 +92,9 @@ class BaseClient:
             params: Query parameters
             data: Request data
             force_refresh: Force refresh cache
-            response_type: Type to parse response into
 
         Returns:
-            API response as dictionary or parsed object
+            Parsed JSON response
         """
         response_text = self.request_handler.request(
             method=method,
@@ -110,20 +104,4 @@ class BaseClient:
             force_refresh=force_refresh,
         )
 
-        if response_type:
-            return self.response_parser.parse_response(response_text, response_type)
-        return self.response_parser.parse_json(response_text)
-
-    def download(self, url: str, output_path: str) -> bool:
-        """
-        Download file from URL.
-
-        Args:
-            url: File URL
-            output_path: Output file path
-
-        Returns:
-            True if download was successful, False otherwise
-        """
-        success, _ = self.request_handler.download(url, output_path, dry_run=self.dry_run)
-        return success
+        return parse_json(response_text)

@@ -190,7 +190,6 @@ jobs:
     skip_existing: true
     verify_hashes: true
     paths: ["lora"]
-    organize: false
     output:
       metadata:
         format: "json"

@@ -16,22 +16,15 @@ logger = logging.getLogger(__name__)
 class ImageHandler:
     """Handler for images used in HTML generation."""
 
-    def __init__(self, config: Dict[str, Any], model_processor=None):
+    def __init__(self, config: Dict[str, Any]):
         """
         Initialize image handler.
 
         Args:
             config: Configuration dictionary
-            model_processor: ModelProcessor instance for downloading images (optional)
         """
         self.config = config
-        self.model_processor = model_processor
         self.path_manager = PathManager(config)
-
-        # For backward compatibility with the refactored code
-        self.image_manager = None
-        if model_processor and hasattr(model_processor, "image_manager"):
-            self.image_manager = model_processor.image_manager
 
         # Get max_count from configuration, default to None for no limit
         self.max_count = self.config.get("output", {}).get("images", {}).get("max_count", None)
@@ -40,7 +33,7 @@ class ImageHandler:
 
     def get_image_paths(self, file_path: str, metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Get image paths for a model.
+        Get the already-downloaded preview images of a model.
 
         Args:
             file_path: Path to model file
@@ -49,31 +42,7 @@ class ImageHandler:
         Returns:
             List of image data dictionaries
         """
-        if self.max_count is not None:
-            logger.debug(
-                f"ImageHandler using max_count limit: {self.max_count} for file: {file_path}"
-            )
-        else:
-            logger.debug(f"ImageHandler processing all images for file: {file_path}")
-
-        image_paths = []
-
-        # If we have an ImageManager, use it to download images
-        if self.image_manager:
-            logger.debug(f"Using ImageManager to download images for {file_path}")
-            image_paths = self.image_manager.download_images(file_path, metadata, self.max_count)
-        # For backward compatibility, try using ModelProcessor if available
-        elif self.model_processor and hasattr(self.model_processor, "download_images"):
-            logger.debug(f"Using ModelProcessor to download images for {file_path}")
-            image_paths = self.model_processor.download_images(file_path, metadata, self.max_count)
-        else:
-            # Fallback to checking for existing images
-            logger.debug(
-                "No ModelProcessor available, checking for existing images for " f"{file_path}"
-            )
-            image_paths = self._get_existing_images(file_path, metadata)
-
-        return image_paths
+        return self._get_existing_images(file_path, metadata)
 
     def _get_existing_images(
         self, file_path: str, metadata: Dict[str, Any]
@@ -110,7 +79,7 @@ class ImageHandler:
 
             ext = os.path.splitext(image_url)[1]
 
-            # The ModelProcessor downloads images with filenames that include the index number
+            # Previews are downloaded with filenames that include the index number
             preview_index = i + 1
             image_path = self.path_manager.get_image_path(file_path, f"preview{preview_index}", ext)
             logger.debug(f"Looking for indexed image file ({preview_index}): {image_path}")
@@ -122,7 +91,7 @@ class ImageHandler:
             else:
                 # If the indexed image file doesn't exist, check if a version with a different
                 # extension exists. This handles the case where a video file was renamed from
-                # .jpeg to .mp4 by the ModelProcessor
+                # .jpeg to .mp4 by the image manager
                 base_path = os.path.splitext(image_path)[0]
                 video_path = f"{base_path}.mp4"
 

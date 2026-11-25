@@ -1,11 +1,10 @@
 """Images endpoint for CivitAI API.
 
-This module handles all image-related API operations.
+This module handles image-related API operations.
 """
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
-from ..models import ImageSearchResult
 from .base import BaseEndpoint
 
 
@@ -20,8 +19,7 @@ class ImagesEndpoint(BaseEndpoint):
         page: int = 1,
         nsfw: Optional[str] = None,
         force_refresh: bool = False,
-        response_type: Optional[type] = None,
-    ) -> Union[Dict[str, Any], ImageSearchResult]:
+    ) -> Dict[str, Any]:
         """
         Get images.
 
@@ -32,10 +30,9 @@ class ImagesEndpoint(BaseEndpoint):
             page: Page number
             nsfw: Browsing-level enum (None/Soft/Mature/X) to include NSFW images
             force_refresh: Force refresh cache
-            response_type: Type to parse response into (ImageSearchResult or None for dict)
 
         Returns:
-            Images data as dict or ImageSearchResult object
+            Images data
         """
         params: Dict[str, Any] = {
             "limit": limit,
@@ -51,27 +48,4 @@ class ImagesEndpoint(BaseEndpoint):
         if nsfw is not None:
             params["nsfw"] = nsfw
 
-        return self._make_request(
-            "GET",
-            "images",
-            params=params,
-            force_refresh=force_refresh,
-            response_type=response_type,
-        )
-
-    def download(self, url: str, output_path: str) -> bool:
-        """
-        Download image from URL.
-
-        Args:
-            url: Image URL
-            output_path: Output file path
-
-        Returns:
-            True if download was successful, False otherwise
-        """
-        try:
-            result = self.client.download(url, output_path)
-            return bool(result)
-        except Exception:
-            return False
+        return self._make_request("GET", "images", params=params, force_refresh=force_refresh)

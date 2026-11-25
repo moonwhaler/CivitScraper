@@ -206,19 +206,17 @@ def invalidate_version_index(search_dir: Optional[str] = None) -> None:
 class ContextBuilder:
     """Builder for template context."""
 
-    def __init__(self, config: Dict[str, Any], model_processor=None):
+    def __init__(self, config: Dict[str, Any]):
         """
         Initialize context builder.
 
         Args:
             config: Configuration dictionary
-            model_processor: ModelProcessor instance for downloading images (optional)
         """
         self.config = config
         self.domains, self.nsfw_threshold, _ = get_domain_settings(config)
-        self.model_processor = model_processor
         self.path_manager = PathManager(config)
-        self.image_handler = ImageHandler(config, model_processor)
+        self.image_handler = ImageHandler(config)
         self.sanitizer = DataSanitizer()
         self.org_config = OrganizationConfig.from_dict(config)
 
@@ -683,21 +681,6 @@ class ContextBuilder:
             result.append(version_data)
 
         return result
-
-    def _find_local_version_html(self, search_dir: str, version_id: Optional[int]) -> Optional[str]:
-        """
-        Find a local HTML file for a given version ID.
-
-        Uses the global version index cache for efficient lookups.
-
-        Args:
-            search_dir: Directory to search in
-            version_id: Version ID to find
-
-        Returns:
-            Absolute path to local HTML file if found, None otherwise
-        """
-        return _version_index_cache.get_html_path(search_dir, version_id)
 
     def _load_metadata(self, metadata_path: str) -> Optional[Dict[str, Any]]:
         """Load metadata from a JSON file, checking both organized and original locations."""

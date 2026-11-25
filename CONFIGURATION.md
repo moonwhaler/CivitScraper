@@ -2,6 +2,8 @@
 
 This document details the advanced configuration options for CivitScraper, typically found in your `config/default.yaml` file (or a custom configuration file). For basic setup, refer to the main [README.md](readme.md).
 
+At start-up CivitScraper warns about keys it does not know, since those are ignored. A typo then shows up as, for example, `Unknown config key jobs.fetch-all.skip_exisiting (did you mean skip_existing?); it is ignored`. Unknown keys are only reported, never rejected.
+
 ## Table of Contents
 - [API Configuration](#api-configuration)
 - [Output Location Configuration](#output-location-configuration)

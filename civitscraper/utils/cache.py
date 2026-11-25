@@ -10,7 +10,7 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, TypeVar
+from typing import Any, Dict, Generic, List, Optional, Tuple, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -337,27 +337,3 @@ class CacheManager(Generic[T]):
             Number of items
         """
         return self.disk_cache.get_item_count()
-
-
-def memoize(func: Callable[..., T]) -> Callable[..., T]:
-    """
-    Memoize decorator for caching function results.
-
-    Args:
-        func: Function to memoize
-
-    Returns:
-        Memoized function
-    """
-    cache: Dict[str, Any] = {}
-
-    def wrapper(*args: Any, **kwargs: Any) -> T:
-        key = str(args) + str(kwargs)
-        if key in cache:
-            return cache[key]  # type: ignore
-
-        result: T = func(*args, **kwargs)
-        cache[key] = result
-        return result
-
-    return wrapper

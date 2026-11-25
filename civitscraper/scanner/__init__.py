@@ -4,7 +4,6 @@ Scanner package for CivitScraper.
 This package handles scanning for model files, processing them, and generating metadata.
 """
 
-from .batch_processor import BatchProcessor
 from .discovery import (
     filter_files,
     find_files,
@@ -19,18 +18,16 @@ from .file_processor import FileProcessingResult, ModelFileProcessor
 from .html_manager import HTMLManager
 from .image_manager import ImageManager
 from .metadata_manager import MetadataManager
-from .processor import ModelProcessor, ProcessingResult
+from .processor import ModelProcessor
 from .version_enricher import VersionEnricher
 
 __all__ = [
     "ModelProcessor",
-    "ProcessingResult",
     "ModelFileProcessor",
     "FileProcessingResult",
     "MetadataManager",
     "ImageManager",
     "HTMLManager",
-    "BatchProcessor",
     "VersionEnricher",
     "find_files",
     "find_model_files",
