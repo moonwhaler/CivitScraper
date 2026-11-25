@@ -37,7 +37,9 @@ class TemplateRenderer:
             autoescape=select_autoescape(["html", "xml"]),
         )
 
-        # Add a function to read css/js files
+        # Add a function to read css/js files. Every detail page inlines the same
+        # few assets, so each is read once per renderer.
+        self._file_cache: Dict[str, Markup] = {}
         self.env.globals["read_file"] = self._read_file
         self.env.filters.update(FILTERS)
 
@@ -58,6 +60,10 @@ class TemplateRenderer:
         Returns:
             File content, marked safe for the template
         """
+        cached = self._file_cache.get(file_path)
+        if cached is not None:
+            return cached
+
         loader = self.env.loader
         if not isinstance(loader, FileSystemLoader):
             raise RuntimeError("Template loader not properly initialized")
@@ -66,7 +72,9 @@ class TemplateRenderer:
 
         try:
             with open(full_path, "r", encoding="utf-8") as f:
-                return Markup(f.read())
+                content = Markup(f.read())
+            self._file_cache[file_path] = content
+            return content
         except Exception as e:
             logger.error(f"Error reading file {file_path}: {e}")
             return Markup(f"/* Error reading {os.path.basename(file_path)} */")

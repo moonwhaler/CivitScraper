@@ -54,8 +54,28 @@ def trigger_string(trigger_words: Any) -> str:
     return str(trigger_words).strip()
 
 
+def index_entries(loras_data: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """
+    Map each model filename to its ``loras.json`` entry (the first one wins).
+
+    Args:
+        loras_data: Parsed ``loras.json``
+
+    Returns:
+        Filename (basename of the entry id) -> entry
+    """
+    index: Dict[str, Dict[str, Any]] = {}
+    for entry in loras_data:
+        index.setdefault(os.path.basename(entry.get("id", "")), entry)
+    return index
+
+
 def update_entry(
-    loras_data: List[Dict[str, Any]], filename: str, trigger_words: Any, overwrite: bool
+    loras_data: List[Dict[str, Any]],
+    filename: str,
+    trigger_words: Any,
+    overwrite: bool,
+    index: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> str:
     """
     Set the triggers of the ``loras.json`` entry whose id ends in ``filename``.
@@ -65,29 +85,29 @@ def update_entry(
         filename: Model file name to match against each entry's id
         trigger_words: Trigger words to store
         overwrite: Replace triggers an entry already has
+        index: ``index_entries(loras_data)``, to avoid a scan per file
 
     Returns:
         UPDATED, SKIPPED (entry already has triggers and overwrite is off) or
         NO_ENTRY
     """
-    for entry in loras_data:
-        if os.path.basename(entry.get("id", "")) != filename:
-            continue
-        logger.debug(f"Found entry with id: {entry.get('id')}")
+    entry = (index if index is not None else index_entries(loras_data)).get(filename)
+    if entry is None:
+        return NO_ENTRY
+    logger.debug(f"Found entry with id: {entry.get('id')}")
 
-        if not overwrite:
-            current_triggers = entry.get("metadata", {}).get("lora_triggers")
-            if current_triggers:
-                logger.debug(
-                    f"Skipping update for {filename} as it already has triggers: "
-                    f"{current_triggers}"
-                )
-                return SKIPPED
+    if not overwrite:
+        current_triggers = entry.get("metadata", {}).get("lora_triggers")
+        if current_triggers:
+            logger.debug(
+                f"Skipping update for {filename} as it already has triggers: "
+                f"{current_triggers}"
+            )
+            return SKIPPED
 
-        logger.debug(f"Updating with new triggers: {trigger_words}")
-        entry.setdefault("metadata", {})["lora_triggers"] = trigger_string(trigger_words)
-        return UPDATED
-    return NO_ENTRY
+    logger.debug(f"Updating with new triggers: {trigger_words}")
+    entry.setdefault("metadata", {})["lora_triggers"] = trigger_string(trigger_words)
+    return UPDATED
 
 
 class LoraTriggerSync:
@@ -161,8 +181,11 @@ class LoraTriggerSync:
             logger.error(f"loras.json not found at {loras_file}")
             return False
 
-        with open(loras_file, "r") as f:
+        # Krita writes UTF-8; the platform default (cp1252 on Windows) would fail
+        # on non-ASCII trigger words.
+        with open(loras_file, "r", encoding="utf-8") as f:
             loras_data = json.load(f)
+        index = index_entries(loras_data)
 
         counts = {UPDATED: 0, SKIPPED: 0, NO_ENTRY: 0}
         processed_count = 0
@@ -172,7 +195,7 @@ class LoraTriggerSync:
             processed_count += 1
             logger.debug(f"Processing {file_path}")
 
-            with open(metadata_path, "r") as f:
+            with open(metadata_path, "r", encoding="utf-8") as f:
                 metadata = json.load(f)
 
             trigger_words = trigger_words_of(metadata)
@@ -182,7 +205,9 @@ class LoraTriggerSync:
 
             filename = os.path.basename(file_path)
             logger.debug(f"Looking for entry with filename: {filename}")
-            outcome = update_entry(loras_data, filename, trigger_words, overwrite_triggers)
+            outcome = update_entry(
+                loras_data, filename, trigger_words, overwrite_triggers, index=index
+            )
             counts[outcome] += 1
             if outcome == NO_ENTRY:
                 logger.debug(f"No matching entry found in loras.json for {filename}")

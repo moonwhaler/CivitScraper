@@ -6,6 +6,7 @@ from civitscraper.jobs.lora_sync import (
     NO_ENTRY,
     SKIPPED,
     UPDATED,
+    index_entries,
     trigger_string,
     trigger_words_of,
     update_entry,
@@ -59,3 +60,43 @@ def test_update_entry_creates_metadata_and_reports_missing():
     assert update_entry(data, "foo.safetensors", "t", overwrite=True) == UPDATED
     assert data[0]["metadata"] == {"lora_triggers": "t"}
     assert update_entry(data, "bar.safetensors", "t", overwrite=True) == NO_ENTRY
+
+
+def test_index_keeps_first_entry_per_filename():
+    """With duplicate ids, the first entry is the one updated, as before."""
+    data = [{"id": "a/foo.safetensors"}, {"id": "b/foo.safetensors"}]
+    index = index_entries(data)
+    assert update_entry(data, "foo.safetensors", ["x"], overwrite=True, index=index) == UPDATED
+    assert data[0]["metadata"]["lora_triggers"] == "x"
+    assert "metadata" not in data[1]
+
+
+def test_sync_reads_files_as_utf8(tmp_path, monkeypatch):
+    """loras.json and sidecars are read as UTF-8 whatever the platform default."""
+    import builtins
+    import json
+
+    from civitscraper.jobs.lora_sync import LoraTriggerSync
+
+    models = tmp_path / "loras"
+    models.mkdir()
+    (models / "foo.safetensors").write_bytes(b"x")
+    (models / "foo.json").write_text(json.dumps({"trainedWords": ["café"]}), encoding="utf-8")
+    loras_file = tmp_path / "loras.json"
+    loras_file.write_text(json.dumps([{"id": "foo.safetensors"}]), encoding="utf-8")
+    encodings = {}
+    real_open = builtins.open
+
+    def spy(path, mode="r", *args, **kwargs):
+        if str(path).endswith(".json") and "r" in mode and "b" not in mode:
+            encodings[str(path)] = kwargs.get("encoding")
+        return real_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", spy)
+    config = {"input_paths": {"l": {"path": str(models), "type": "LORA",
+                                    "patterns": ["*.safetensors"]}}}
+    job = {"paths": ["l"], "loras_file": str(loras_file)}
+    assert LoraTriggerSync(config, "sync", job).run()
+    assert encodings and set(encodings.values()) == {"utf-8"}
+    saved = json.loads(loras_file.read_text(encoding="utf-8"))
+    assert saved[0]["metadata"]["lora_triggers"] == "café"

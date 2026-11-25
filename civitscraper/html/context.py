@@ -20,7 +20,7 @@ from ..organization.organizer import (
 )
 from ..scanner.discovery import get_metadata_path, list_preview_files
 from .images import ImageHandler
-from .paths import DEFAULT_GALLERY_PATH, PathManager
+from .paths import DEFAULT_GALLERY_PATH, PathManager, relative_to
 from .sanitizer import description_excerpt, sanitize_description
 
 # Gallery card limits: the detail page shows everything, cards only need enough
@@ -34,18 +34,30 @@ HEALTH_NO_PREVIEW = "no_preview"
 HEALTH_DUPLICATE = "duplicate"
 
 
-def card_trigger_words(trained_words: Any) -> List[str]:
-    """Trigger words for a gallery card: at most 10 entries and 300 characters."""
+def clean_trigger_words(trained_words: Any) -> List[str]:
+    """
+    Return a sidecar's trigger words as a clean list.
+
+    A single string counts as one word; entries are stripped of whitespace and the
+    trailing commas CivitAI creators often leave; empty entries are dropped.
+    """
     if isinstance(trained_words, str):
         trained_words = [trained_words]
     if not isinstance(trained_words, list):
         return []
     words: List[str] = []
-    total = 0
     for word in trained_words:
         word = str(word).strip().rstrip(",").strip() if word else ""
-        if not word:
-            continue
+        if word:
+            words.append(word)
+    return words
+
+
+def card_trigger_words(trained_words: Any) -> List[str]:
+    """Trigger words for a gallery card: at most 10 entries and 300 characters."""
+    words: List[str] = []
+    total = 0
+    for word in clean_trigger_words(trained_words):
         if len(words) >= MAX_CARD_TRIGGER_WORDS or total + len(word) > MAX_CARD_TRIGGER_CHARS:
             break
         words.append(word)
@@ -291,15 +303,6 @@ def model_file_extensions(config: Dict[str, Any]) -> List[str]:
     return extensions
 
 
-def _relative_to(path: str, directory: str) -> str:
-    """``path`` relative to ``directory`` with forward slashes; absolute on another drive."""
-    absolute = os.path.abspath(path)
-    try:
-        return os.path.relpath(absolute, directory).replace(os.sep, "/")
-    except ValueError:
-        return absolute
-
-
 class ContextBuilder:
     """Builder for template context."""
 
@@ -365,12 +368,12 @@ class ContextBuilder:
             self.config.get("output", {}).get("metadata", {}).get("html", {}).get("gallery_path")
             or DEFAULT_GALLERY_PATH
         )
-        gallery_path = _relative_to(gallery_output_path, html_dir)
+        gallery_path = relative_to(gallery_output_path, html_dir)
 
         # Local version links are absolute; make them relative to this page.
         sibling_versions = [
             (
-                dict(v, link=_relative_to(v["link"], html_dir))
+                dict(v, link=relative_to(v["link"], html_dir))
                 if v.get("is_local") and v.get("link")
                 else v
             )
@@ -387,6 +390,7 @@ class ContextBuilder:
             "creator": creator,
             "description": description,
             "tags": tags,
+            "trigger_words": clean_trigger_words(metadata.get("trainedWords")),
             "stats": stats,
             "images": image_paths,
             "metadata": filtered_metadata,
@@ -395,7 +399,7 @@ class ContextBuilder:
             "hashes": {k: hashes[k] for k in ("AutoV2", "SHA256") if hashes.get(k)},
             "local_file_path": os.path.abspath(file_path),
             # Relative to the page, so copying still works after the collection moves.
-            "file_rel_path": _relative_to(file_path, html_dir),
+            "file_rel_path": relative_to(file_path, html_dir),
             "sibling_versions": sibling_versions,
             "parent_model": metadata.get("parentModel", {}),
             "gallery_path": gallery_path,
