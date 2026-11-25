@@ -221,6 +221,8 @@ scanner:
   cache_dir: ".civitscraper_cache"  # Where to store cache files
   cache_validity: 86400            # [seconds] Cache lifetime (24 hours)
   force_refresh: false             # [true/false] Ignore cache and force refresh
+  not_found_validity: 604800       # [seconds] Skip re-querying hashes CivitAI answered 404 for
+  hash_workers: 4                  # Parallel hash + lookup workers (1 for HDD, 2 for NAS)
 
 # =============================================================================
 # Logging Configuration

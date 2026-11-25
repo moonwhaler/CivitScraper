@@ -236,7 +236,13 @@ class JobExecutor:
             metadata_dict = {}
             organized_files_mapping = {}
 
-            summary = {"not_found": 0, "unreadable": 0, "errors": 0, "output_failed": 0}
+            summary = {
+                "not_found": 0,
+                "not_found_cached": 0,
+                "unreadable": 0,
+                "errors": 0,
+                "output_failed": 0,
+            }
 
             # First, fetch metadata for all files without processing them
             for file_path in filtered_files:
@@ -258,6 +264,12 @@ class JobExecutor:
                     if not result.success or not result.file_hash:
                         logger.warning(f"Failed to process file {file_path}: {result.error}")
                         summary["unreadable"] += 1
+                        continue
+
+                    if not force_refresh and temp_processor.metadata_manager.is_known_not_found(
+                        result.file_hash
+                    ):
+                        summary["not_found_cached"] += 1
                         continue
 
                     # Get metadata from API
@@ -438,7 +450,8 @@ class JobExecutor:
             logger.info(
                 f"Job {job_name} summary: {len(files)} found, "
                 f"{len(files) - len(filtered_files)} skipped (already have metadata), "
-                f"{len(metadata_dict)} matched, {summary['not_found']} not found on CivitAI, "
+                f"{len(metadata_dict)} matched, {summary['not_found']} not found on CivitAI "
+                f"(+{summary['not_found_cached']} known unknown, not re-queried), "
                 f"{summary['unreadable']} unreadable, {summary['errors']} lookup errors, "
                 f"{summary['output_failed']} failed while writing output"
             )
