@@ -74,3 +74,53 @@ def test_nested_input_paths_list_each_file_once(tmp_path):
                                    "use_cached_metadata": True}, MagicMock())
     assert job.discover()
     assert [os.path.basename(f) for f in job.files] == ["x.safetensors"]
+
+
+def test_gallery_data_leaves_out_python_only_fields(tmp_path):
+    config, lib = _config(tmp_path)
+    _card(lib / "A", "style", ".safetensors", 1, "Style A")
+    (card,) = _gallery_cards(tmp_path, config)
+    assert "model_id" not in card
+    assert "local_version_count" not in card
+    assert set(card["stats"]) == {"downloads", "rating"}
+
+
+def test_version_index_is_built_once_under_parallel_access(tmp_path):
+    import threading
+    from unittest.mock import patch
+
+    from civitscraper.html.context import VersionIndexCache
+
+    (tmp_path / "a.json").write_text(json.dumps({"id": 1, "modelId": 2}))
+    cache = VersionIndexCache()
+    real_build = cache._build_index
+    calls = []
+
+    def slow_build(directory):
+        calls.append(directory)
+        threading.Event().wait(0.05)
+        real_build(directory)
+
+    with patch.object(cache, "_build_index", side_effect=slow_build):
+        threads = [threading.Thread(target=cache.get_html_path, args=(str(tmp_path), 1))
+                   for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+    assert calls == [str(tmp_path)]
+    assert cache.get_model_versions(str(tmp_path), 2, 1)
+
+
+def test_images_folder_preview_must_belong_to_the_model(tmp_path):
+    builder = ContextBuilder({"api": {}})
+    images = tmp_path / "images"
+    images.mkdir()
+    (images / "foobar.png").write_bytes(b"x")
+    (images / "foo.txt").write_bytes(b"x")
+    card = str(tmp_path / "foo.html")
+    assert builder._try_images_directory(card, str(tmp_path)) is None
+    (images / "foo_2.webp").write_bytes(b"x")
+    (images / "foo.1.png").write_bytes(b"x")
+    found = builder._try_images_directory(card, str(tmp_path))
+    assert found["path"].endswith("foo.1.png")  # sorted: deterministic pick

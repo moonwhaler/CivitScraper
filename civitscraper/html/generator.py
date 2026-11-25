@@ -177,7 +177,8 @@ class HTMLGenerator:
                     dest_path = os.path.join(dest_dir, filename)
                     if os.path.exists(source_path):
                         shutil.copy2(source_path, dest_path)
-                        relative_path = os.path.join(asset_type, filename)
+                        # A URL path for the page, not a filesystem path
+                        relative_path = f"{asset_type}/{filename}"
                         context_key = f"{asset_type}_{filename.split('.')[0]}_path"
                         asset_paths_context[context_key] = relative_path
                         logger.debug(f"Copied {source_path} to {dest_path}")
@@ -237,8 +238,9 @@ class HTMLGenerator:
         unmatched_data = unmatched_entries(unmatched or [], output_dir, portable)
 
         data_js_path = os.path.join(data_output_dir, "models_data.js")
-        # Default empty
-        js_content = "const allModelsData = [];"
+        # If the data cannot be serialized, the page shows its "gallery data is
+        # missing, run regenerate-html" state rather than an empty gallery.
+        js_content = "window.allModelsData = null;"
         try:
             # Serialize directly to JSON, no special escaping needed for JS file
             json_string = json.dumps(slim_cards_for_js(models_data), separators=(",", ":"))
@@ -251,7 +253,6 @@ class HTMLGenerator:
             logger.debug(f"Serialized {len(models_data)} models for JS file.")
         except Exception as e:
             logger.error(f"Error serializing gallery data for JS file: {e}")
-            # js_content remains "const allModelsData = [];"
 
         try:
             atomic_write(data_js_path, js_content)

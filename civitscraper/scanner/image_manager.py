@@ -9,7 +9,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 from ..api.client import CivitAIClient
-from .discovery import get_html_path, get_image_path, list_preview_files
+from .discovery import get_image_path, list_preview_files
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class ImageManager:
         metadata: Dict[str, Any],
         max_count: Optional[int] = None,
         force_refresh: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> List[str]:
         """
         Download images for model.
 
@@ -55,7 +55,7 @@ class ImageManager:
             force_refresh: Whether to force refresh images
 
         Returns:
-            List of dictionaries with information about downloaded images
+            Local paths of the model's previews (existing and newly downloaded)
         """
         # Get image configuration
         image_config = self.output_config.get("images", {})
@@ -93,7 +93,7 @@ class ImageManager:
                 logger.info(
                     f"Skipping image downloads - already have {existing_count} preview images"
                 )
-                return self._get_existing_image_info(file_path, max_count)
+                return self._existing_preview_paths(file_path, max_count)
             logger.debug(
                 f"Found {existing_count} existing previews, but less than max_count ({max_count})"
             )
@@ -133,25 +133,22 @@ class ImageManager:
             logger.debug(f"No limit - will download {len(images)} additional images")
 
         # Download images
-        downloaded_images = []
+        downloaded: List[str] = []
         total_count = len(images)
         for i, image in enumerate(images):
-            image_info = self._download_single_image(
+            path = self._download_single_image(
                 file_path, image, i + existing_count, total_count, skip_existing
             )
-            if image_info:
-                downloaded_images.append(image_info)
+            if path:
+                downloaded.append(path)
 
-        # Get info for all images (existing + newly downloaded)
+        # All previews (existing + newly downloaded)
         if skip_existing and not force_refresh:
-            all_image_info = self._get_existing_image_info(file_path, max_count)
-            # Add any newly downloaded images that aren't already included
-            for img in downloaded_images:
-                if img not in all_image_info:
-                    all_image_info.append(img)
-            return all_image_info
+            all_paths = self._existing_preview_paths(file_path, max_count)
+            all_paths.extend(p for p in downloaded if p not in all_paths)
+            return all_paths
 
-        return downloaded_images
+        return downloaded
 
     def _count_existing_previews(self, file_path: str) -> int:
         """
@@ -165,29 +162,19 @@ class ImageManager:
         """
         return len(list_preview_files(file_path, self.config))
 
-    def _get_existing_image_info(
-        self, file_path: str, max_count: Optional[int]
-    ) -> List[Dict[str, Any]]:
+    def _existing_preview_paths(self, file_path: str, max_count: Optional[int]) -> List[str]:
         """
-        Get image info for existing preview files.
+        Paths of a model's numbered preview files, lowest index first.
 
         Args:
             file_path: Path to model file
             max_count: Maximum number of images
 
         Returns:
-            List of image info dictionaries
+            Preview file paths
         """
-        html_dir = os.path.dirname(get_html_path(file_path, self.config))
-
-        preview_files = list_preview_files(file_path, self.config)
-        if max_count is not None:
-            preview_files = preview_files[:max_count]
-
-        return [
-            self._create_image_info(image_path, html_dir, {}, is_video)
-            for image_path, _, is_video in preview_files
-        ]
+        paths = [path for path, _, _ in list_preview_files(file_path, self.config)]
+        return paths[:max_count] if max_count is not None else paths
 
     def _clean_up_old_previews(self, file_path: str, max_count: Optional[int] = None) -> None:
         """
@@ -219,7 +206,7 @@ class ImageManager:
         index: int,
         total_count: int,
         skip_existing: bool = False,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[str]:
         """
         Download a single image.
 
@@ -231,81 +218,50 @@ class ImageManager:
             skip_existing: Whether to skip existing files
 
         Returns:
-            Dictionary with information about downloaded image, or None if download failed
+            Local path of the preview, or None if the download failed
         """
-        # Get image URL
         image_url = image.get("url")
         if not image_url:
             return None
 
-        # Get image extension
         ext = os.path.splitext(image_url)[1]
 
         # Use simple preview naming with index
         preview_index = index + 1
         image_path = get_image_path(file_path, self.config, f"preview{preview_index}", ext)
 
-        # Get image metadata
-        image_meta = image.get("meta", {})
-        # Ensure image_meta is a dictionary, even if meta is None
-        if image_meta is None:
-            image_meta = {}
-
-        # Get HTML path for relative path calculation
-        html_path = get_html_path(file_path, self.config)
-        html_dir = os.path.dirname(html_path)
-
-        # Check if the file already exists and we're skipping existing files
+        # Check if the file (or the video it was renamed to) already exists
         if skip_existing and os.path.isfile(image_path):
             logger.debug(f"Skipping existing image at {image_path}")
-            return self._create_image_info(image_path, html_dir, image_meta)
-
-        # Check if a video version exists and we're skipping existing files
+            return image_path
         video_path = os.path.splitext(image_path)[0] + ".mp4"
         if skip_existing and os.path.isfile(video_path):
             logger.debug(f"Skipping existing video at {video_path}")
-            return self._create_image_info(video_path, html_dir, image_meta, is_video=True)
+            return video_path
 
         if self.dry_run:
-            # Simulate download in dry run mode
             logger.info(f"Dry run: Would download image {preview_index} to {image_path}")
-            # Add placeholder for dry run
-            return self._create_image_info(image_path, html_dir, image_meta)
-        else:
-            return self._perform_download(
-                image_url, image_path, html_dir, image_meta, index, total_count
-            )
+            return image_path
+        return self._perform_download(image_url, image_path, index, total_count)
 
     def _perform_download(
-        self,
-        image_url: str,
-        image_path: str,
-        html_dir: str,
-        image_meta: Dict[str, Any],
-        index: int,
-        total_count: int,
-    ) -> Optional[Dict[str, Any]]:
+        self, image_url: str, image_path: str, index: int, total_count: int
+    ) -> Optional[str]:
         """
         Perform the actual download of an image.
 
         Args:
             image_url: URL of the image
             image_path: Path to save the image
-            html_dir: HTML directory for relative path calculation
-            image_meta: Image metadata
             index: Image index
             total_count: Total number of images to download
 
         Returns:
-            Dictionary with information about downloaded image, or None if download failed
+            Local path of the downloaded file (``.mp4`` for videos), or None on failure
         """
-        # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(image_path), exist_ok=True)
 
-        # Calculate preview index (1-based)
         preview_index = index + 1
-
-        # Download image
         logger.debug(f"Downloading image {preview_index}/{total_count}")
         success, content_type = self.api_client.download_image(image_url, image_path)
 
@@ -313,60 +269,18 @@ class ImageManager:
             logger.warning(f"Failed to download image {preview_index}/{total_count}")
             return None
 
-        # Check if the content type indicates a video
+        # A video served under an image URL is renamed to .mp4 (the pages look for it)
         is_video = bool(content_type and content_type.startswith("video/"))
-
-        # If it's a video but has a wrong extension, save it with .mp4 extension
         if is_video and not image_path.lower().endswith(".mp4"):
-            # Get the directory and filename without extension
-            dir_name = os.path.dirname(image_path)
-            base_name = os.path.splitext(os.path.basename(image_path))[0]
-
-            # Create new path with .mp4 extension
-            new_path = os.path.join(dir_name, f"{base_name}.mp4")
-
-            # Rename the file
+            new_path = os.path.splitext(image_path)[0] + ".mp4"
             try:
                 os.rename(image_path, new_path)
                 logger.info(
                     f"Renamed video file from {image_path} to {new_path} "
                     f"based on Content-Type: {content_type}"
                 )
-                # Update the image_path for further processing
                 image_path = new_path
             except Exception as e:
                 logger.error(f"Failed to rename video file from {image_path} to {new_path}: {e}")
 
-        # Create and return image info
-        return self._create_image_info(image_path, html_dir, image_meta, is_video)
-
-    def _create_image_info(
-        self, image_path: str, html_dir: str, image_meta: Dict[str, Any], is_video: bool = False
-    ) -> Dict[str, Any]:
-        """
-        Create image information dictionary.
-
-        Args:
-            image_path: Path to image file
-            html_dir: HTML directory for relative path calculation
-            image_meta: Image metadata
-            is_video: Whether the file is a video
-
-        Returns:
-            Dictionary with information about the image
-        """
-        # Calculate relative path from HTML to image
-        rel_path = os.path.relpath(image_path, html_dir)
-
-        # Create image info
-        return {
-            "path": rel_path,
-            "prompt": image_meta.get("prompt", ""),
-            "negative_prompt": image_meta.get("negativePrompt", ""),
-            "sampler": image_meta.get("sampler", ""),
-            "cfg_scale": image_meta.get("cfgScale", ""),
-            "steps": image_meta.get("steps", ""),
-            "seed": image_meta.get("seed", ""),
-            "model": image_meta.get("Model", ""),
-            "is_video": is_video,
-        }
+        return image_path

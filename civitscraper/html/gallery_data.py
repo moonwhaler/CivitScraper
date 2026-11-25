@@ -154,6 +154,8 @@ def make_cards_portable(cards: List[Dict[str, Any]], gallery_dir: str, portable:
 _VERSION_KEYS_FOR_JS = ("name", "link", "is_local", "is_current")
 # Card fields left out of models_data.js when empty (gallery.js treats missing as empty)
 _OMIT_WHEN_EMPTY = ("duplicates", "health", "update_version")
+# Card fields only the Python side needs (merging versions); gallery.js never reads them
+_PYTHON_ONLY = ("model_id",)
 
 
 def slim_cards_for_js(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -168,7 +170,11 @@ def slim_cards_for_js(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     slim = []
     for card in cards:
-        out = {k: v for k, v in card.items() if not (k in _OMIT_WHEN_EMPTY and not v)}
+        out = {
+            k: v
+            for k, v in card.items()
+            if k not in _PYTHON_ONLY and not (k in _OMIT_WHEN_EMPTY and not v)
+        }
         if "versions" in out:
             out["versions"] = [
                 {k: v[k] for k in _VERSION_KEYS_FOR_JS if k in v} for v in out["versions"]

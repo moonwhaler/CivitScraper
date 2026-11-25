@@ -40,13 +40,13 @@ def test_clean_up_ignores_non_numbered_preview_file(tmp_path):
     assert stray.exists()
 
 
-def test_get_existing_image_info_ignores_non_numbered_preview_file(tmp_path):
+def test_existing_preview_paths_ignore_non_numbered_preview_file(tmp_path):
     manager, model_path = make_manager(tmp_path)
     stray = tmp_path / "model.preview.jpeg"
     stray.write_bytes(b"data")
 
     # Must not raise ValueError("Invalid preview filename")
-    result = manager._get_existing_image_info(str(model_path), 1)
+    result = manager._existing_preview_paths(str(model_path), 1)
 
     assert result == []
 

@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TypedDict
 
@@ -18,7 +19,7 @@ from ..organization.organizer import (
     organized_output_root,
     original_dir_for,
 )
-from ..scanner.discovery import get_metadata_path, list_preview_files
+from ..scanner.discovery import PREVIEW_EXTENSIONS, get_metadata_path, list_preview_files
 from .images import ImageHandler
 from .paths import DEFAULT_GALLERY_PATH, PathManager, relative_to
 from .sanitizer import description_excerpt, sanitize_description
@@ -130,11 +131,17 @@ class VersionIndexCache:
         self._html_paths: Dict[str, Dict[int, str]] = {}
         # dir -> model_id -> {version_id -> version dict (template fields)}
         self._versions_by_model: Dict[str, Dict[int, Dict[int, Dict[str, Any]]]] = {}
+        # Gallery cards are built in parallel; one thread indexes a directory while
+        # the others wait, instead of each parsing every sidecar in it.
+        self._lock = threading.Lock()
 
     def ensure_indexed(self, search_dir: str) -> None:
         """Build the index for a directory if not already cached."""
-        if os.path.isdir(search_dir) and search_dir not in self._html_paths:
-            self._build_index(search_dir)
+        if search_dir in self._html_paths or not os.path.isdir(search_dir):
+            return
+        with self._lock:
+            if search_dir not in self._html_paths:
+                self._build_index(search_dir)
 
     def get_html_path(self, search_dir: str, version_id: Optional[int]) -> Optional[str]:
         """
@@ -250,8 +257,9 @@ class VersionIndexCache:
         except OSError as e:
             logger.debug(f"Error building version index for {search_dir}: {e}")
 
-        self._html_paths[search_dir] = html_paths
+        # _html_paths marks a directory as indexed (see ensure_indexed): publish last
         self._versions_by_model[search_dir] = versions_by_model
+        self._html_paths[search_dir] = html_paths
         logger.debug(f"Built version index for {search_dir}: {len(html_paths)} local versions")
 
     def invalidate(self, search_dir: Optional[str] = None) -> None:
@@ -261,12 +269,13 @@ class VersionIndexCache:
         Args:
             search_dir: Directory to invalidate, or None for all
         """
-        if search_dir:
-            self._html_paths.pop(search_dir, None)
-            self._versions_by_model.pop(search_dir, None)
-        else:
-            self._html_paths.clear()
-            self._versions_by_model.clear()
+        with self._lock:
+            if search_dir:
+                self._html_paths.pop(search_dir, None)
+                self._versions_by_model.pop(search_dir, None)
+            else:
+                self._html_paths.clear()
+                self._versions_by_model.clear()
 
 
 # Global version index cache for reuse across context builders
@@ -467,7 +476,6 @@ class ContextBuilder:
         model_stats = {
             "downloads": stats.get("downloadCount", 0),
             "rating": stats.get("rating", 0),
-            "rating_count": stats.get("ratingCount", 0),
         }
 
         model_name = metadata.get("model", {}).get("name") or metadata.get("name", "Unknown")
@@ -489,11 +497,6 @@ class ContextBuilder:
         # name before the trailing slash.
         if not folder_name and parent_folder_path and parent_folder_path != os.path.sep:
             folder_name = os.path.basename(os.path.normpath(parent_folder_path))
-
-        # Count local versions (for filtering models with multiple local versions)
-        local_version_count = self._count_local_versions(
-            file_path, metadata.get("siblingVersions", [])
-        )
 
         # Get file modification time from the actual model file
         file_modified = None
@@ -528,7 +531,6 @@ class ContextBuilder:
             "model_id": metadata.get("modelId"),
             "nsfw": is_nsfw(metadata, self.nsfw_threshold),
             "version_id": metadata.get("id"),
-            "local_version_count": local_version_count,
             "creator": creator,
             "tags": [str(t) for t in tags if t][:MAX_CARD_TAGS],
             "trigger_words": card_trigger_words(metadata.get("trainedWords")),
@@ -737,34 +739,6 @@ class ContextBuilder:
         )
 
         return filtered_metadata
-
-    def _count_local_versions(
-        self, current_file_path: str, sibling_versions: List[Dict[str, Any]]
-    ) -> int:
-        """
-        Count how many sibling versions have local HTML files.
-
-        Uses the global version index cache for efficient lookups.
-
-        Args:
-            current_file_path: Path to the current model file
-            sibling_versions: List of sibling version data from metadata
-
-        Returns:
-            Count of versions with local HTML files (including current)
-        """
-        if not sibling_versions:
-            return 1  # At least the current version is local
-
-        current_dir = self._sidecar_dir(current_file_path)
-        count = 0
-
-        for version in sibling_versions:
-            version_id = version.get("id")
-            if version_id and _version_index_cache.get_html_path(current_dir, version_id):
-                count += 1
-
-        return max(count, 1)  # At least 1 (the current version)
 
     def _build_sibling_versions_context(
         self,
@@ -1017,15 +991,20 @@ class ContextBuilder:
         images_dir = os.path.join(html_dir, "images")
 
         if os.path.isdir(images_dir):
-            for filename in os.listdir(images_dir):
-                if model_name.lower() in filename.lower():
-                    preview_path = os.path.join(images_dir, filename)
-                    is_video = filename.lower().endswith(".mp4")
-                    result: PreviewImageDict = {
-                        "path": os.path.abspath(preview_path),  # Use absolute path
-                        "is_video": is_video,
-                    }
-                    return result
+            # "<model>.png", "<model>_1.jpg", "<model>-preview.webp", ... but not
+            # "<model>xyz.png" (another model) or non-image files.
+            stem = model_name.lower()
+            for filename in sorted(os.listdir(images_dir)):
+                lower = filename.lower()
+                if not lower.endswith(PREVIEW_EXTENSIONS) or not lower.startswith(stem):
+                    continue
+                if len(lower) == len(stem) or lower[len(stem)] not in "._-":
+                    continue
+                result: PreviewImageDict = {
+                    "path": os.path.abspath(os.path.join(images_dir, filename)),
+                    "is_video": lower.endswith(".mp4"),
+                }
+                return result
 
         return None
 

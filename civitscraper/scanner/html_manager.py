@@ -80,11 +80,6 @@ class HTMLManager:
             return html_path
 
         try:
-            max_count = self.output_config.get("images", {}).get("max_count")
-            if max_count is not None:
-                logger.debug(f"Using max_count: {max_count} for HTML generation")
-
-            self.html_generator.output_config = self.output_config
             html_path = str(self.html_generator.generate_html(file_path, metadata))
             logger.debug(f"Generated HTML using templates at {html_path}")
             return html_path
