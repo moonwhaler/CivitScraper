@@ -9,6 +9,7 @@ import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..api.domains import get_domain_settings
+from ..scanner.discovery import list_preview_files
 from .paths import PathManager, relative_to
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,19 @@ _INFOTEXT_KEYS: List[Tuple[str, Tuple[str, ...]]] = [
     ("Hires upscaler", ("Hires upscaler",)),
     ("RNG", ("RNG",)),
 ]
+
+
+def image_is_nsfw(image: Dict[str, Any], threshold: int) -> bool:
+    """
+    Whether a preview image is NSFW.
+
+    The image's ``nsfwLevel`` decides; entries without one (older sidecars filled
+    from the NSFW image feed) carry a boolean ``nsfw`` instead.
+    """
+    level = image.get("nsfwLevel")
+    if isinstance(level, (int, float)) and not isinstance(level, bool):
+        return level >= threshold
+    return bool(image.get("nsfw"))
 
 
 def _positive_int(value: Any) -> Optional[int]:
@@ -102,74 +116,54 @@ class ImageHandler:
         self, file_path: str, metadata: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         """
-        Get existing images for a model.
+        Get the downloaded previews of a model with their image data.
+
+        ``images[i]`` of the sidecar belongs to the preview file numbered ``i + 1``
+        (any extension: a video may have been renamed to ``.mp4``). ``max_count``
+        limits the current CivitAI images; archived previews (no longer on CivitAI,
+        kept on disk) are always shown, after the current ones.
 
         Args:
             file_path: Path to model file
             metadata: Model metadata
 
         Returns:
-            List of image data dictionaries
+            List of image data dictionaries, current first
         """
-        images = metadata.get("images", [])
-        total_images = len(images)
-        logger.debug(f"ImageHandler found {total_images} images")
+        images = metadata.get("images") or []
+        html_dir = os.path.dirname(self.path_manager.get_html_path(file_path))
 
-        html_path = self.path_manager.get_html_path(file_path)
-        html_dir = os.path.dirname(html_path)
-        image_paths = []
+        # First file per preview number
+        files: Dict[int, Tuple[str, bool]] = {}
+        for path, index, is_video in list_preview_files(file_path, self.config):
+            files.setdefault(index, (path, is_video))
 
-        # Only process up to max_count images if set
-        max_images = self.max_count if self.max_count is not None else total_images
-        logger.debug(f"Processing up to {max_images} images based on configuration")
-
-        # First, pre-filter images to avoid warnings for images beyond max_count
-        images_to_process = images[:max_images] if max_images < total_images else images
-
-        for i, image in enumerate(images_to_process):
-            image_url = image.get("url")
-            if not image_url:
+        current: List[Dict[str, Any]] = []
+        archived: List[Dict[str, Any]] = []
+        for i, image in enumerate(images):
+            if not isinstance(image, dict):
                 continue
-
-            ext = os.path.splitext(image_url)[1]
-
-            # Previews are downloaded with filenames that include the index number
-            preview_index = i + 1
-            image_path = self.path_manager.get_image_path(file_path, f"preview{preview_index}", ext)
-            logger.debug(f"Looking for indexed image file ({preview_index}): {image_path}")
-
-            if os.path.isfile(image_path):
-                image_data = self._process_image(image_path, html_dir, image)
-                if image_data:
-                    image_paths.append(image_data)
-            else:
-                # If the indexed image file doesn't exist, check if a version with a different
-                # extension exists. This handles the case where a video file was renamed from
-                # .jpeg to .mp4 by the image manager
-                base_path = os.path.splitext(image_path)[0]
-                video_path = f"{base_path}.mp4"
-
-                if os.path.isfile(video_path):
-                    logger.debug(f"Found video file instead of image: {video_path}")
-                    video_data = self._process_image(video_path, html_dir, image, is_video=True)
-                    if video_data:
-                        image_paths.append(video_data)
-                else:
-                    logger.debug(f"Image file not found: {image_path}")
-                    # In dry run mode, we would normally download the image
-                    if self.dry_run:
-                        logger.info(
-                            f"Dry run: Download {preview_index}/{len(images_to_process)} from "
-                            f"{image.get('url')} to {image_path}"
-                        )
-
-        return image_paths
+            is_archived = bool(image.get("civitscraperArchived"))
+            if (
+                not is_archived
+                and self.max_count is not None
+                and len(current) >= self.max_count
+            ):
+                continue
+            found = files.get(i + 1)
+            if not found:
+                logger.debug(f"Preview {i + 1} of {file_path} is not on disk")
+                continue
+            data = self._process_image(found[0], html_dir, image, is_video=found[1])
+            if data:
+                (archived if is_archived else current).append(data)
+        return current + archived
 
     def _process_image(
         self, image_path: str, html_dir: str, image: Dict[str, Any], is_video: Optional[bool] = None
     ) -> Optional[Dict[str, Any]]:
         """
-        Process image and extract metadata.
+        Return a preview's page data.
 
         Args:
             image_path: Path to image file
@@ -190,7 +184,6 @@ class ImageHandler:
             if is_video is None:
                 is_video = image_path.lower().endswith(".mp4")
 
-            level = image.get("nsfwLevel")
             # Exactly what model.html and model.js read; settings travel in "params".
             return {
                 "path": relative_to(image_path, html_dir),
@@ -199,7 +192,8 @@ class ImageHandler:
                 "params": generation_params(image_meta),
                 "width": _positive_int(image.get("width")),
                 "height": _positive_int(image.get("height")),
-                "nsfw": isinstance(level, int) and level >= self.nsfw_threshold,
+                "nsfw": image_is_nsfw(image, self.nsfw_threshold),
+                "archived": bool(image.get("civitscraperArchived")),
                 "is_video": is_video,
             }
         except Exception as e:

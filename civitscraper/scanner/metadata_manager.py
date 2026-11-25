@@ -120,13 +120,14 @@ class MetadataManager:
 
     def _fetch_nsfw_images(
         self, version_id: Optional[int], force_refresh: bool
-    ) -> List[Dict[str, Any]]:
+    ) -> Optional[List[Dict[str, Any]]]:
         """Fetch the NSFW image feed for a version and map to inline shape.
 
-        Returns an empty list on any failure so the caller keeps inline images.
+        Returns None when the feed could not be fetched (the caller keeps what it
+        has) and an empty list when the feed has no images.
         """
         if not version_id:
-            return []
+            return None
         try:
             response = self.api_client.get_images(
                 model_version_id=version_id,
@@ -142,6 +143,9 @@ class MetadataManager:
                     {
                         "id": item.get("id"),
                         "url": item.get("url"),
+                        # The level itself, so pages can compare it with the threshold
+                        "nsfwLevel": level,
+                        "type": item.get("type"),
                         "nsfw": bool(
                             isinstance(level, (int, float)) and level >= self.nsfw_threshold
                         ),
@@ -154,7 +158,7 @@ class MetadataManager:
             return mapped
         except Exception as e:
             logger.warning(f"Failed to fetch NSFW image feed for version {version_id}: {e}")
-            return []
+            return None
 
     def save_metadata(
         self, file_path: str, metadata: Dict[str, Any], dry_run: bool = False
