@@ -11,6 +11,10 @@ from ..scanner.discovery import get_html_path, get_image_path
 
 logger = logging.getLogger(__name__)
 
+# Where the gallery goes when a job sets no output.metadata.html.gallery_path
+# (relative to the working directory). Model pages link to the same place.
+DEFAULT_GALLERY_PATH = "gallery.html"
+
 
 class PathManager:
     """

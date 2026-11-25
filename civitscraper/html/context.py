@@ -20,7 +20,7 @@ from ..organization.organizer import (
 )
 from ..scanner.discovery import get_metadata_path, list_preview_files
 from .images import ImageHandler
-from .paths import PathManager
+from .paths import DEFAULT_GALLERY_PATH, PathManager
 from .sanitizer import description_excerpt, sanitize_description
 
 # Gallery card limits: the detail page shows everything, cards only need enough
@@ -360,23 +360,12 @@ class ContextBuilder:
         html_path = self.path_manager.get_html_path(file_path)
         html_dir = os.path.dirname(os.path.abspath(html_path))
 
-        # Get gallery path from config, default to index.html in model directory
+        # Same setting and default the gallery is written with (ScanJob.build_gallery)
         gallery_output_path = (
-            self.config.get("output", {})
-            .get("metadata", {})
-            .get("html", {})
-            .get("gallery_path", "index.html")
+            self.config.get("output", {}).get("metadata", {}).get("html", {}).get("gallery_path")
+            or DEFAULT_GALLERY_PATH
         )
-
-        # Calculate relative path from model HTML to gallery
-        gallery_path = "index.html"
-        try:
-            gallery_abs_path = os.path.abspath(gallery_output_path)
-            gallery_path = os.path.relpath(gallery_abs_path, html_dir).replace(os.sep, "/")
-        except ValueError:
-            # On Windows, relpath can fail if paths are on different drives
-            # Fall back to absolute path
-            gallery_path = os.path.abspath(gallery_output_path)
+        gallery_path = _relative_to(gallery_output_path, html_dir)
 
         # Local version links are absolute; make them relative to this page.
         sibling_versions = [

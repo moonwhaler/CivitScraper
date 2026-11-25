@@ -257,13 +257,13 @@ class ImageManager:
 
         # Check if the file already exists and we're skipping existing files
         if skip_existing and os.path.isfile(image_path):
-            logger.info(f"Skipping existing image at {image_path}")
+            logger.debug(f"Skipping existing image at {image_path}")
             return self._create_image_info(image_path, html_dir, image_meta)
 
         # Check if a video version exists and we're skipping existing files
         video_path = os.path.splitext(image_path)[0] + ".mp4"
         if skip_existing and os.path.isfile(video_path):
-            logger.info(f"Skipping existing video at {video_path}")
+            logger.debug(f"Skipping existing video at {video_path}")
             return self._create_image_info(video_path, html_dir, image_meta, is_video=True)
 
         if self.dry_run:

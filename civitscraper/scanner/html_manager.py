@@ -71,7 +71,7 @@ class HTMLManager:
             and not force_refresh
             and not generate_gallery
         ):
-            logger.info(f"Skipping existing HTML at {html_path}")
+            logger.debug(f"Skipping existing HTML at {html_path}")
             return html_path
 
         if self.dry_run:
