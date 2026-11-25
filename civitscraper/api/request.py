@@ -10,6 +10,7 @@ import logging
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
+from urllib.parse import urlparse
 
 import requests
 
@@ -41,6 +42,7 @@ class RequestHandler:
         max_retries: int = 3,
         base_retry_delay: float = 2.0,
         headers: Optional[Dict[str, str]] = None,
+        download_rate_limiter: Optional[RateLimiter] = None,
     ):
         """
         Initialize request handler.
@@ -57,6 +59,9 @@ class RequestHandler:
         """
         self.base_url = base_url
         self.rate_limiter = rate_limiter
+        # Image/CDN downloads are throttled separately from API calls.
+        self.download_rate_limiter = download_rate_limiter or rate_limiter
+        self._api_host = urlparse(base_url).hostname
         self.circuit_breaker = circuit_breaker
         self.cache_manager = cache_manager
         self.timeout = timeout
@@ -351,9 +356,15 @@ class RequestHandler:
             return True, None
 
         try:
-            self.rate_limiter.acquire()
+            self.download_rate_limiter.acquire()
 
-            response = self.session.get(url, timeout=self.timeout, stream=True)
+            # The API key is only for the API host; never send it to image CDNs or
+            # other hosts a metadata URL may point at (None removes a session header).
+            headers = None
+            if urlparse(url).hostname != self._api_host:
+                headers = {"Authorization": None}
+
+            response = self.session.get(url, timeout=self.timeout, stream=True, headers=headers)
             response.raise_for_status()
 
             content_type_raw = response.headers.get("Content-Type")

@@ -362,17 +362,11 @@ class JobExecutor:
                     if new_path:
                         organized_files_mapping[orig_path] = new_path
 
-            # PHASE 3: Download images to appropriate paths (if enabled)
-            images_save = job_config.get("output", {}).get("images", {}).get("save", True)
-            if metadata_dict and images_save:
-                logger.info(f"Downloading images for {len(metadata_dict)} files")
-                for file_path, metadata in metadata_dict.items():
-                    # Use organized path if available, otherwise use original path
-                    target_path = organized_files_mapping.get(file_path, file_path)
-                    temp_processor.image_manager.download_images(
-                        target_path, metadata, force_refresh=force_refresh
-                    )
-            elif metadata_dict and not images_save:
+            # Images are downloaded per model in phase 4b (in parallel, right before
+            # that model's HTML is rendered), into the organized location if any.
+            if metadata_dict and not job_specific_config.get("output", {}).get("images", {}).get(
+                "save", True
+            ):
                 logger.info("Skipping image downloads (images.save is false)")
 
             # PHASE 4: Process remaining tasks (metadata, HTML) with parallelization
@@ -421,14 +415,19 @@ class JobExecutor:
             # no-op for already-written sidecars (dirty flag consumed in 4a).
             # Use parallel processing for large collections
             if len(items_to_process) > 10:
-                max_workers = min(4, len(items_to_process))  # Lower workers for I/O-heavy tasks
+                download_workers = (
+                    job_specific_config.get("api", {}).get("batch", {}).get("download_workers", 4)
+                )
+                max_workers = max(1, min(int(download_workers), len(items_to_process)))
                 logger.info(f"Processing {len(items_to_process)} files with {max_workers} workers")
 
                 def process_single_item(
                     item: Tuple[str, Dict[str, Any]],
                 ) -> Tuple[str, Optional[Dict[str, Any]]]:
                     path, meta = item
-                    processed = temp_processor.save_and_process_with_metadata(path, meta)
+                    processed = temp_processor.save_and_process_with_metadata(
+                        path, meta, force_refresh=force_refresh
+                    )
                     return (path, processed)
 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -454,7 +453,7 @@ class JobExecutor:
                 # Sequential processing for small collections
                 for process_path, metadata in items_to_process:
                     processed_metadata = temp_processor.save_and_process_with_metadata(
-                        process_path, metadata
+                        process_path, metadata, force_refresh=force_refresh
                     )
                     results.append((process_path, processed_metadata))
 

@@ -272,6 +272,8 @@ api:
     rate_limit: 100       # Target requests/minute
     retry_delay: 1000     # Base delay (ms) for retrying after rate limit (429 error)
     cache_size: 100       # In-memory LRU cache size for API responses during a run
+    download_rate_limit: 300  # Image downloads/minute (separate from API calls)
+    download_workers: 4   # Models whose previews download in parallel
     circuit_breaker:
       failure_threshold: 5 # Consecutive failures to trigger breaker
       reset_timeout: 60    # Seconds before retrying a broken circuit
@@ -279,7 +281,8 @@ api:
 
 -   **`enabled`**: `false` makes hashing and metadata lookups sequential.
 -   **`max_concurrent`**: Maximum number of simultaneous metadata API requests. Files are hashed by `scanner.hash_workers` threads; this caps how many of them talk to the API at once.
--   **`rate_limit`**: A single token bucket (shared by API calls and image downloads) keeps requests below the target rate (requests per minute).
+-   **`rate_limit`**: Token bucket for CivitAI API calls (requests per minute).
+-   **`download_rate_limit`** (default 300/min) and **`download_workers`** (default 4): preview downloads from the image CDN have their own bucket and run for several models at once. Your API key is only ever sent to the API host, never to image or other hosts.
 -   **HTTP 429**: CivitAI's `Retry-After` header (seconds or HTTP date, capped at 5 minutes) is honored; without it the client backs off exponentially from `retry_delay`. Rate limiting does not count toward the circuit breaker.
 -   **`cache_size`**: An in-memory LRU cache stores recent API responses during a run to avoid refetching the same data multiple times within that run.
 -   **`circuit_breaker`**: Monitors consecutive failures for each API endpoint (e.g., `/models/{id}`, `/images`). If an endpoint fails `failure_threshold` times in a row, the breaker "opens," and further requests to that specific endpoint are blocked for `reset_timeout` seconds to allow the API to recover. This prevents hammering a potentially failing service.
