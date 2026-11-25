@@ -77,6 +77,9 @@ output:
 - `output.metadata.html.gallery_path` is unaffected — it's a separate, fixed path for the shared gallery index page, not per-model output. It can point at the same directory as `base_dir` with no conflict.
 - `organization.output_dir` is also unaffected — that setting relocates the model file itself, a separate feature from metadata/image/HTML output.
 - **Caveat**: two different model files that share the same name and model type, but live in different source folders, will collide under `base_dir/{model_type}/` — the second will overwrite the first's output.
+- `{model_type}` comes from the most specific `input_paths` entry that contains the model file. A model organized to an absolute `organization.output_dir` outside every input path resolves to `Unknown`.
+- Model cards (HTML) are expected in the same directory as their metadata sidecar (true for the default layout and for `base_dir`). Custom `output.metadata.path` and `output.metadata.html.path` values pointing at *different* directories work for writing, but the gallery's "existing model cards" scan and local version links only find cards that sit next to their sidecar.
+- All readers (skip_existing, cached-metadata jobs, the gallery, `sync-lora-triggers`, organization) use these same locations. For `sync-lora-triggers`, put `output.base_dir` / `output.metadata` either at the top level of the config or in the sync job itself; the legacy `<model>.json` next to the model is used as a fallback.
 
 ## HTML Generation Configuration
 
@@ -117,8 +120,7 @@ The new `skip_existing_html` setting allows you to regenerate HTML files without
 ```yaml
 regenerate-html:
   type: scan-paths
-  skip_existing: true          # Skip metadata fetching - use cached files
-  verify_hashes: false         # Don't verify hashes to avoid API calls
+  use_cached_metadata: true    # Only models with an existing sidecar; no API calls
   paths: ["lora"]
   output:
     metadata:
@@ -131,10 +133,14 @@ regenerate-html:
 ```
 
 This configuration will:
-1. Use existing cached metadata files (no API calls)
+1. Use existing cached metadata files (no API calls, no hashing)
 2. Regenerate all HTML files even if they exist
 3. Skip image downloading
 4. Create a new gallery page
+
+### `verify_hashes`
+
+Models are identified on CivitAI by their file hash, so `scan-paths` jobs always hash files for API lookups. `verify_hashes: false` is ignored there (a warning is logged); use `use_cached_metadata: true` to work without hashing or API calls.
 
 ## Advanced Organization Settings
 
@@ -150,6 +156,12 @@ organization:
   output_dir: "{model_dir}/organized"  # Base directory for organized files
   operation_mode: "symlink"    # [copy/move/symlink] How to organize files
 ```
+
+Re-running organization is safe:
+
+- **copy / symlink**: files inside the organization output are not scanned again (the originals are), and the original keeps its own metadata sidecar so `skip_existing` works for it.
+- **move**: moved files stay in the scan (they are the only copy) but are never re-organized, so repeated runs cannot nest them deeper.
+- Metadata, HTML and previews move along with the model to the locations their path settings dictate. With `output.base_dir` they usually stay where they are.
 
 ### Custom Templates
 
@@ -180,6 +192,21 @@ The template string uses placeholders that will be replaced with metadata values
 `{creator|Unknown Creator}` will use "Unknown Creator" if the creator field is not present in the metadata.
 
 **Path Sanitization:** The organizer automatically sanitizes generated paths to remove characters that are invalid in directory or file names.
+
+## Krita AI Diffusion Integration
+
+The `sync-lora-triggers` job copies each LoRA's trigger words (`trainedWords`) into Krita's `loras.json`:
+
+```yaml
+sync-triggers:
+  type: sync-lora-triggers
+  loras_file: "path/to/loras.json"
+  overwrite_triggers: true   # false keeps triggers already set in Krita
+  paths: ["lora"]
+```
+
+- `--dry-run` (or `dry_run: true`) reports what would change without touching the file.
+- Before changing `loras.json`, the previous version is saved as `loras.json.bak`; the file is written atomically and left untouched when nothing changed.
 
 ## Scanner Settings (Caching)
 
@@ -244,8 +271,8 @@ api:
       reset_timeout: 60    # Seconds before retrying a broken circuit
 ```
 
--   **`enabled`**: Turns batch processing on or off. If off, requests are made sequentially.
--   **`max_concurrent`**: Limits the number of simultaneous API requests using a semaphore to avoid overwhelming the API or your network.
--   **`rate_limit`**: Uses a token bucket algorithm (per API endpoint) to smooth out requests and stay below the target rate (requests per minute). If the limit is hit, requests will pause and retry with exponential backoff (`retry_delay`).
+-   **`enabled`** / **`max_concurrent`**: Currently not used by `scan-paths` jobs; metadata lookups run sequentially. (Parallel lookups are planned.)
+-   **`rate_limit`**: A single token bucket (shared by API calls and image downloads) keeps requests below the target rate (requests per minute).
+-   **HTTP 429**: CivitAI's `Retry-After` header (seconds or HTTP date, capped at 5 minutes) is honored; without it the client backs off exponentially from `retry_delay`. Rate limiting does not count toward the circuit breaker.
 -   **`cache_size`**: An in-memory LRU cache stores recent API responses during a run to avoid refetching the same data multiple times within that run.
 -   **`circuit_breaker`**: Monitors consecutive failures for each API endpoint (e.g., `/models/{id}`, `/images`). If an endpoint fails `failure_threshold` times in a row, the breaker "opens," and further requests to that specific endpoint are blocked for `reset_timeout` seconds to allow the API to recover. This prevents hammering a potentially failing service.

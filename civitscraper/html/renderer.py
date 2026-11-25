@@ -27,6 +27,7 @@ class TemplateRenderer:
             template_dir = os.path.join(os.path.dirname(__file__), "templates")
 
         logger.debug(f"Using template directory: {template_dir}")
+        self.template_dir: str = template_dir
 
         self.env = Environment(
             loader=FileSystemLoader(template_dir),

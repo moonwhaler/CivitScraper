@@ -293,3 +293,17 @@ def test_metadata_without_images_is_kept(tmp_path):
     metadata = MetadataManager(config, api).fetch_metadata("ABC")
 
     assert metadata is not None and metadata["id"] == 5
+
+
+def test_gallery_with_bare_filename_is_written_to_cwd(tmp_path, monkeypatch):
+    from civitscraper.html.generator import HTMLGenerator
+
+    monkeypatch.chdir(tmp_path)
+    config, models = make_config(tmp_path)
+    model = make_model(models)
+    write_sidecar(config, model)
+
+    HTMLGenerator(config).generate_gallery([model], "gallery.html", include_existing=False)
+
+    assert (tmp_path / "gallery.html").is_file()
+    assert (tmp_path / "data" / "models_data.js").is_file()

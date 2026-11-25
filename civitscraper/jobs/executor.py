@@ -160,6 +160,13 @@ class JobExecutor:
             # Get scan options
             skip_existing = job_config.get("skip_existing", True)
             verify_hashes = job_config.get("verify_hashes", True)
+            if not verify_hashes and not job_config.get("use_cached_metadata", False):
+                # CivitAI lookups are by file hash; without one every file would fail.
+                logger.warning(
+                    "verify_hashes: false is ignored for API lookups (the file hash is "
+                    "how models are identified on CivitAI)"
+                )
+                verify_hashes = True
             use_cached_metadata = job_config.get("use_cached_metadata", False)
 
             # Find model files
@@ -229,6 +236,8 @@ class JobExecutor:
             metadata_dict = {}
             organized_files_mapping = {}
 
+            summary = {"not_found": 0, "unreadable": 0, "errors": 0, "output_failed": 0}
+
             # First, fetch metadata for all files without processing them
             for file_path in filtered_files:
                 try:
@@ -240,6 +249,7 @@ class JobExecutor:
                             metadata_dict[file_path] = metadata
                         else:
                             logger.warning(f"No cached metadata found for {file_path}")
+                            summary["not_found"] += 1
                         continue
 
                     result = temp_processor.file_processor.process(
@@ -247,6 +257,7 @@ class JobExecutor:
                     )
                     if not result.success or not result.file_hash:
                         logger.warning(f"Failed to process file {file_path}: {result.error}")
+                        summary["unreadable"] += 1
                         continue
 
                     # Get metadata from API
@@ -258,8 +269,11 @@ class JobExecutor:
                         metadata_dict[file_path] = metadata
                     else:
                         logger.warning(f"No metadata found for {file_path}")
+                        summary["not_found"] += 1
                 except Exception as e:
                     logger.error(f"Error fetching metadata for {file_path}: {e}")
+                    logger.debug("Traceback:", exc_info=True)
+                    summary["errors"] += 1
 
             # PHASE 1.5: Enrich with parent model data (deduplicated by modelId).
             # Run enrichment if any file's sibling versions are missing or stale
@@ -418,10 +432,19 @@ class JobExecutor:
                     include_existing=include_existing,
                 )
 
+            summary["output_failed"] = sum(1 for _, meta in results if meta is None)
+            logger.info(
+                f"Job {job_name} summary: {len(files)} found, "
+                f"{len(files) - len(filtered_files)} skipped (already have metadata), "
+                f"{len(metadata_dict)} matched, {summary['not_found']} not found on CivitAI, "
+                f"{summary['unreadable']} unreadable, {summary['errors']} lookup errors, "
+                f"{summary['output_failed']} failed while writing output"
+            )
             return True
 
         except Exception as e:
             logger.error(f"Error executing scan-paths job {job_name}: {e}")
+            logger.debug("Traceback:", exc_info=True)
             return False
 
     def _execute_sync_lora_triggers_job(self, job_name: str, job_config: Dict[str, Any]) -> bool:
@@ -573,6 +596,7 @@ class JobExecutor:
 
         except Exception as e:
             logger.error(f"Error executing sync-lora-triggers job {job_name}: {e}")
+            logger.debug("Traceback:", exc_info=True)
             return False
 
     def _find_metadata_file(self, file_path: str, config: Dict[str, Any]) -> Optional[str]:

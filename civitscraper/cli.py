@@ -142,6 +142,7 @@ def main():
 
     except Exception as e:
         logger.error(f"Error: {e}")
+        logger.debug("Traceback:", exc_info=True)
         return 1
 
 

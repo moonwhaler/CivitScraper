@@ -98,6 +98,9 @@ class HTMLGenerator:
             logger.info(f"Dry run: Would generate gallery at {output_path}")
             return output_path
 
+        # A bare filename ("gallery.html", as in the README quick start) has an empty
+        # dirname, which os.makedirs rejects; resolve against the working directory.
+        output_path = os.path.abspath(output_path)
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         # Dictionary to store unique models, keyed by model name
@@ -150,7 +153,7 @@ class HTMLGenerator:
         os.makedirs(js_output_dir, exist_ok=True)
         os.makedirs(data_output_dir, exist_ok=True)
 
-        template_dir = os.path.dirname(self.renderer.gallery_template.filename)
+        template_dir = self.renderer.template_dir
         css_source_dir = os.path.join(template_dir, "css")
         js_source_dir = os.path.join(template_dir, "js")
 
