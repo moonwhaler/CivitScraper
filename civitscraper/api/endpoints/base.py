@@ -3,10 +3,7 @@
 This module provides the base endpoint class that all endpoint-specific classes inherit from.
 """
 
-from typing import Any, Dict, Optional, Type, TypeVar, Union, cast
-
-T = TypeVar("T")
-R = TypeVar("R")
+from typing import Any, Dict, Optional
 
 
 class BaseEndpoint:
@@ -28,8 +25,7 @@ class BaseEndpoint:
         params: Optional[Dict[str, Any]] = None,
         data: Optional[Dict[str, Any]] = None,
         force_refresh: bool = False,
-        response_type: Optional[Type[T]] = None,
-    ) -> Union[Dict[str, Any], T]:
+    ) -> Dict[str, Any]:
         """
         Make API request.
 
@@ -39,19 +35,15 @@ class BaseEndpoint:
             params: Query parameters
             data: Request data
             force_refresh: Force refresh cache
-            response_type: Type to parse response into
 
         Returns:
-            API response
+            Parsed JSON response
         """
-        response = self.client._make_request(
+        response: Dict[str, Any] = self.client._make_request(
             method=method,
             endpoint=endpoint,
             params=params,
             data=data,
             force_refresh=force_refresh,
-            response_type=response_type,
         )
-        if response_type is not None:
-            return cast(T, response)
-        return cast(Dict[str, Any], response)
+        return response

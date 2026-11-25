@@ -38,15 +38,6 @@ class JobExecutor:
         self.config = config
         self.api_client = api_client
 
-        # Create HTML generator
-        self.html_generator = HTMLGenerator(config)
-
-        # Create model processor and pass the HTML generator
-        self.model_processor = ModelProcessor(config, api_client, self.html_generator)
-
-        # Create file organizer
-        self.file_organizer = FileOrganizer(config)
-
     def execute_job(self, job_name: str) -> bool:
         """
         Execute a job.

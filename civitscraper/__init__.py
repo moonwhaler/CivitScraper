@@ -9,14 +9,12 @@ This package provides functionality for:
 - Synchronizing trigger words
 """
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 
 from .api.client import CivitAIClient
 from .config.loader import load_and_validate_config
 from .html.generator import HTMLGenerator
 from .jobs.executor import JobExecutor
-
-# Removed templates module imports as part of job inheritance refactoring
 from .organization.organizer import FileOrganizer
 from .scanner.discovery import filter_files, find_model_files
 from .scanner.processor import ModelProcessor

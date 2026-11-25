@@ -28,23 +28,20 @@ class HTMLGenerator:
     image handling, and data sanitization.
     """
 
-    def __init__(
-        self, config: Dict[str, Any], template_dir: Optional[str] = None, model_processor=None
-    ):
+    def __init__(self, config: Dict[str, Any], template_dir: Optional[str] = None):
         """
         Initialize HTML generator.
 
         Args:
             config: Configuration dictionary
             template_dir: Directory containing templates (optional)
-            model_processor: ModelProcessor instance for downloading images (optional)
         """
         self.config = config
         self.dry_run = config.get("dry_run", False)
 
         self.path_manager = PathManager(config)
         self.renderer = TemplateRenderer(template_dir)
-        self.context_builder = ContextBuilder(config, model_processor)
+        self.context_builder = ContextBuilder(config)
 
     def generate_html(self, file_path: str, metadata: Dict[str, Any]) -> str:
         """
