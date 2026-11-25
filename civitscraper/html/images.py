@@ -9,7 +9,7 @@ import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..api.domains import get_domain_settings
-from .paths import PathManager
+from .paths import PathManager, relative_to
 
 logger = logging.getLogger(__name__)
 
@@ -154,10 +154,6 @@ class ImageHandler:
                     video_data = self._process_image(video_path, html_dir, image, is_video=True)
                     if video_data:
                         image_paths.append(video_data)
-                elif os.path.isfile(image_path):
-                    image_data = self._process_image(image_path, html_dir, image)
-                    if image_data:
-                        image_paths.append(image_data)
                 else:
                     logger.debug(f"Image file not found: {image_path}")
                     # In dry run mode, we would normally download the image
@@ -190,26 +186,16 @@ class ImageHandler:
             if image_meta is None:
                 image_meta = {}
 
-            rel_path = os.path.relpath(image_path, html_dir)
-            logger.debug(f"HTML dir: {html_dir}")
-            logger.debug(f"Image path: {image_path}")
-            logger.debug(f"Relative path: {rel_path}")
-
             # Determine if this is a video file based on extension if not explicitly provided
             if is_video is None:
                 is_video = image_path.lower().endswith(".mp4")
-            logger.debug(f"File is video: {is_video}")
 
             level = image.get("nsfwLevel")
+            # Exactly what model.html and model.js read; settings travel in "params".
             return {
-                "path": rel_path.replace(os.sep, "/"),
+                "path": relative_to(image_path, html_dir),
                 "prompt": str(image_meta.get("prompt") or ""),
                 "negative_prompt": str(image_meta.get("negativePrompt") or ""),
-                "sampler": image_meta.get("sampler", ""),
-                "cfg_scale": image_meta.get("cfgScale", ""),
-                "steps": image_meta.get("steps", ""),
-                "seed": image_meta.get("seed", ""),
-                "model": image_meta.get("Model", ""),
                 "params": generation_params(image_meta),
                 "width": _positive_int(image.get("width")),
                 "height": _positive_int(image.get("height")),

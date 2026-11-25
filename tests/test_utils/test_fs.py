@@ -115,6 +115,8 @@ def test_interrupted_download_leaves_no_preview(tmp_path):
     response = MagicMock()
     response.headers = {"Content-Type": "image/jpeg"}
     response.iter_content.side_effect = chunks
+    response.__enter__.return_value = response
+    response.__exit__.return_value = False  # like requests.Response: never swallows errors
     handler.session = MagicMock()
     handler.session.get.return_value = response
     target = tmp_path / "foo.preview1.jpeg"

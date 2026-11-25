@@ -3,6 +3,7 @@
 {% set metadata = metadata or {} %}
 {% set images = images or [] %}
 {% set hashes = hashes or {} %}
+{% set trigger_words = trigger_words or [] %}
 {% set slug = model_type|type_slug %}
 {% set version = version_name|version_label %}
 {% set file = (metadata.files or [])|first %}
@@ -98,16 +99,16 @@
                 {% if stats.thumbsUpCount %}<span title="{{ stats.thumbsUpCount }} likes"><svg class="icon sm" aria-hidden="true"><use href="#i-thumb"/></svg>{{ stats.thumbsUpCount|compact }}</span>{% endif %}
             </p>
 
-            {% if metadata.trainedWords %}
+            {% if trigger_words %}
             <section class="m-block m-triggers">
                 <div class="m-block-head">
                     <h2 class="eyebrow">Trigger words</h2>
-                    <button type="button" class="btn sm" data-copy-text="{{ metadata.trainedWords|join(', ') }}" data-copy-what="trigger words">
+                    <button type="button" class="btn sm" data-copy-text="{{ trigger_words|join(', ') }}" data-copy-what="trigger words">
                         <svg class="icon sm" aria-hidden="true"><use href="#i-copy"/></svg>Copy all
                     </button>
                 </div>
                 <div class="chips">
-                    {% for word in metadata.trainedWords %}
+                    {% for word in trigger_words %}
                     <button type="button" class="chip trigger" data-copy-text="{{ word }}" data-copy-what="“{{ word|truncate(36, True, '…') }}”" title="Copy"><span>{{ word }}</span></button>
                     {% endfor %}
                 </div>

@@ -364,16 +364,20 @@ class RequestHandler:
             if urlparse(url).hostname != self._api_host:
                 headers = {"Authorization": None}
 
-            response = self.session.get(url, timeout=self.timeout, stream=True, headers=headers)
-            response.raise_for_status()
+            # Closed in every case, so a failed streamed download returns its
+            # connection to the pool instead of leaking it.
+            with self.session.get(
+                url, timeout=self.timeout, stream=True, headers=headers
+            ) as response:
+                response.raise_for_status()
 
-            content_type_raw = response.headers.get("Content-Type")
-            content_type = str(content_type_raw) if content_type_raw is not None else None
-            logger.debug(f"Content-Type for {url}: {content_type}")
+                content_type_raw = response.headers.get("Content-Type")
+                content_type = str(content_type_raw) if content_type_raw is not None else None
+                logger.debug(f"Content-Type for {url}: {content_type}")
 
-            # Streamed to a temp file and moved into place only when complete, so an
-            # interrupted download never leaves a truncated preview behind.
-            atomic_write(output_path, response.iter_content(chunk_size=65536))
+                # Streamed to a temp file and moved into place only when complete, so
+                # an interrupted download never leaves a truncated preview behind.
+                atomic_write(output_path, response.iter_content(chunk_size=65536))
 
             return True, content_type
 

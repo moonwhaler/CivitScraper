@@ -16,6 +16,7 @@ from ..api.client import CivitAIClient
 from ..config.loader import merge_configs
 from ..html.gallery_data import UNMATCHED_NO_METADATA, UNMATCHED_NOT_ON_CIVITAI
 from ..html.generator import HTMLGenerator
+from ..html.paths import DEFAULT_GALLERY_PATH
 from ..organization import FileOrganizer, OrganizationConfig
 from ..organization.organizer import is_in_organized_output
 from ..scanner.discovery import (
@@ -123,7 +124,7 @@ class ScanJob:
         self.path_ids = path_ids
 
         # Get scan options
-        self.skip_existing = job_config.get("skip_existing", True)
+        self.skip_existing = bool(job_config.get("skip_existing", True))
         verify_hashes = job_config.get("verify_hashes", True)
         if not verify_hashes and not job_config.get("use_cached_metadata", False):
             # CivitAI lookups are by file hash; without one every file would fail.
@@ -137,11 +138,22 @@ class ScanJob:
 
         logger.info(f"Finding model files for paths: {path_ids}")
         path_files = find_model_files(self.config, path_ids, job_config.get("recursive"))
+        # Nested input paths (e.g. a Lora folder and one of its subfolders) list the
+        # same file twice; keep it once so it is hashed and processed once.
         files: List[str] = []
+        seen = set()
         for path_files_list in path_files.values():
-            files.extend(path_files_list)
+            for file_path in path_files_list:
+                key = os.path.normcase(os.path.abspath(file_path))
+                if key not in seen:
+                    seen.add(key)
+                    files.append(file_path)
 
         self.job_specific_config = merge_configs(self.config, job_config)
+        # One meaning everywhere: the metadata and image managers read this key too,
+        # and an unset key must not make them overwrite sidecars and re-download
+        # every preview while the scan itself skips existing files.
+        self.job_specific_config["skip_existing"] = self.skip_existing
 
         # Copies/symlinks in the organization output mirror originals that are
         # scanned anyway; rescanning them duplicates hashing and gallery cards
@@ -365,8 +377,15 @@ class ScanJob:
         for original_path, metadata in originals_needing_sidecar:
             metadata_manager.save_metadata(original_path, dict(metadata), dry_run)
 
+        # A model whose sidecar could not be written gets no page or previews (the
+        # next scan retries it) and counts as failed in the summary.
+        written = []
         for process_path, metadata in self.items_to_process:
-            metadata_manager.save_metadata(process_path, metadata, dry_run)
+            if metadata_manager.save_metadata(process_path, metadata, dry_run):
+                written.append((process_path, metadata))
+            else:
+                self.results.append((process_path, None))
+        self.items_to_process = written
 
         invalidate_version_index()
         if not dry_run:
@@ -380,12 +399,7 @@ class ScanJob:
     # --- Phase 4b: previews + detail pages -------------------------------------
 
     def render(self) -> None:
-        """
-        Download previews and generate detail pages.
-
-        save_metadata inside is a no-op for the sidecars written in
-        ``write_sidecars`` (dirty flag already consumed).
-        """
+        """Download previews and generate detail pages (sidecars are already written)."""
         items = self.items_to_process
         processor = self.processor
         force_refresh = self.force_refresh
@@ -433,11 +447,15 @@ class ScanJob:
 
     def build_gallery(self) -> None:
         """Generate the gallery page, if enabled for this job."""
-        html_config = self.job_config.get("output", {}).get("metadata", {}).get("html", {})
+        # The merged config, like the model pages: a gallery_path set globally is
+        # where the pages link to, so the gallery must be written there too.
+        html_config = (
+            self.job_specific_config.get("output", {}).get("metadata", {}).get("html", {})
+        )
         if not html_config.get("generate_gallery", False):
             return
 
-        gallery_path = html_config.get("gallery_path", "gallery.html")
+        gallery_path = html_config.get("gallery_path") or DEFAULT_GALLERY_PATH
         gallery_title = html_config.get("gallery_title", "Model Gallery")
         include_existing = html_config.get("include_existing_in_gallery", True)
 

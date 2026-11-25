@@ -7,6 +7,8 @@ This module handles preparing context data for templates.
 import json
 import logging
 import os
+import re
+import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TypedDict
 
@@ -17,9 +19,9 @@ from ..organization.organizer import (
     organized_output_root,
     original_dir_for,
 )
-from ..scanner.discovery import get_metadata_path, list_preview_files
+from ..scanner.discovery import PREVIEW_EXTENSIONS, get_metadata_path, list_preview_files
 from .images import ImageHandler
-from .paths import PathManager
+from .paths import DEFAULT_GALLERY_PATH, PathManager, relative_to
 from .sanitizer import description_excerpt, sanitize_description
 
 # Gallery card limits: the detail page shows everything, cards only need enough
@@ -33,18 +35,30 @@ HEALTH_NO_PREVIEW = "no_preview"
 HEALTH_DUPLICATE = "duplicate"
 
 
-def card_trigger_words(trained_words: Any) -> List[str]:
-    """Trigger words for a gallery card: at most 10 entries and 300 characters."""
+def clean_trigger_words(trained_words: Any) -> List[str]:
+    """
+    Return a sidecar's trigger words as a clean list.
+
+    A single string counts as one word; entries are stripped of whitespace and the
+    trailing commas CivitAI creators often leave; empty entries are dropped.
+    """
     if isinstance(trained_words, str):
         trained_words = [trained_words]
     if not isinstance(trained_words, list):
         return []
     words: List[str] = []
-    total = 0
     for word in trained_words:
         word = str(word).strip().rstrip(",").strip() if word else ""
-        if not word:
-            continue
+        if word:
+            words.append(word)
+    return words
+
+
+def card_trigger_words(trained_words: Any) -> List[str]:
+    """Trigger words for a gallery card: at most 10 entries and 300 characters."""
+    words: List[str] = []
+    total = 0
+    for word in clean_trigger_words(trained_words):
         if len(words) >= MAX_CARD_TRIGGER_WORDS or total + len(word) > MAX_CARD_TRIGGER_CHARS:
             break
         words.append(word)
@@ -117,11 +131,17 @@ class VersionIndexCache:
         self._html_paths: Dict[str, Dict[int, str]] = {}
         # dir -> model_id -> {version_id -> version dict (template fields)}
         self._versions_by_model: Dict[str, Dict[int, Dict[int, Dict[str, Any]]]] = {}
+        # Gallery cards are built in parallel; one thread indexes a directory while
+        # the others wait, instead of each parsing every sidecar in it.
+        self._lock = threading.Lock()
 
     def ensure_indexed(self, search_dir: str) -> None:
         """Build the index for a directory if not already cached."""
-        if os.path.isdir(search_dir) and search_dir not in self._html_paths:
-            self._build_index(search_dir)
+        if search_dir in self._html_paths or not os.path.isdir(search_dir):
+            return
+        with self._lock:
+            if search_dir not in self._html_paths:
+                self._build_index(search_dir)
 
     def get_html_path(self, search_dir: str, version_id: Optional[int]) -> Optional[str]:
         """
@@ -237,8 +257,9 @@ class VersionIndexCache:
         except OSError as e:
             logger.debug(f"Error building version index for {search_dir}: {e}")
 
-        self._html_paths[search_dir] = html_paths
+        # _html_paths marks a directory as indexed (see ensure_indexed): publish last
         self._versions_by_model[search_dir] = versions_by_model
+        self._html_paths[search_dir] = html_paths
         logger.debug(f"Built version index for {search_dir}: {len(html_paths)} local versions")
 
     def invalidate(self, search_dir: Optional[str] = None) -> None:
@@ -248,12 +269,13 @@ class VersionIndexCache:
         Args:
             search_dir: Directory to invalidate, or None for all
         """
-        if search_dir:
-            self._html_paths.pop(search_dir, None)
-            self._versions_by_model.pop(search_dir, None)
-        else:
-            self._html_paths.clear()
-            self._versions_by_model.clear()
+        with self._lock:
+            if search_dir:
+                self._html_paths.pop(search_dir, None)
+                self._versions_by_model.pop(search_dir, None)
+            else:
+                self._html_paths.clear()
+                self._versions_by_model.clear()
 
 
 # Global version index cache for reuse across context builders
@@ -265,13 +287,29 @@ def invalidate_version_index(search_dir: Optional[str] = None) -> None:
     _version_index_cache.invalidate(search_dir)
 
 
-def _relative_to(path: str, directory: str) -> str:
-    """``path`` relative to ``directory`` with forward slashes; absolute on another drive."""
-    absolute = os.path.abspath(path)
-    try:
-        return os.path.relpath(absolute, directory).replace(os.sep, "/")
-    except ValueError:
-        return absolute
+# Model file extensions tried when a model card is found without its model file
+_DEFAULT_MODEL_EXTENSIONS = (".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".gguf", ".sft")
+
+
+def model_file_extensions(config: Dict[str, Any]) -> List[str]:
+    """
+    Extensions a model file next to its card can have.
+
+    The plain ``*.ext`` patterns of every configured input path come first, then
+    the common model formats.
+    """
+    extensions: List[str] = []
+    for path_config in (config.get("input_paths") or {}).values():
+        if not isinstance(path_config, dict):
+            continue
+        for pattern in path_config.get("patterns") or []:
+            match = re.fullmatch(r"\*(\.[A-Za-z0-9_]+)", str(pattern))
+            if match and match.group(1).lower() not in extensions:
+                extensions.append(match.group(1).lower())
+    for ext in _DEFAULT_MODEL_EXTENSIONS:
+        if ext not in extensions:
+            extensions.append(ext)
+    return extensions
 
 
 class ContextBuilder:
@@ -289,6 +327,7 @@ class ContextBuilder:
         self.path_manager = PathManager(config)
         self.image_handler = ImageHandler(config)
         self.org_config = OrganizationConfig.from_dict(config)
+        self.model_extensions = model_file_extensions(config)
 
     def build_model_context(self, file_path: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -333,28 +372,17 @@ class ContextBuilder:
         html_path = self.path_manager.get_html_path(file_path)
         html_dir = os.path.dirname(os.path.abspath(html_path))
 
-        # Get gallery path from config, default to index.html in model directory
+        # Same setting and default the gallery is written with (ScanJob.build_gallery)
         gallery_output_path = (
-            self.config.get("output", {})
-            .get("metadata", {})
-            .get("html", {})
-            .get("gallery_path", "index.html")
+            self.config.get("output", {}).get("metadata", {}).get("html", {}).get("gallery_path")
+            or DEFAULT_GALLERY_PATH
         )
-
-        # Calculate relative path from model HTML to gallery
-        gallery_path = "index.html"
-        try:
-            gallery_abs_path = os.path.abspath(gallery_output_path)
-            gallery_path = os.path.relpath(gallery_abs_path, html_dir).replace(os.sep, "/")
-        except ValueError:
-            # On Windows, relpath can fail if paths are on different drives
-            # Fall back to absolute path
-            gallery_path = os.path.abspath(gallery_output_path)
+        gallery_path = relative_to(gallery_output_path, html_dir)
 
         # Local version links are absolute; make them relative to this page.
         sibling_versions = [
             (
-                dict(v, link=_relative_to(v["link"], html_dir))
+                dict(v, link=relative_to(v["link"], html_dir))
                 if v.get("is_local") and v.get("link")
                 else v
             )
@@ -371,6 +399,7 @@ class ContextBuilder:
             "creator": creator,
             "description": description,
             "tags": tags,
+            "trigger_words": clean_trigger_words(metadata.get("trainedWords")),
             "stats": stats,
             "images": image_paths,
             "metadata": filtered_metadata,
@@ -379,7 +408,7 @@ class ContextBuilder:
             "hashes": {k: hashes[k] for k in ("AutoV2", "SHA256") if hashes.get(k)},
             "local_file_path": os.path.abspath(file_path),
             # Relative to the page, so copying still works after the collection moves.
-            "file_rel_path": _relative_to(file_path, html_dir),
+            "file_rel_path": relative_to(file_path, html_dir),
             "sibling_versions": sibling_versions,
             "parent_model": metadata.get("parentModel", {}),
             "gallery_path": gallery_path,
@@ -447,7 +476,6 @@ class ContextBuilder:
         model_stats = {
             "downloads": stats.get("downloadCount", 0),
             "rating": stats.get("rating", 0),
-            "rating_count": stats.get("ratingCount", 0),
         }
 
         model_name = metadata.get("model", {}).get("name") or metadata.get("name", "Unknown")
@@ -469,11 +497,6 @@ class ContextBuilder:
         # name before the trailing slash.
         if not folder_name and parent_folder_path and parent_folder_path != os.path.sep:
             folder_name = os.path.basename(os.path.normpath(parent_folder_path))
-
-        # Count local versions (for filtering models with multiple local versions)
-        local_version_count = self._count_local_versions(
-            file_path, metadata.get("siblingVersions", [])
-        )
 
         # Get file modification time from the actual model file
         file_modified = None
@@ -508,7 +531,6 @@ class ContextBuilder:
             "model_id": metadata.get("modelId"),
             "nsfw": is_nsfw(metadata, self.nsfw_threshold),
             "version_id": metadata.get("id"),
-            "local_version_count": local_version_count,
             "creator": creator,
             "tags": [str(t) for t in tags if t][:MAX_CARD_TAGS],
             "trigger_words": card_trigger_words(metadata.get("trainedWords")),
@@ -541,7 +563,6 @@ class ContextBuilder:
         Returns:
             Merged list with one card per model (plus standalone cards).
         """
-
         domains = domains or DEFAULT_DOMAINS
 
         def sort_key(value: Optional[str]) -> str:
@@ -718,34 +739,6 @@ class ContextBuilder:
         )
 
         return filtered_metadata
-
-    def _count_local_versions(
-        self, current_file_path: str, sibling_versions: List[Dict[str, Any]]
-    ) -> int:
-        """
-        Count how many sibling versions have local HTML files.
-
-        Uses the global version index cache for efficient lookups.
-
-        Args:
-            current_file_path: Path to the current model file
-            sibling_versions: List of sibling version data from metadata
-
-        Returns:
-            Count of versions with local HTML files (including current)
-        """
-        if not sibling_versions:
-            return 1  # At least the current version is local
-
-        current_dir = self._sidecar_dir(current_file_path)
-        count = 0
-
-        for version in sibling_versions:
-            version_id = version.get("id")
-            if version_id and _version_index_cache.get_html_path(current_dir, version_id):
-                count += 1
-
-        return max(count, 1)  # At least 1 (the current version)
 
     def _build_sibling_versions_context(
         self,
@@ -957,7 +950,7 @@ class ContextBuilder:
         html_dir = os.path.dirname(html_file)
         model_name = os.path.splitext(os.path.basename(html_file))[0]
 
-        for ext in [".safetensors", ".ckpt", ".pt", ".bin"]:
+        for ext in self.model_extensions:
             potential_path = os.path.join(html_dir, model_name + ext)
             if os.path.isfile(potential_path):
                 return potential_path
@@ -998,15 +991,20 @@ class ContextBuilder:
         images_dir = os.path.join(html_dir, "images")
 
         if os.path.isdir(images_dir):
-            for filename in os.listdir(images_dir):
-                if model_name.lower() in filename.lower():
-                    preview_path = os.path.join(images_dir, filename)
-                    is_video = filename.lower().endswith(".mp4")
-                    result: PreviewImageDict = {
-                        "path": os.path.abspath(preview_path),  # Use absolute path
-                        "is_video": is_video,
-                    }
-                    return result
+            # "<model>.png", "<model>_1.jpg", "<model>-preview.webp", ... but not
+            # "<model>xyz.png" (another model) or non-image files.
+            stem = model_name.lower()
+            for filename in sorted(os.listdir(images_dir)):
+                lower = filename.lower()
+                if not lower.endswith(PREVIEW_EXTENSIONS) or not lower.startswith(stem):
+                    continue
+                if len(lower) == len(stem) or lower[len(stem)] not in "._-":
+                    continue
+                result: PreviewImageDict = {
+                    "path": os.path.abspath(os.path.join(images_dir, filename)),
+                    "is_video": lower.endswith(".mp4"),
+                }
+                return result
 
         return None
 
@@ -1075,8 +1073,6 @@ class ContextBuilder:
                 # For CivitAI URLs, handle width parameter
                 if preview_url and "image.civitai.com" in preview_url:
                     # Extract the width parameter if it exists
-                    import re
-
                     width_match = re.search(r"width=(\d+)", preview_url)
                     width = width_match.group(1) if width_match else "450"
 

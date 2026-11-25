@@ -7,7 +7,7 @@ This module handles fetching metadata from the CivitAI API and saving it to disk
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional
 
 from ..api.client import CivitAIClient
 from ..api.domains import get_domain_settings, is_nsfw
@@ -63,14 +63,19 @@ class MetadataManager:
         self, file_hash: str, force_refresh: bool = False
     ) -> Optional[Dict[str, Any]]:
         """
-        Fetch metadata from API.
+        Fetch a model version's metadata by file hash.
 
         Args:
             file_hash: File hash
             force_refresh: Whether to force refresh metadata
 
         Returns:
-            Metadata or None if fetching failed
+            Metadata, or None when CivitAI does not know the hash (404, remembered
+            for ``not_found_validity`` seconds)
+
+        Raises:
+            CivitAIError: Network errors, server errors, rate limits and an open circuit
+                breaker; they are not remembered, so the next run retries
         """
         if not file_hash:
             logger.warning("Cannot fetch metadata without file hash")
@@ -80,82 +85,38 @@ class MetadataManager:
             logger.debug(f"Hash {file_hash} was not found on CivitAI recently; skipping lookup")
             return None
 
+        logger.debug(f"Fetching metadata for hash {file_hash}")
         try:
-            logger.debug(f"Fetching metadata for hash {file_hash}")
-            try:
-                response = self.api_client.get_model_version_by_hash(
-                    file_hash, force_refresh=force_refresh
-                )
-            except ClientError as e:
-                if e.status_code == 404:
-                    self.not_found_cache.set(f"hash_{file_hash}", True)
-                    logger.info(f"Hash {file_hash} is not known to CivitAI")
-                    return None
-                raise
-            logger.debug(f"Got API response for hash {file_hash}: {type(response)}")
-
-            # Convert response to metadata dict format
-            metadata = (
-                response
-                if isinstance(response, dict)
-                else {
-                    "id": response.id,
-                    "modelId": response.model_id,  # Parent model ID
-                    "baseModel": response.base_model,
-                    "name": response.name,
-                    "createdAt": response.created_at.isoformat(),
-                    "downloadUrl": response.download_url,
-                    "description": response.description,
-                    "trainedWords": response.trained_words,
-                    "files": [
-                        {
-                            "name": f.name,
-                            "id": f.id,
-                            "sizeKb": f.size_kb,
-                            "type": f.type,
-                            "metadata": f.metadata.__dict__ if f.metadata else None,
-                            "pickleScanResult": f.pickle_scan_result,
-                            "virusScanResult": f.virus_scan_result,
-                            "scannedAt": f.scanned_at.isoformat() if f.scanned_at else None,
-                            "primary": f.primary,
-                        }
-                        for f in response.files
-                    ],
-                    "images": [
-                        {
-                            "id": i.id,
-                            "url": i.url,
-                            "nsfw": i.nsfw,
-                            "width": i.width,
-                            "height": i.height,
-                            "hash": i.hash,
-                            "meta": i.meta.__dict__ if i.meta else None,
-                        }
-                        for i in response.images
-                    ],
-                    "stats": response.stats.__dict__ if response.stats else None,
-                }
+            response = self.api_client.get_model_version_by_hash(
+                file_hash, force_refresh=force_refresh
             )
+        except ClientError as e:
+            if e.status_code == 404:
+                self.not_found_cache.set(f"hash_{file_hash}", True)
+                logger.info(f"Hash {file_hash} is not known to CivitAI")
+                return None
+            raise
+        if not isinstance(response, dict):
+            raise ValueError(f"Unexpected API response for hash {file_hash}: {type(response)}")
+        metadata: Dict[str, Any] = response
 
-            # For NSFW models the inline by-hash images are browsing-level
-            # filtered (SFW only). Pull the full media set from the images feed
-            # with an explicit nsfw browsing level instead.
-            if is_nsfw(metadata, self.nsfw_threshold):
-                feed_images = self._fetch_nsfw_images(metadata.get("id"), force_refresh)
-                if feed_images:
-                    metadata["images"] = feed_images
+        # For NSFW models the inline by-hash images are browsing-level
+        # filtered (SFW only). Pull the full media set from the images feed
+        # with an explicit nsfw browsing level instead.
+        if is_nsfw(metadata, self.nsfw_threshold):
+            feed_images = self._fetch_nsfw_images(metadata.get("id"), force_refresh)
+            if feed_images:
+                metadata["images"] = feed_images
 
-            # A model without preview images is still a valid CivitAI match: keep its
-            # metadata (otherwise it is treated as "not found" and re-queried forever).
-            if not metadata.get("images"):
-                logger.info(f"No preview images listed for hash {file_hash}")
+        # A model without preview images is still a valid CivitAI match: keep its
+        # metadata (otherwise it is treated as "not found" and re-queried forever).
+        if not metadata.get("images"):
+            logger.info(f"No preview images listed for hash {file_hash}")
 
-            images = cast(List[Any], metadata.get("images", []))
-            logger.debug(f"Processed hash: {file_hash}, found {len(images)} images")
-            return metadata
-        except Exception as e:
-            logger.error(f"Failed to fetch metadata for hash {file_hash}: {e}")
-            return None
+        logger.debug(
+            f"Processed hash: {file_hash}, found {len(metadata.get('images') or [])} images"
+        )
+        return metadata
 
     def _fetch_nsfw_images(
         self, version_id: Optional[int], force_refresh: bool
@@ -221,7 +182,7 @@ class MetadataManager:
         # disk even when skip_existing would otherwise skip the write.
         skip_existing = self.config.get("skip_existing", False)
         if skip_existing and not dirty and os.path.exists(metadata_path):
-            logger.info(f"Skipping existing metadata at {metadata_path}")
+            logger.debug(f"Skipping existing metadata at {metadata_path}")
             return True
 
         if dry_run:
@@ -238,63 +199,3 @@ class MetadataManager:
         except Exception as e:
             logger.error(f"Failed to save metadata to {metadata_path}: {e}")
             return False
-
-    def load_existing_metadata(self, metadata_path: str) -> Optional[Dict[str, Any]]:
-        """
-        Load existing metadata from disk.
-
-        Args:
-            metadata_path: Path to metadata file
-
-        Returns:
-            Metadata dictionary or None if loading failed
-        """
-        try:
-            with open(metadata_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            if not isinstance(data, dict):
-                logger.warning(f"Metadata at {metadata_path} is not a dictionary")
-                return None
-
-            return data
-        except Exception as e:
-            logger.error(f"Failed to load existing metadata from {metadata_path}: {e}")
-            return None
-
-    def fetch_and_save(
-        self, file_path: str, file_hash: str, force_refresh: bool = False, dry_run: bool = False
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Fetch metadata from API and save it to disk.
-
-        Args:
-            file_path: Path to model file
-            file_hash: File hash
-            force_refresh: Whether to force refresh metadata
-            dry_run: Whether to simulate saving metadata
-
-        Returns:
-            Metadata or None if fetching or saving failed
-        """
-        # Check if metadata file exists and skip_existing is enabled
-        skip_existing = self.config.get("skip_existing", False)
-        metadata_path = get_metadata_path(file_path, self.config)
-
-        # Try to load existing metadata first if applicable
-        if skip_existing and os.path.exists(metadata_path) and not force_refresh:
-            logger.info(f"Using existing metadata at {metadata_path}")
-            existing_metadata = self.load_existing_metadata(metadata_path)
-            if existing_metadata:
-                return existing_metadata
-
-        # If we reach this point, we need to fetch new metadata
-        metadata = self.fetch_metadata(file_hash, force_refresh)
-        if not metadata:
-            return None
-
-        # Save metadata
-        if not self.save_metadata(file_path, metadata, dry_run):
-            return None
-
-        return metadata

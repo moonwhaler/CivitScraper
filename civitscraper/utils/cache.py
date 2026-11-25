@@ -9,8 +9,11 @@ import json
 import logging
 import threading
 import time
+from collections import OrderedDict
 from pathlib import Path
-from typing import Any, Dict, Generic, List, Optional, Tuple, TypeVar
+from typing import Any, Dict, Generic, List, Optional, TypeVar
+
+from .fs import atomic_write
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +24,7 @@ PRUNE_THRESHOLD = 1000
 
 
 class LRUCache(Generic[T]):
-    """LRU (Least Recently Used) cache implementation."""
+    """Thread-safe LRU (least recently used) cache with O(1) get, put and eviction."""
 
     def __init__(self, capacity: int):
         """
@@ -30,8 +33,8 @@ class LRUCache(Generic[T]):
         Args:
             capacity: Maximum number of items to store
         """
-        self.capacity = capacity
-        self.cache: Dict[str, Tuple[T, float]] = {}  # key -> (value, timestamp)
+        self.capacity = max(1, int(capacity))
+        self.cache: "OrderedDict[str, T]" = OrderedDict()
         self.lock = threading.Lock()
 
     def get(self, key: str) -> Optional[T]:
@@ -45,28 +48,24 @@ class LRUCache(Generic[T]):
             Cached value or None if not found
         """
         with self.lock:
-            if key in self.cache:
-                value, _ = self.cache[key]
-                self.cache[key] = (value, time.time())  # Update timestamp
-                return value
-            return None
+            if key not in self.cache:
+                return None
+            self.cache.move_to_end(key)
+            return self.cache[key]
 
     def put(self, key: str, value: T):
         """
-        Put value in cache.
+        Put value in cache, evicting the least recently used item when full.
 
         Args:
             key: Cache key
             value: Value to cache
         """
         with self.lock:
-            self.cache[key] = (value, time.time())
-
-            # Evict least recently used items if capacity is exceeded
-            if len(self.cache) > self.capacity:
-                # Find least recently used item
-                oldest_key = min(self.cache.items(), key=lambda x: x[1][1])[0]
-                del self.cache[oldest_key]
+            self.cache[key] = value
+            self.cache.move_to_end(key)
+            while len(self.cache) > self.capacity:
+                self.cache.popitem(last=False)
 
     def remove(self, key: str):
         """
@@ -76,8 +75,7 @@ class LRUCache(Generic[T]):
             key: Cache key
         """
         with self.lock:
-            if key in self.cache:
-                del self.cache[key]
+            self.cache.pop(key, None)
 
     def clear(self):
         """Clear cache."""
@@ -89,7 +87,7 @@ class LRUCache(Generic[T]):
         Get list of keys in cache.
 
         Returns:
-            List of keys
+            List of keys, least recently used first
         """
         with self.lock:
             return list(self.cache.keys())
@@ -108,17 +106,18 @@ class LRUCache(Generic[T]):
 class DiskCache(Generic[T]):
     """Disk-based cache implementation."""
 
-    def __init__(self, cache_dir: str, validity: int = 86400):
+    def __init__(self, cache_dir: str, validity: int = 86400, memory_size: int = 1000):
         """
         Initialize disk cache.
 
         Args:
             cache_dir: Directory to store cache files
             validity: Cache validity in seconds
+            memory_size: Entries kept in memory in front of the files
         """
         self.cache_dir = Path(cache_dir)
         self.validity = validity
-        self.memory_cache = LRUCache[T](1000)  # In-memory cache for frequently accessed items
+        self.memory_cache = LRUCache[T](memory_size)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_cache_path(self, key: str) -> Path:
@@ -178,9 +177,10 @@ class DiskCache(Generic[T]):
         self.memory_cache.put(key, value)
         cache_path = self._get_cache_path(key)
         try:
-            with open(cache_path, "w", encoding="utf-8") as f:
-                json.dump(value, f)
-        except IOError as e:
+            # Atomic: parallel workers and an interrupted run never leave a
+            # truncated entry that later reads would report as corrupt.
+            atomic_write(str(cache_path), json.dumps(value))
+        except (OSError, TypeError, ValueError) as e:
             logger.error(f"Error writing cache file: {e}")
 
     def remove(self, key: str):
@@ -256,9 +256,9 @@ class CacheManager(Generic[T]):
         self.config = config
         cache_dir = config.get("scanner", {}).get("cache_dir", ".civitscraper_cache")
         cache_validity = config.get("scanner", {}).get("cache_validity", 86400)
-        self.disk_cache = DiskCache[T](cache_dir, cache_validity)
         memory_cache_size = config.get("api", {}).get("batch", {}).get("cache_size", 100)
-        self.memory_cache = LRUCache[T](memory_cache_size)
+        # The disk cache's memory layer is the only one: responses are not held twice.
+        self.disk_cache = DiskCache[T](cache_dir, cache_validity, memory_cache_size)
 
         # Expired responses were never deleted, so the cache directory only grew.
         # Prune once per run when it holds a meaningful number of entries. Only
@@ -278,17 +278,7 @@ class CacheManager(Generic[T]):
         Returns:
             Cached value or default if not found or expired
         """
-        value = self.memory_cache.get(key)
-        if value is not None:
-            return value
-
-        value = self.disk_cache.get(key, default)
-
-        # Add to memory cache if found on disk
-        if value is not default and value is not None:
-            self.memory_cache.put(key, value)
-
-        return value if value is not None else default
+        return self.disk_cache.get(key, default)
 
     def set(self, key: str, value: Any):
         """
@@ -298,7 +288,6 @@ class CacheManager(Generic[T]):
             key: Cache key
             value: Value to cache
         """
-        self.memory_cache.put(key, value)
         self.disk_cache.set(key, value)
 
     def remove(self, key: str):
@@ -308,12 +297,10 @@ class CacheManager(Generic[T]):
         Args:
             key: Cache key
         """
-        self.memory_cache.remove(key)
         self.disk_cache.remove(key)
 
     def clear(self):
         """Clear cache."""
-        self.memory_cache.clear()
         self.disk_cache.clear()
 
     def clear_expired(self):

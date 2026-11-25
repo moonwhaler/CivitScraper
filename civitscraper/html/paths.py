@@ -5,11 +5,25 @@ This module handles path-related functionality for HTML generation.
 """
 
 import logging
+import os
 from typing import Any, Dict
 
 from ..scanner.discovery import get_html_path, get_image_path
 
 logger = logging.getLogger(__name__)
+
+# Where the gallery goes when a job sets no output.metadata.html.gallery_path
+# (relative to the working directory). Model pages link to the same place.
+DEFAULT_GALLERY_PATH = "gallery.html"
+
+
+def relative_to(path: str, directory: str) -> str:
+    """``path`` relative to ``directory`` with forward slashes; absolute on another drive."""
+    absolute = os.path.abspath(path)
+    try:
+        return os.path.relpath(absolute, directory).replace(os.sep, "/")
+    except ValueError:
+        return absolute
 
 
 class PathManager:

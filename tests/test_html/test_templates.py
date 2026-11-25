@@ -210,3 +210,44 @@ def test_gallery_ships_new_assets(tmp_path, sample_config):
     assert (
         html.index("js/common.js") < html.index("data/models_data.js") < html.index("js/gallery.js")
     )
+
+
+def test_detail_page_trigger_words_are_cleaned(tmp_path, sample_config):
+    """Trailing commas and blanks are dropped; a single string stays one word."""
+    model = tmp_path / "foo.safetensors"
+    model.write_bytes(b"x")
+    builder = ContextBuilder(sample_config)
+    context = builder.build_model_context(
+        str(model), _sidecar(trainedWords=["foo style,", " ", "bar ,"])
+    )
+    assert context["trigger_words"] == ["foo style", "bar"]
+    html = TemplateRenderer().render_model(context)
+    assert 'data-copy-text="foo style, bar"' in html
+    single = builder.build_model_context(str(model), _sidecar(trainedWords="one phrase"))
+    assert single["trigger_words"] == ["one phrase"]
+
+
+def test_image_data_holds_only_what_the_page_reads(model_page):
+    """Settings travel in params; the old per-setting keys are gone."""
+    context, _ = model_page
+    assert set(context["images"][0]) == {
+        "path", "prompt", "negative_prompt", "params", "width", "height", "nsfw", "is_video"
+    }
+
+
+def test_inlined_assets_are_read_once_per_renderer(monkeypatch):
+    """Rendering many pages does not re-read theme.css, model.css and the scripts."""
+    import builtins
+
+    renderer = TemplateRenderer()
+    opened = []
+    real_open = builtins.open
+
+    def counting_open(path, *args, **kwargs):
+        opened.append(os.path.basename(str(path)))
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", counting_open)
+    first = renderer._read_file("css/theme.css")
+    assert renderer._read_file("css/theme.css") is first
+    assert opened.count("theme.css") == 1

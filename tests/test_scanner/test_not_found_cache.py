@@ -32,9 +32,11 @@ def test_404_is_remembered_across_runs(tmp_path):
 @pytest.mark.parametrize(
     "error", [ServerError(503, "down"), NetworkError("timeout"), ClientError(429, "slow down")]
 )
-def test_transient_errors_are_not_remembered(tmp_path, error):
+def test_transient_errors_are_raised_and_not_remembered(tmp_path, error):
     first, _ = manager(tmp_path, error)
-    assert first.fetch_metadata("ABC") is None
+    # Raised, so the scan counts a lookup error instead of "not found on CivitAI"
+    with pytest.raises(type(error)):
+        first.fetch_metadata("ABC")
     assert not first.is_known_not_found("ABC")
 
 

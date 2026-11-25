@@ -21,6 +21,8 @@ def client(tmp_path):
     response = MagicMock()
     response.headers = {"Content-Type": "image/jpeg"}
     response.iter_content.return_value = [b"img"]
+    response.__enter__.return_value = response
+    response.__exit__.return_value = False  # like requests.Response: never swallows errors
     handler.session.get = MagicMock(return_value=response)
     return base, handler
 
@@ -56,3 +58,15 @@ def test_downloads_use_their_own_rate_limiter(tmp_path):
     api_tokens = handler.rate_limiter.get_tokens()
     handler.download("https://image.civitai.com/x/1.jpeg", str(tmp_path / "p.jpeg"))
     assert handler.rate_limiter.get_tokens() >= api_tokens
+
+
+def test_streamed_download_is_closed_on_failure(tmp_path):
+    """A failed download still releases its connection (context manager exit)."""
+    _, handler = client(tmp_path)
+    response = handler.session.get.return_value
+    response.raise_for_status.side_effect = RuntimeError("404")
+
+    ok, _ = handler.download("https://image.civitai.com/x/1.jpeg", str(tmp_path / "a.jpeg"))
+
+    assert not ok
+    response.__exit__.assert_called_once()

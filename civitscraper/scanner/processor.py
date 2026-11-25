@@ -48,7 +48,10 @@ class ModelProcessor:
         self, file_path: str, metadata: Dict[str, Any], force_refresh: bool = False
     ) -> Optional[Dict[str, Any]]:
         """
-        Save metadata and process a model file with already fetched metadata.
+        Write a model's previews and detail page from already fetched metadata.
+
+        The sidecar itself is written before (``ScanJob.write_sidecars``), so every
+        detail page sees the complete version index.
 
         Args:
             file_path: Path to model file
@@ -59,23 +62,12 @@ class ModelProcessor:
             Metadata or None if processing failed
         """
         try:
-            # Save metadata to disk - skip_existing is handled inside the method
-            if not self.metadata_manager.save_metadata(file_path, metadata, self.dry_run):
-                return None
-
-            if self.config.get("output", {}).get("images", {}).get("save", True):
-                # Always pass dry_run flag to ensure consistent behavior
+            output_config = self.config.get("output", {})
+            if output_config.get("images", {}).get("save", True):
                 self.image_manager.download_images(file_path, metadata, force_refresh=force_refresh)
 
-            html_enabled = (
-                self.config.get("output", {})
-                .get("metadata", {})
-                .get("html", {})
-                .get("enabled", True)
-            )
-
             # Generate HTML if enabled. html_manager handles skip/refresh logic.
-            if html_enabled:
+            if output_config.get("metadata", {}).get("html", {}).get("enabled", True):
                 self.html_manager.generate_html(file_path, metadata, force_refresh=force_refresh)
 
             return metadata
