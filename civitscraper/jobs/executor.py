@@ -4,10 +4,12 @@ Job executor for CivitScraper.
 This module handles executing jobs defined in the configuration.
 """
 
+import concurrent.futures
 import json
 import logging
 import os
 import shutil
+import threading
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..api.client import CivitAIClient
@@ -244,48 +246,82 @@ class JobExecutor:
                 "output_failed": 0,
             }
 
-            # First, fetch metadata for all files without processing them
-            for file_path in filtered_files:
+            # Hash + look up files in parallel. Hashing releases the GIL (hashlib), and
+            # API calls are additionally bounded by api.batch.max_concurrent; the shared
+            # rate limiter, circuit breaker and caches are thread-safe.
+            batch_config = job_specific_config.get("api", {}).get("batch", {})
+            parallel = batch_config.get("enabled", True)
+            workers = (
+                max(1, int(job_specific_config.get("scanner", {}).get("hash_workers", 4)))
+                if parallel
+                else 1
+            )
+            api_slots = threading.BoundedSemaphore(
+                max(1, int(batch_config.get("max_concurrent", 4))) if parallel else 1
+            )
+
+            def fetch_one(file_path: str) -> Tuple[str, Optional[Dict[str, Any]]]:
+                """Return (outcome, metadata) for one file."""
                 try:
-                    # If using cached metadata, load from JSON file instead of API
                     if use_cached_metadata:
                         metadata = self._load_cached_metadata(file_path, job_specific_config)
                         if metadata:
                             logger.debug(f"Loaded cached metadata for {file_path}")
-                            metadata_dict[file_path] = metadata
-                        else:
-                            logger.warning(f"No cached metadata found for {file_path}")
-                            summary["not_found"] += 1
-                        continue
+                            return "matched", metadata
+                        logger.warning(f"No cached metadata found for {file_path}")
+                        return "not_found", None
 
                     result = temp_processor.file_processor.process(
                         file_path, verify_hash=verify_hashes
                     )
                     if not result.success or not result.file_hash:
                         logger.warning(f"Failed to process file {file_path}: {result.error}")
-                        summary["unreadable"] += 1
-                        continue
+                        return "unreadable", None
 
                     if not force_refresh and temp_processor.metadata_manager.is_known_not_found(
                         result.file_hash
                     ):
-                        summary["not_found_cached"] += 1
-                        continue
+                        return "not_found_cached", None
 
-                    # Get metadata from API
-                    metadata = temp_processor.metadata_manager.fetch_metadata(
-                        result.file_hash, force_refresh=force_refresh
-                    )
+                    with api_slots:
+                        metadata = temp_processor.metadata_manager.fetch_metadata(
+                            result.file_hash, force_refresh=force_refresh
+                        )
                     if metadata:
                         logger.debug(f"Got metadata for {file_path}")
-                        metadata_dict[file_path] = metadata
-                    else:
-                        logger.warning(f"No metadata found for {file_path}")
-                        summary["not_found"] += 1
+                        return "matched", metadata
+                    logger.warning(f"No metadata found for {file_path}")
+                    return "not_found", None
                 except Exception as e:
                     logger.error(f"Error fetching metadata for {file_path}: {e}")
                     logger.debug("Traceback:", exc_info=True)
-                    summary["errors"] += 1
+                    return "errors", None
+
+            fetched: Dict[str, Dict[str, Any]] = {}
+            if workers > 1 and len(filtered_files) > 1:
+                logger.info(f"Hashing and looking up with {workers} workers")
+                with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+                    futures = {pool.submit(fetch_one, f): f for f in filtered_files}
+                    for done, future in enumerate(concurrent.futures.as_completed(futures), 1):
+                        outcome, metadata = future.result()
+                        if metadata is not None:
+                            fetched[futures[future]] = metadata
+                        else:
+                            summary[outcome] += 1
+                        if done % 100 == 0 or done == len(filtered_files):
+                            logger.info(f"Looked up {done}/{len(filtered_files)} files")
+            else:
+                for file_path in filtered_files:
+                    outcome, metadata = fetch_one(file_path)
+                    if metadata is not None:
+                        fetched[file_path] = metadata
+                    else:
+                        summary[outcome] += 1
+
+            # Keep discovery order so later phases behave deterministically.
+            for file_path in filtered_files:
+                if file_path in fetched:
+                    metadata_dict[file_path] = fetched[file_path]
 
             temp_processor.file_processor.flush()
 
@@ -384,8 +420,6 @@ class JobExecutor:
             # PHASE 4b: Generate images + HTML. The internal save_metadata is now a
             # no-op for already-written sidecars (dirty flag consumed in 4a).
             # Use parallel processing for large collections
-            import concurrent.futures
-
             if len(items_to_process) > 10:
                 max_workers = min(4, len(items_to_process))  # Lower workers for I/O-heavy tasks
                 logger.info(f"Processing {len(items_to_process)} files with {max_workers} workers")

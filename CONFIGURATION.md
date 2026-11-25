@@ -277,7 +277,8 @@ api:
       reset_timeout: 60    # Seconds before retrying a broken circuit
 ```
 
--   **`enabled`** / **`max_concurrent`**: Currently not used by `scan-paths` jobs; metadata lookups run sequentially. (Parallel lookups are planned.)
+-   **`enabled`**: `false` makes hashing and metadata lookups sequential.
+-   **`max_concurrent`**: Maximum number of simultaneous metadata API requests. Files are hashed by `scanner.hash_workers` threads; this caps how many of them talk to the API at once.
 -   **`rate_limit`**: A single token bucket (shared by API calls and image downloads) keeps requests below the target rate (requests per minute).
 -   **HTTP 429**: CivitAI's `Retry-After` header (seconds or HTTP date, capped at 5 minutes) is honored; without it the client backs off exponentially from `retry_delay`. Rate limiting does not count toward the circuit breaker.
 -   **`cache_size`**: An in-memory LRU cache stores recent API responses during a run to avoid refetching the same data multiple times within that run.
