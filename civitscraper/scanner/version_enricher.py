@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from ..api.client import CivitAIClient
 from ..utils.cache import DiskCache
+from .sidecar import DIRTY_FLAG as SIDECAR_DIRTY_FLAG
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +24,9 @@ FAILED_MODEL_CACHE_VALIDITY = 7 * 24 * 60 * 60
 SIBLING_VERSIONS_CACHE_VALIDITY_DEFAULT = 86400
 # Field stamped into sidecar metadata recording when siblingVersions was fetched
 SIBLING_VERSIONS_TS_FIELD = "siblingVersionsFetchedAt"
-# Transient in-memory marker telling save_metadata to bypass skip_existing.
-# Popped before serialization; never written to disk.
-DIRTY_FLAG = "_civitscraper_dirty"
+# Transient in-memory marker telling save_metadata to bypass skip_existing
+# (defined with the other sidecar bookkeeping).
+DIRTY_FLAG = SIDECAR_DIRTY_FLAG
 
 
 class VersionEnricher:

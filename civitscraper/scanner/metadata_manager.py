@@ -15,6 +15,7 @@ from ..api.exceptions import ClientError
 from ..utils.cache import DiskCache
 from ..utils.fs import atomic_write
 from .discovery import get_metadata_path
+from .sidecar import DIRTY_FLAG, IMAGES_INFO, SOURCE_FEED, SOURCE_SHOWCASE
 
 logger = logging.getLogger(__name__)
 
@@ -98,15 +99,7 @@ class MetadataManager:
             raise
         if not isinstance(response, dict):
             raise ValueError(f"Unexpected API response for hash {file_hash}: {type(response)}")
-        metadata: Dict[str, Any] = response
-
-        # For NSFW models the inline by-hash images are browsing-level
-        # filtered (SFW only). Pull the full media set from the images feed
-        # with an explicit nsfw browsing level instead.
-        if is_nsfw(metadata, self.nsfw_threshold):
-            feed_images = self._fetch_nsfw_images(metadata.get("id"), force_refresh)
-            if feed_images:
-                metadata["images"] = feed_images
+        metadata: Dict[str, Any] = self.complete_images(response, force_refresh)
 
         # A model without preview images is still a valid CivitAI match: keep its
         # metadata (otherwise it is treated as "not found" and re-queried forever).
@@ -116,6 +109,48 @@ class MetadataManager:
         logger.debug(
             f"Processed hash: {file_hash}, found {len(metadata.get('images') or [])} images"
         )
+        return metadata
+
+    def refresh_version(self, version_id: int) -> Dict[str, Any]:
+        """
+        Fetch a known version again by its ID (no file hashing).
+
+        The request cache is bypassed: a refresh is due precisely because the data
+        is old.
+
+        Args:
+            version_id: CivitAI model version ID from the sidecar
+
+        Returns:
+            Fresh version data in the by-hash shape (prompts included)
+
+        Raises:
+            ClientError: 404 when the version was deleted, other 4xx answers
+            CivitAIError: Network errors, server errors, rate limits
+        """
+        response = self.api_client.get_model_version(version_id, force_refresh=True)
+        if not isinstance(response, dict) or not response.get("id"):
+            raise ValueError(f"No version data in the response for version {version_id}")
+        return self.complete_images(response, force_refresh=True)
+
+    def complete_images(self, metadata: Dict[str, Any], force_refresh: bool) -> Dict[str, Any]:
+        """
+        Use the NSFW image feed for NSFW versions and note where images came from.
+
+        For NSFW models the inline images are browsing-level filtered (SFW only), so
+        the full media set is pulled from the images feed with an explicit nsfw
+        browsing level. The IMAGES_INFO marker tells merge_refreshed the source and
+        whether the images are a degraded stand-in because the feed failed.
+        """
+        info = {"source": SOURCE_SHOWCASE, "degraded": False}
+        if is_nsfw(metadata, self.nsfw_threshold):
+            feed_images = self._fetch_nsfw_images(metadata.get("id"), force_refresh)
+            if feed_images:
+                metadata["images"] = feed_images
+                info["source"] = SOURCE_FEED
+            elif feed_images is None:
+                info["degraded"] = True
+        metadata[IMAGES_INFO] = info
         return metadata
 
     def _fetch_nsfw_images(
@@ -177,9 +212,10 @@ class MetadataManager:
         # Get metadata path
         metadata_path = get_metadata_path(file_path, self.config)
 
-        # Consume the transient dirty marker (set by the version enricher when it
-        # refreshes siblingVersions). Pop it so it is never serialized to disk.
-        dirty = metadata.pop("_civitscraper_dirty", False)
+        # Consume the transient markers (dirty: set by the version enricher and the
+        # sidecar merge). Pop them so they are never serialized to disk.
+        dirty = metadata.pop(DIRTY_FLAG, False)
+        metadata.pop(IMAGES_INFO, None)
 
         # Check if metadata file exists and skip_existing is enabled. A dirty
         # (freshly enriched) metadata always writes, so version refreshes reach
