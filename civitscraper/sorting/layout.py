@@ -308,6 +308,28 @@ class Layout:
             self.folder_base[root] = mapping
             self.folder_stats[root] = stats
 
+        # A small folder still stands for its base model when all its labelled
+        # files agree and it carries that base's name (the name a sort run gives
+        # a new folder: the base model's, or the one it has in another root).
+        for root in self.roots:
+            mapping = self.folder_base[root]
+            for folder, (base, count, total) in self.folder_stats[root].items():
+                if folder in mapping or count != total:
+                    continue
+                if normalize_name(folder) in self._names_for(base, root):
+                    mapping[folder] = base
+
+    def _names_for(self, base: str, root: Root) -> set:
+        """Return the normalized folder names standing for ``base`` (own or other roots')."""
+        names = {normalize_name(folder_name_for(base))}
+        for other in self.roots:
+            if other is root:
+                continue
+            for folder, mapped in self.folder_base.get(other, {}).items():
+                if mapped == base:
+                    names.add(normalize_name(folder))
+        return names
+
     # --- Queries --------------------------------------------------------------
 
     def folder_for(self, root: Root, base: str) -> Optional[str]:
@@ -473,6 +495,10 @@ class Layout:
         if verdict.status == UNKNOWN:
             state = STATE_UNKNOWN
         option = self.option("move", verdict.path, root, family, base, bundled)
+        if option is not None and os.path.normcase(option.target) == os.path.normcase(
+            os.path.abspath(verdict.path)
+        ):
+            return suggestion  # already where it would go
         if option is None:
             suggestion.state = state
             suggestion.reason = f"no {FAMILY_NAMES.get(family, family)} folder configured"

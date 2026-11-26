@@ -164,3 +164,23 @@ def test_generic_override_does_not_sort_a_flat_root(library):
     assert analysis.layout.folder_base[unet] == {"alpha": "Alpha"}
     vae = next(r for r in analysis.roots if r.path_id == "vae")
     assert analysis.layout.folder_base[vae] == {}
+
+
+def test_new_folder_from_a_sort_run_counts_as_the_base_folder(library):
+    config, models = library
+    p = write_safetensors(models / "Lora" / "Gamma" / "concept" / "g.safetensors", beta_lora(5))
+    sidecar(p, "Gamma", version_id=991)
+    p2 = write_safetensors(models / "unet" / "Beta" / "b.safetensors", checkpoint(3072))
+    sidecar(p2, "Beta", "Checkpoint", version_id=990)
+    result = by_name(analyze(config, PATHS))
+    assert result["g.safetensors"].state == OK  # one file, named after its base
+    assert result["b.safetensors"].state == OK  # named like Lora/Beta
+
+
+def test_single_file_folder_with_another_name_is_still_unsorted(library):
+    config, models = library
+    p = write_safetensors(models / "Lora" / "Misc" / "g.safetensors", beta_lora(5))
+    sidecar(p, "Gamma", version_id=991)
+    s = by_name(analyze(config, PATHS))["g.safetensors"]
+    assert s.state == UNSORTED
+    assert s.options[0].target == str(models / "Lora" / "Gamma" / "g.safetensors")
