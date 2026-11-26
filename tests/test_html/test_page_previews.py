@@ -68,3 +68,48 @@ def test_feed_images_keep_their_level(tmp_path):
     assert image["nsfwLevel"] == 16 and image["type"] == "video" and image["nsfw"] is True
     api.get_images.side_effect = RuntimeError("down")
     assert manager._fetch_nsfw_images(5, False) is None
+
+
+def _card_setup(tmp_path, images, removed=None):
+    import json
+
+    config, models, model = _config(tmp_path)
+    meta = {"id": 1, "modelId": 2, "name": "v1", "model": {"name": "Foo", "type": "LORA"},
+            "images": images}
+    if removed:
+        meta["civitscraper"] = {"removed": removed}
+    (models / "foo.json").write_text(json.dumps(meta))
+    return config, models, model, meta
+
+
+def test_gallery_cover_skips_archived_previews(tmp_path):
+    from civitscraper.html.context import ContextBuilder
+
+    config, models, model, _ = _card_setup(
+        tmp_path, [_img(1), _img(2), _img(3, civitscraperArchived=True)])
+    (models / "foo.preview3.jpeg").write_bytes(b"x")  # archived
+    (models / "foo.preview2.jpeg").write_bytes(b"x")  # current (preview1 failed)
+    card = ContextBuilder(config)._process_gallery_model(model)
+    assert card["preview_image_path"].endswith("foo.preview2.jpeg")
+
+
+def test_removed_model_gets_health_flag_and_page_notice(tmp_path):
+    from civitscraper.html.context import ContextBuilder
+    from civitscraper.html.renderer import TemplateRenderer
+
+    config, models, model, meta = _card_setup(
+        tmp_path, [_img(1), _img(2, civitscraperArchived=True)],
+        removed={"what": "model", "at": 1767225600})
+    (models / "foo.preview1.jpeg").write_bytes(b"x")
+    (models / "foo.preview2.jpeg").write_bytes(b"x")
+    builder = ContextBuilder(config)
+    (card,) = builder.merge_gallery_models([builder._process_gallery_model(model)])
+    assert "removed" in card["health"]
+    assert card["removed"] == {"what": "model", "date": "2026-01-01"}
+
+    context = builder.build_model_context(model, meta)
+    html = TemplateRenderer().render_model(context)
+    assert "Removed from CivitAI</strong> on 2026-01-01" in html
+    assert "(may be gone)" in html
+    assert html.count("No longer on CivitAI</span>") == 1
+    assert 'class="m-shot mount is-archived"' in html
