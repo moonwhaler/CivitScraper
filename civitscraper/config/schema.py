@@ -100,6 +100,14 @@ _ORGANIZATION = {
     "create_symlinks": LEAF,
 }
 
+_SORTING = {
+    "base_folders": FREE,
+    "decisions_file": LEAF,
+    "regenerate_job": LEAF,
+    "gallery_flag": LEAF,
+    "krita": {"enabled": LEAF, "loras_file": LEAF, "styles_dir": LEAF},
+}
+
 # Sections a job may override (merged over the global configuration)
 _OVERRIDABLE: Dict[str, Any] = {
     "api": _API,
@@ -107,7 +115,11 @@ _OVERRIDABLE: Dict[str, Any] = {
     "logging": _LOGGING,
     "output": _OUTPUT,
     "organization": _ORGANIZATION,
+    "sorting": _SORTING,
     "dry_run": LEAF,
+    # Set from the command line (--yes, --undo) for the sort-models job
+    "yes": LEAF,
+    "undo": LEAF,
 }
 
 _JOB: Dict[str, Any] = {
@@ -129,6 +141,8 @@ SCHEMA: Dict[str, Any] = {
     "default_job": LEAF,
     "jobs": {MAP: _JOB},
     "defaults": {"organization": {"operation_mode": LEAF, "on_collision": LEAF}},
+    # Directory of the loaded config file (set by the loader)
+    "_config_dir": LEAF,
     **_OVERRIDABLE,
 }
 

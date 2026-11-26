@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 from ..api.client import CivitAIClient
 from ..config.loader import merge_configs
 from ..scanner.discovery import find_metadata_file, has_metadata, load_cached_metadata
+from ..sorting.job import SortJob
 from .lora_sync import LoraTriggerSync
 from .scan_job import ScanJob
 
@@ -54,6 +55,8 @@ class JobExecutor:
 
         if job_type == "scan-paths":
             return ScanJob(self.config, job_name, job_config, self.api_client).run()
+        elif job_type == "sort-models":
+            return SortJob(self.config, job_name, job_config, run_job=self.execute_job).run()
         elif job_type == "sync-lora-triggers":
             # Offline job: needs no API client.
             return LoraTriggerSync(self.config, job_name, job_config).run()
