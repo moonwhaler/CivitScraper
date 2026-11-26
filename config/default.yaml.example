@@ -249,6 +249,14 @@ jobs:
     description: "Move models into their base model's folder"
     paths: ["lora", "checkpoints", "embeddings", "vae", "text_encoder"]
 
+  # Download newer versions of your models (see CONFIGURATION.md). Keep it last:
+  # it runs the fetch and trigger-sync jobs itself after downloading.
+  #   civitscraper -j updates --dry-run | (walk-through) | --yes | --undo
+  updates:
+    type: download-updates
+    description: "Download newer versions of your models"
+    paths: ["lora", "checkpoints"]
+
 # =============================================================================
 # Sorting (sort-models job and the gallery's "misplaced" flag)
 # =============================================================================
@@ -261,6 +269,21 @@ sorting:
   #   "Flux.1 D": { lora: Flux, checkpoint: flux1-dev }
   krita:
     enabled: true                   # Update Krita's LoRA paths after moves (backup first)
+
+# =============================================================================
+# Update downloads (download-updates job)
+# =============================================================================
+updates:
+  auto_max_size_mb: 2048            # --yes downloads free updates up to this size
+  min_free_gb: 5                    # keep this much disk space free
+  decisions_file: update-decisions.json  # Your answers (relative to this file)
+  # base_models:                   # Versions for other base models are offered for the bases
+  #   add: ["Qwen 2.1"]             # you use (learned from your folders); add or skip some
+  #   skip: ["ZImageTurbo"]
+  # archive_dir: "~/model-archive" # Archived old versions (default: _archive next to the
+  #                                 # model folders). Same drive, outside the scanned folders
+  krita:
+    enabled: true                   # Point Krita at the new LoRA when the old one goes
 
 # =============================================================================
 # Scanner Settings

@@ -11,7 +11,8 @@ Tired of digging through messy folders to find your AI models? **CivitScraper** 
 *   **Downloads Previews:** Grabs preview images so you can see what the model does.
 *   **Organizes Files (Optional):** Arranges your models, info files, and images into a clean folder structure.
 *   **Sorts Misfiled Models:** Finds models that sit in the wrong base model folder (a Flux LoRA among your SDXL ones, a checkpoint in the LoRA folder) by checking what the file really is, and moves them with everything that belongs to them, after asking you.
-*   **Creates Visual Previews:** Generates HTML pages for each model and a main gallery page to easily browse your collection (light and dark theme, cards, image wall or table): search by name, trigger word, tag or creator, peek at a model without leaving the gallery, copy trigger words and file paths with one click, copy a preview's prompt and settings straight into Forge, and spot available updates, missing previews, duplicates and files CivitAI doesn't know.
+*   **Downloads Updates:** Offers the newer versions of your models, and versions for other base models you use (a "Chair" LoRA you have for MOSS, now also for Krea 2), picks the file that matches yours, downloads it with your API key (NSFW too), verifies it, and archives or trashes the old version if you want, after asking you.
+*   **Creates Visual Previews:** Generates HTML pages for each model and a main gallery page to easily browse your collection (light and dark theme, cards, image wall or table, grouped by type, base model and folder to drill down into): search by name, trigger word, tag or creator, peek at a model without leaving the gallery, copy trigger words and file paths with one click, copy a preview's prompt and settings straight into Forge, and spot available updates, missing previews, duplicates and files CivitAI doesn't know.
 
 ### Screenshots
 
@@ -36,6 +37,10 @@ All screenshots show a demo catalogue with made-up models and generated preview 
 **Sorting:** models in the wrong folder are flagged in the gallery, with the folder they belong in.
 
 ![Gallery filtered to models in the wrong folder, with the quick look showing where one belongs](docs/screenshots/gallery_misplaced.jpg)
+
+**Grouped:** drill down by type, base model and your folders; each tile shows its previews, size and health.
+
+![Gallery grouped by base model inside the LoRA type, with a preview mosaic per group](docs/screenshots/gallery_grouped.jpg)
 
 **On a phone:**
 
@@ -285,6 +290,11 @@ civitscraper -j sort --dry-run   # report only
 civitscraper -j sort             # walk through each suggestion
 civitscraper -j sort --undo      # move the last run's models back
 
+# Download newer versions of your models (asks first; see below)
+civitscraper -j updates --dry-run   # report only
+civitscraper -j updates             # choose the downloads, then download
+civitscraper -j updates --undo      # revert the last run
+
 # Force CivitScraper to ignore cached API data and get fresh info
 civitscraper --force-refresh
 
@@ -328,6 +338,14 @@ civitscraper --config /path/to/your/custom_config.yaml
 *   **Solution:** The `sort-models` job checks what every file really is: its CivitAI data and the file's own structure (the tensor layout in its header, compared with your other models). It learns which folder holds which base model from where most of your files already are, and suggests moves for the rest: `Lora/SDXL/style/x` to `Lora/Flux/style/x`, keeping your category folders. You review each one in the terminal; the model moves with its info file, page and previews, Krita's LoRA references are updated, and the pages and gallery are rebuilt.
 *   **Safety:** Nothing is overwritten or deleted, every run can be undone with `--undo`, and `--dry-run` only reports. `--yes` moves only the obvious cases.
 *   **Details:** [Sorting Models in CONFIGURATION.md](CONFIGURATION.md#sorting-models-into-the-right-folders).
+
+### Downloading Updates
+
+*   **Problem:** The gallery shows *Update available*, but downloading each new version by hand, finding the right file, and cleaning up the old one takes a while.
+*   **Solution:** The `download-updates` job lists every model with a newer version on the same base model, with the version's notes, trigger words, size and links. You choose in the terminal, then it downloads everything in one go: the same variant as your file (fp16, pruned, GGUF quantization), into the same folder, checked against CivitAI's hash. Afterwards it fetches the new pages and, if you chose, archives or trashes the old version and points Krita at the new LoRA.
+*   **Needs:** your CivitAI API key (`api.key`), which also works for NSFW models. Early access and paid versions are listed and offered once they are free.
+*   **Safety:** Nothing is overwritten, the old version is only touched after the new one is verified, interrupted downloads resume, and `--undo` reverts the last run.
+*   **Details:** [Downloading Updates in CONFIGURATION.md](CONFIGURATION.md#downloading-updates).
 
 ### Understanding the Metadata (`.json` Files)
 

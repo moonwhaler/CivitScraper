@@ -11,6 +11,7 @@ At start-up CivitScraper warns about keys it does not know, since those are igno
 - [Advanced Organization Settings](#advanced-organization-settings)
 - [Keeping Models Up to Date](#keeping-models-up-to-date)
 - [Sorting Models into the Right Folders](#sorting-models-into-the-right-folders)
+- [Downloading Updates](#downloading-updates)
 - [Scanner Settings (Caching)](#scanner-settings-caching)
 - [Logging Configuration](#logging-configuration)
 - [Batch Processing Details](#batch-processing-details)
@@ -116,6 +117,8 @@ output:
 ### Gallery Features
 
 -   **Views**: *Cards*, *Wall* (dense image wall) and *Table* (sortable columns). A slider sets the card size.
+-   **One card per model and base model.** A CivitAI model with versions for several base models (a "Chair" LoRA for MOSS and for Krea 2) gets one card per base model you have. Each card lists the others under *Also for* in the quick look, together with versions on CivitAI for base models you use (learned from your folders, see [Downloading Updates](#downloading-updates)).
+-   **Group** (the folder button next to the views): drill down by *type* › *base model* › *your folders* below the base folder (`LORA › Krea 2 › style › anime`). Each group is a tile with up to four previews, the number of models, their size on disk, the newest addition and its health counts. Click a tile to open it; the path above the tiles (and the browser's Back button, or `Backspace`) goes back up. A level with only one group is skipped. Searching shows matching models from every group, each with its group path; clearing the search returns to where you were. Filters narrow the groups and their counts. The choice is remembered, and works with every view.
 -   **Search** matches model name, trigger words, tags, creator, type, base model, folder, version and the description. Words are combined (`anime style` finds models matching both); `"blue hair"` matches the exact phrase. Press `/` to search.
 -   **Filters** by health, model type, base model, folder and creator. Within one filter any selected value matches; across filters all must match.
 -   **Quick look**: press `Space` on a card (or click its eye button) for a side panel with every trigger word, the file path, versions, duplicates, tags and the description. `←`/`→` step through the results. Click a tag to search for it.
@@ -124,6 +127,7 @@ output:
     -   *Update available*: CivitAI has a version newer than every local version on the same base model. A new SDXL release does not flag a model you only keep for SD 1.5.
     -   *No preview*: no preview image was found.
     -   *Duplicate*: the same CivitAI version is stored at two or more locations. Organized copies and symlinks (copy/symlink mode) are not counted.
+    -   *Also for other bases*: not a problem, a filter: CivitAI has versions of the model for base models you use that you do not have yet.
     -   *Removed from CivitAI*: CivitAI no longer lists the version (or the whole model). The card and page show the last data fetched; nothing local is deleted. See [Keeping Models Up to Date](#keeping-models-up-to-date).
     -   *Not on CivitAI*: scanned files that have no sidecar because CivitAI answered "not found" for their hash. Other files without a sidecar (never looked up, or the lookup failed) are listed as *No metadata yet*. Both are in the collapsible panel above the results.
 -   **Blur NSFW** blurs previews of models above `api.nsfw.level_threshold` until you hover them. The setting is remembered.
@@ -338,6 +342,89 @@ Base models built on the same architecture (Pony, Illustrious and SDXL, for exam
 **Krita.** Krita AI Diffusion refers to LoRAs by their path inside the LoRA folder (`SDXL/style/x.safetensors`). After moving LoRAs, the sorter replaces exactly those paths in Krita's `loras.json` and in the LoRA lists of its styles; nothing else in those files changes, and a timestamped backup is written first. If Krita is running you are asked first (with `--yes`, the update is skipped). `--undo` changes the paths back.
 
 **In the gallery,** `scan-paths` jobs flag misplaced models (*In the wrong folder*), with the suggested folder in the quick look, and the job summary reports how many there are. Set `sorting.gallery_flag: false` to turn this off.
+
+## Downloading Updates
+
+The `download-updates` job offers the newer versions the gallery flags as *Update available* and downloads the ones you pick, next to the version you have:
+
+```yaml
+jobs:
+  # Put it last: it runs the fetch and trigger-sync jobs itself after downloading.
+  updates:
+    type: download-updates
+    paths: ["lora", "unet", "checkpoints"]
+
+updates:                         # all optional
+  auto_max_size_mb: 2048         # --yes downloads free updates up to this size
+  min_free_gb: 5                 # keep this much disk space free
+  archive_dir: "~/model-archive"  # where archived old versions go (default: <models>/_archive)
+  decisions_file: update-decisions.json   # your answers; relative to the config file
+  # after_jobs: [fetch-all, sync-triggers]   # default: the first scan-paths job that
+  #                                          # calls CivitAI, plus every sync-lora-triggers job
+  krita:
+    enabled: true                # point Krita's references at the new LoRA (paths: sorting.krita)
+```
+
+```bash
+civitscraper -j updates --dry-run   # report only
+civitscraper -j updates             # choose in the terminal, then download
+civitscraper -j updates --yes       # only small free updates, old versions kept
+civitscraper -j updates --undo      # revert the last run
+```
+
+**The API key is required.** CivitAI only lets logged-in users download, SFW models included. The `api.key` (or `CIVITAI_API_KEY`) is all it takes, for NSFW models (civitai.red) too; no browser login is needed. The key is only sent to the CivitAI API, never to the storage server the download is redirected to. Without a key the job only reports.
+
+**What counts as an update** is the gallery's rule: a version newer than every version you have *on the same base model*. A new SDXL version is never offered for your SD 1.5 copy. When there are several newer versions, the newest is offered and `[v]` lists the others.
+
+**Which file.** A version can offer several files (fp16 and fp32, full and pruned, GGUF quantizations). The one most like yours is chosen: same format, same quantization, same precision. It must have an extension its folder is scanned for. `[f]` picks another one. The file keeps CivitAI's name and goes into the folder of the version you have, so your folder layout stays as it is. If that name is taken, `<name>_v<version id>` is used; nothing is ever overwritten.
+
+**The walk-through** asks all questions first and then downloads one file at a time, so you can walk away while it runs:
+
+```
+[2/7] Lora/Flux/style/ember_glow_v1.safetensors   (LORA · Flux.1 D)
+  You have  v1.0 · 2026-03-02
+  New       v2.0 · 2026-10-14 · 144.0 MB · SafeTensor fp16   (1 more newer version(s): [v])
+  Notes     Retrained on 400 images, better hands
+  Triggers  ember glow, warm light  (was: ember glow)
+  Links     https://civitai.com/models/...  https://civitai.red/models/...
+  Save as   Lora/Flux/style/ember_glow_v2.safetensors
+  [y] download  [n] not this version  [i] ignore this model  [v] other version  [f] other file  [s] skip  [q] quit
+  Old version after download: [k] keep  [a] archive  [t] trash  (default k)
+```
+
+-   `n` remembers "not this version", including the older ones in between; a later version is offered again. `i` never offers updates for the model again. Both also hide the gallery's update flag. `s` skips for this run only.
+-   **Old version.** `keep` (the default) leaves it in place. `archive` moves it, with its sidecar, page and previews, to `<archive_dir>/<folder>/<same subfolders>` (e.g. `_archive/Lora/Flux/style/`). `updates.archive_dir` takes `~`, `$VARS` and paths relative to the config file, and a job can set its own; the default is `_archive` next to your model folders. It must be outside every scanned folder and on the same drive (archiving moves, it never copies); otherwise the job says so up front and does not offer `archive`. `trash` moves it to the desktop Trash (Linux), where you can restore it from your file manager. The old version is only touched once the new file is downloaded, verified and has its CivitAI data.
+-   **Early access and paid versions** cannot be downloaded with an API key. They are listed with their links and the end date, and offered as soon as they are free.
+
+**Downloads.**
+
+-   Each download is checked against CivitAI's SHA256 before it is put in place; a file that does not match is discarded.
+-   An interrupted download (network, Ctrl-C) is kept as `<file>.part` and resumed on the next run. If you choose not to resume, you are asked whether to delete the partial file.
+-   Before each file, the free disk space is checked.
+
+**Afterwards** the job runs the fetch job for the new files (sidecar, previews, page, gallery; the file is not hashed again) and the trigger sync. Then it archives or trashes the old versions you chose, and rebuilds the pages. Without a terminal and without `--yes` it only reports, so it can run every time as part of `--all-jobs`.
+
+**Versions for other base models.** CivitAI authors often put variants for several base models into one model (a "Chair" LoRA for MOSS Image, Krea 2 and Pony). After the updates, the walk-through offers these too, but only for base models you use: a base counts when one of your LoRA or checkpoint folders holds it (learned like the sort job does, from where most of your files are), plus `updates.base_models`:
+
+```yaml
+updates:
+  base_models:              # optional
+    add: ["Qwen 2.1"]       # offer these too, even without a folder yet
+    skip: ["ZImageTurbo"]   # never offer versions for these
+  # base_models: ["Qwen 2.1"]   # a plain list means "add"
+```
+
+-   The newest version on each such base is offered, even if it is older than yours: it is a different model, not an update. `[v]` lists the others on that base.
+-   It is saved in that base's folder, with your category folders kept (`Lora/MOSS/style/chair` → `Lora/krea2/style/`). A folder that does not exist yet, or another model folder, is marked on the card, and `[o]` picks another folder.
+-   The version you have is always kept. `--yes` never downloads versions for other bases.
+-   `n` hides that version (and older ones on that base) until a newer one appears; `[b]` never offers this model for that base again; `[x]` skips all the remaining ones for this run.
+-   Some models mix types, e.g. a full checkpoint uploaded as a version of a LoRA. A file far bigger (or smaller) than its type suggests is marked on the card and proposed for the checkpoint (or LoRA) folder. After the download the file's header is checked like the sort job does; if it is another type than its folder, you are asked whether to move it there.
+
+**Re-uploads.** A "newer" version whose file has the same SHA256 as a file you already have (the same file uploaded twice) is not offered, and it no longer flags an update. The next version is offered instead.
+
+**Krita.** When an old LoRA is archived or trashed, Krita's LoRA entry moves to the new file and keeps its strength and other settings; the trigger words become the new version's. Styles that used the old LoRA use the new one, with the same strength. A timestamped backup is written first, and `--undo` reverts it. A kept LoRA is left alone; Krita adds the new one itself, and the trigger sync fills in its trigger words once Krita lists it.
+
+**Undo.** Every run is journaled in `<cache_dir>/update-journal/`. `--undo` moves the downloaded files (and the pages made for them) to the Trash, brings archived and trashed old versions back, and restores Krita's references. With `--all-jobs --undo`, the sort and the update job each undo their last run.
 
 ## Scanner Settings (Caching)
 
