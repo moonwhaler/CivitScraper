@@ -98,6 +98,15 @@ class HashCache:
         if due:
             self.save()
 
+    def rekey(self, old_path: str, new_path: str) -> None:
+        """Move a renamed file's cached hashes (every algorithm) to its new path."""
+        old_suffix = os.path.normcase(os.path.abspath(old_path))
+        with self._lock:
+            for key in [k for k in self._entries if k.split(":", 1)[-1] == old_suffix]:
+                algorithm = key.split(":", 1)[0]
+                self._entries[self._key(new_path, algorithm)] = self._entries.pop(key)
+                self._unsaved += 1
+
     def save(self) -> None:
         """Persist the cache (atomic write); no-op when nothing changed."""
         with self._lock:

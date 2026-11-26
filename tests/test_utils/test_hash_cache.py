@@ -80,3 +80,22 @@ def test_cache_file_is_outside_api_cache_prune_glob(tmp_path):
     cache = HashCache(str(tmp_path))
     assert os.path.dirname(cache.path) != str(tmp_path)
     assert not list(tmp_path.glob("*.json"))
+
+
+def test_rekey_moves_every_algorithm(tmp_path):
+    from civitscraper.utils.hash_cache import HashCache
+
+    model = tmp_path / "a.safetensors"
+    model.write_bytes(b"x")
+    cache = HashCache(str(tmp_path / "cache"))
+    st = os.stat(model)
+    cache.put(str(model), "sha256", st, "s")
+    cache.put(str(model), "blake3", st, "b")
+    moved = tmp_path / "b.safetensors"
+    os.rename(model, moved)
+    cache.rekey(str(model), str(moved))
+    cache.save()
+    reloaded = HashCache(str(tmp_path / "cache"))
+    assert reloaded.get(str(moved), "sha256", os.stat(moved)) == "s"
+    assert reloaded.get(str(moved), "blake3", os.stat(moved)) == "b"
+    assert reloaded.get(str(model), "sha256", os.stat(moved)) is None

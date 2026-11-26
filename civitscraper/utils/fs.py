@@ -8,6 +8,7 @@ runs would mistake for a complete file. A hard kill can still leave a hidden
 ``.<name>.<random>.part`` file behind; it is never picked up as a preview or sidecar.
 """
 
+import errno
 import logging
 import os
 import stat
@@ -96,4 +97,47 @@ def atomic_write(path: str, content: Content, encoding: str = "utf-8") -> None:
             os.remove(tmp_path)
         except OSError:
             pass
+        raise
+
+
+# link() is unsupported here (FAT/exFAT, some network shares): fall back to rename.
+_NO_LINK_ERRNOS = {
+    getattr(errno, name)
+    for name in ("EPERM", "EOPNOTSUPP", "ENOTSUP", "EMLINK", "ENOSYS")
+    if hasattr(errno, name)
+}
+
+
+def move_no_clobber(source: str, target: str) -> None:
+    """
+    Move a file to ``target``, never replacing an existing file.
+
+    POSIX ``rename`` silently replaces the target, so on POSIX the file is hard-linked
+    to its new name first (``link`` fails atomically with EEXIST when the name is
+    taken) and the old name is then unlinked. Windows ``rename`` already refuses an
+    existing target. A symlink is moved as a link, not followed.
+
+    Raises:
+        FileExistsError: ``target`` exists; nothing changed
+        OSError: e.g. EXDEV when ``target`` is on another filesystem; nothing changed
+    """
+    if os.name == "nt":
+        os.rename(source, target)
+        return
+    try:
+        os.link(source, target, follow_symlinks=False)
+    except FileExistsError:
+        raise
+    except OSError as e:
+        if e.errno not in _NO_LINK_ERRNOS:
+            raise
+        if os.path.lexists(target):
+            raise FileExistsError(errno.EEXIST, "File exists", target) from e
+        os.rename(source, target)
+        return
+    try:
+        os.unlink(source)
+    except OSError:
+        # Both names point at the same data: dropping the new one loses nothing.
+        os.unlink(target)
         raise
