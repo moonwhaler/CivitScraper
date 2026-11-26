@@ -168,6 +168,33 @@
     background: color-mix(in srgb, var(--mount) 80%, transparent);
     border-color: transparent;
 }
+.m-shot-flag {
+    position: absolute;
+    left: 13px;
+    top: 13px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--mount) 86%, transparent);
+    color: var(--ink-2);
+    font: 600 10px/1.6 var(--mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    pointer-events: none;
+}
+.m-shot.is-archived .mount-window { opacity: 0.82; }
+.m-notice {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin: 10px 0 4px;
+    padding: 9px 12px;
+    border-radius: var(--r-control);
+    background: var(--warn-soft);
+    color: var(--ink);
+    font-size: var(--fs-13);
+    line-height: 1.5;
+}
+.m-notice .icon { flex: none; margin-top: 2px; color: var(--warn); }
 .m-shot-caption { display: flex; align-items: flex-start; gap: 4px; padding: 8px 2px 2px 6px; }
 .m-shot-prompt {
     flex: 1;

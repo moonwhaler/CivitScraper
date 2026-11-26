@@ -204,10 +204,10 @@ class RequestHandler:
                 logger.debug(f"Cache hit for {url}")
                 return str(cached_response)
 
-        self.rate_limiter.acquire()
-
         retries = 0
         while retries <= self.max_retries:
+            # Every attempt, retries included, counts against the rate limit.
+            self.rate_limiter.acquire()
             try:
                 response = self.session.request(
                     method=method,

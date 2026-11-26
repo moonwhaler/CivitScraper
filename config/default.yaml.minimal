@@ -85,6 +85,7 @@ scanner:
   cache_dir: ".civitscraper_cache"  # Where to store cache files
   cache_validity: 86400            # [seconds] Cache lifetime (24 hours)
   force_refresh: false             # [true/false] Ignore cache and force refresh
+  refresh_after_days: 14           # Refresh a known model's data after this many days (0: never)
 
 # =============================================================================
 # Logging Configuration

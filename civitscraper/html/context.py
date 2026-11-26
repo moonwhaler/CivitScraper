@@ -20,6 +20,7 @@ from ..organization.organizer import (
     original_dir_for,
 )
 from ..scanner.discovery import PREVIEW_EXTENSIONS, get_metadata_path, list_preview_files
+from ..scanner.sidecar import removed_info
 from .images import ImageHandler
 from .paths import DEFAULT_GALLERY_PATH, PathManager, relative_to
 from .sanitizer import description_excerpt, sanitize_description
@@ -33,6 +34,7 @@ MAX_CARD_TRIGGER_CHARS = 300
 HEALTH_UPDATE = "update"
 HEALTH_NO_PREVIEW = "no_preview"
 HEALTH_DUPLICATE = "duplicate"
+HEALTH_REMOVED = "removed"
 
 
 def clean_trigger_words(trained_words: Any) -> List[str]:
@@ -312,6 +314,17 @@ def model_file_extensions(config: Dict[str, Any]) -> List[str]:
     return extensions
 
 
+def _removed_for_page(removed: Optional[Dict[str, Any]]) -> Optional[Dict[str, str]]:
+    """Return the removed-from-CivitAI record as pages show it (what, date), or None."""
+    if not removed:
+        return None
+    at = removed.get("at")
+    date = ""
+    if isinstance(at, (int, float)):
+        date = datetime.fromtimestamp(at, tz=timezone.utc).strftime("%Y-%m-%d")
+    return {"what": str(removed.get("what") or "version"), "date": date}
+
+
 class ContextBuilder:
     """Builder for template context."""
 
@@ -391,6 +404,7 @@ class ContextBuilder:
 
         files = filtered_metadata.get("files") or []
         hashes = (files[0].get("hashes") or {}) if files else {}
+        removed = removed_info(metadata)
 
         context = {
             "title": model_name,
@@ -412,6 +426,8 @@ class ContextBuilder:
             "sibling_versions": sibling_versions,
             "parent_model": metadata.get("parentModel", {}),
             "gallery_path": gallery_path,
+            # CivitAI answered 404: {"what": "version" | "model", "date": "YYYY-MM-DD"}
+            "removed": _removed_for_page(removed),
             "model_url": build_model_url(
                 parent_model_id, metadata.get("id"), model_nsfw, self.domains
             ),
@@ -535,6 +551,7 @@ class ContextBuilder:
             "tags": [str(t) for t in tags if t][:MAX_CARD_TAGS],
             "trigger_words": card_trigger_words(metadata.get("trainedWords")),
             "file_path": os.path.abspath(model_file) if model_file else None,
+            "removed": _removed_for_page(removed_info(metadata)),
             # Raw sibling versions for gallery merging (local + remote linking)
             "sibling_versions": metadata.get("siblingVersions", []),
         }
@@ -661,6 +678,14 @@ class ContextBuilder:
                 health.append(HEALTH_UPDATE)
             if not merged_card.get("preview_image_path"):
                 health.append(HEALTH_NO_PREVIEW)
+            # The card's version is gone from CivitAI, or the whole model is
+            removed = representative.get("removed") or next(
+                (m["removed"] for m in members if (m.get("removed") or {}).get("what") == "model"),
+                None,
+            )
+            merged_card["removed"] = removed
+            if removed:
+                health.append(HEALTH_REMOVED)
             if duplicates:
                 health.append(HEALTH_DUPLICATE)
             merged_card["health"] = health
@@ -856,12 +881,14 @@ class ContextBuilder:
             organized_path = self._find_organized_version(file_path)
             if organized_path:
                 organized_preview = self._try_standard_preview_path(
-                    organized_path, output_dir, is_html_file
+                    organized_path, output_dir, is_html_file, metadata.get("images")
                 )
                 if organized_preview is not None:
                     return organized_preview
 
-        preview_path = self._try_standard_preview_path(file_path, output_dir, is_html_file)
+        preview_path = self._try_standard_preview_path(
+            file_path, output_dir, is_html_file, metadata.get("images")
+        )
         if preview_path is not None:
             return preview_path
 
@@ -913,7 +940,11 @@ class ContextBuilder:
         return os.path.dirname(os.path.abspath(get_metadata_path(file_path, self.config)))
 
     def _try_standard_preview_path(
-        self, file_path: str, output_dir: str, is_html_file: bool
+        self,
+        file_path: str,
+        output_dir: str,
+        is_html_file: bool,
+        images: Optional[List[Any]] = None,
     ) -> PreviewImageResult:
         """Return the lowest-numbered downloaded preview for a model file or model card."""
         if is_html_file:
@@ -941,7 +972,13 @@ class ContextBuilder:
         if not previews:
             return None
 
-        path, _, is_video = previews[0]
+        # The cover is the first preview still on CivitAI; archived ones only when
+        # there is nothing else.
+        def archived(index: int) -> bool:
+            entry = images[index - 1] if images and 0 < index <= len(images) else None
+            return isinstance(entry, dict) and bool(entry.get("civitscraperArchived"))
+
+        path, _, is_video = next((p for p in previews if not archived(p[1])), previews[0])
         result: PreviewImageDict = {"path": os.path.abspath(path), "is_video": is_video}
         return result
 

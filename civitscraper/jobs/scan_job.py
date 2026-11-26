@@ -1,32 +1,45 @@
 """
 scan-paths job for CivitScraper.
 
-Finds model files, looks them up on CivitAI by hash, enriches them with their
-sibling versions, optionally organizes them, and writes sidecars, previews,
+Finds model files, looks new ones up on CivitAI by hash and refreshes known ones
+once their data is older than ``scanner.refresh_after_days``, enriches them with
+their sibling versions, optionally organizes them, and writes sidecars, previews,
 detail pages and the gallery.
+
+Nothing local is ever deleted: a model or version CivitAI no longer knows keeps its
+sidecar, previews and page and is flagged as removed.
 """
 
 import concurrent.futures
 import logging
 import os
 import threading
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..api.client import CivitAIClient
+from ..api.exceptions import ClientError
 from ..config.loader import merge_configs
 from ..html.gallery_data import UNMATCHED_NO_METADATA, UNMATCHED_NOT_ON_CIVITAI
 from ..html.generator import HTMLGenerator
 from ..html.paths import DEFAULT_GALLERY_PATH
 from ..organization import FileOrganizer, OrganizationConfig
 from ..organization.organizer import is_in_organized_output
-from ..scanner.discovery import (
-    filter_files,
-    find_model_files,
-    get_metadata_path,
-    has_metadata,
-    load_cached_metadata,
-)
+from ..scanner.discovery import find_model_files, get_metadata_path
 from ..scanner.processor import ModelProcessor
+from ..scanner.sidecar import (
+    bookkeeping,
+    has_civitai_metadata,
+    images_source,
+    last_checked,
+    load_sidecar,
+    mark_checked,
+    mark_removed,
+    merge_refreshed,
+)
+
+DEFAULT_REFRESH_AFTER_DAYS = 14
+DEFAULT_REFRESH_MAX_PER_RUN = 100
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +76,21 @@ class ScanJob:
         self.items_to_process: List[Tuple[str, Dict[str, Any]]] = []
         self.results: List[Tuple[str, Optional[Dict[str, Any]]]] = []
         self.mirror_mode = False
+        # Sidecar of each scanned file before this run (None: no CivitAI data)
+        self.previous: Dict[str, Optional[Dict[str, Any]]] = {}
+        # Sidecars without CivitAI data (Forge's own); their keys survive a lookup
+        self.previous_foreign: Dict[str, Dict[str, Any]] = {}
+        # Known models whose data is due for a refresh (looked up by version id)
+        self.refresh_files: List[str] = []
+        # Files with fresh CivitAI images this run, and where they came from
+        self.fresh_source: Dict[str, str] = {}
+        # Files whose sidecar changed: their pages are regenerated
+        self.updated: set = set()
         self.summary = {
+            "new": 0,
+            "refreshed": 0,
+            "checked": 0,
+            "removed": 0,
             "not_found": 0,
             "not_found_cached": 0,
             "unreadable": 0,
@@ -180,12 +207,28 @@ class ScanJob:
         self.files = files
 
         logger.info(f"Found {len(files)} files, filtering...")
+        # Sidecars Forge writes on its own carry no CivitAI data: such a file is
+        # treated like one without a sidecar (looked up, Forge's keys kept).
+        sidecar_paths = {f: get_metadata_path(f, self.job_specific_config) for f in files}
+        for file_path in files:
+            sidecar = load_sidecar(sidecar_paths[file_path])
+            self.previous[file_path] = sidecar if has_civitai_metadata(sidecar) else None
+            if sidecar is not None and self.previous[file_path] is None:
+                self.previous_foreign[file_path] = sidecar
+        known = [f for f in files if self.previous[f] is not None]
+
         if self.use_cached_metadata:
-            # Only include files that HAVE existing metadata
-            self.filtered_files = [f for f in files if has_metadata(f, self.job_specific_config)]
+            self.filtered_files = known
             logger.info(f"Found {len(self.filtered_files)} files with cached metadata")
+        elif self.skip_existing:
+            self.filtered_files = [f for f in files if self.previous[f] is None]
+            self.refresh_files = self._due_for_refresh(known, sidecar_paths)
+            logger.info(
+                f"Filtered to {len(self.filtered_files)} new files, "
+                f"{len(self.refresh_files)} known files due for a refresh"
+            )
         else:
-            self.filtered_files = filter_files(files, self.skip_existing, self.job_specific_config)
+            self.filtered_files = list(files)
             logger.info(f"Filtered to {len(self.filtered_files)} files")
 
         # Job-specific generator and processor, so gallery_path and the other job
@@ -201,15 +244,42 @@ class ScanJob:
         self.force_refresh = force_refresh
         return True
 
+    def _due_for_refresh(self, known: List[str], sidecar_paths: Dict[str, str]) -> List[str]:
+        """
+        Known files whose CivitAI data is older than scanner.refresh_after_days.
+
+        Oldest answer first (checkedAt, so files CivitAI keeps answering 404 for do
+        not crowd out the rest), at most scanner.refresh_max_per_run per run.
+        """
+        scanner = self.job_specific_config.get("scanner", {})
+        days = float(scanner.get("refresh_after_days", DEFAULT_REFRESH_AFTER_DAYS) or 0)
+        limit = int(scanner.get("refresh_max_per_run", DEFAULT_REFRESH_MAX_PER_RUN) or 0)
+        if days <= 0 or limit <= 0:
+            return []
+        cutoff = time.time() - days * 86400
+        ages = []
+        for file_path in known:
+            checked = last_checked(self.previous[file_path] or {}, sidecar_paths[file_path])
+            if checked <= cutoff:
+                ages.append((checked, file_path))
+        ages.sort()
+        if len(ages) > limit:
+            logger.info(
+                f"{len(ages)} known files are due for a refresh; refreshing the "
+                f"{limit} oldest now (scanner.refresh_max_per_run), the rest on later runs"
+            )
+        return [f for _, f in ages[:limit]]
+
     # --- Phase 1: hash + look up ----------------------------------------------
 
     def fetch(self) -> None:
-        """Hash and look up the filtered files in parallel."""
-        filtered_files = self.filtered_files
+        """Look up new files by hash and refresh due ones by version id, in parallel."""
+        lookups = [(f, "hash") for f in self.filtered_files]
+        lookups += [(f, "refresh") for f in self.refresh_files]
         if self.use_cached_metadata:
-            logger.info(f"Loading metadata sidecars of {len(filtered_files)} files")
+            logger.info(f"Loading metadata sidecars of {len(lookups)} files")
         else:
-            logger.info(f"Fetching metadata for {len(filtered_files)} files")
+            logger.info(f"Fetching metadata for {len(lookups)} files")
         verb = "Loaded" if self.use_cached_metadata else "Looked up"
 
         # Hashing releases the GIL (hashlib), and API calls are additionally bounded
@@ -225,17 +295,24 @@ class ScanJob:
         api_slots = threading.BoundedSemaphore(
             max(1, int(batch_config.get("max_concurrent", 4))) if parallel else 1
         )
+        manager = self.processor.metadata_manager
 
-        def fetch_one(file_path: str) -> Tuple[str, Optional[Dict[str, Any]]]:
-            """Return (outcome, metadata) for one file."""
+        def look_up(file_path: str, how: str) -> Tuple[str, Optional[Dict[str, Any]]]:
+            """
+            Return (outcome, data) for one file.
+
+            Outcomes: "matched"/"refreshed" (fresh data), "cached" (sidecar as is),
+            "removed" (404 for a known model), "checked" (another definite answer
+            for a known model), or a summary counter for nothing to save.
+            """
+            known = self.previous.get(file_path)
             try:
                 if self.use_cached_metadata:
-                    metadata = load_cached_metadata(file_path, self.job_specific_config)
-                    if metadata:
-                        logger.debug(f"Loaded cached metadata for {file_path}")
-                        return "matched", metadata
-                    logger.warning(f"No cached metadata found for {file_path}")
-                    return "not_found", None
+                    return "cached", known
+                if how == "refresh" and known is not None:
+                    with api_slots:
+                        fresh = manager.refresh_version(int(known["id"]))
+                    return "refreshed", fresh
 
                 result = self.processor.file_processor.process(
                     file_path, verify_hash=self.verify_hashes
@@ -244,51 +321,70 @@ class ScanJob:
                     logger.warning(f"Failed to process file {file_path}: {result.error}")
                     return "unreadable", None
 
-                if not self.force_refresh and self.processor.metadata_manager.is_known_not_found(
-                    result.file_hash
-                ):
-                    return "not_found_cached", None
+                if not self.force_refresh and manager.is_known_not_found(result.file_hash):
+                    return ("removed" if known else "not_found_cached"), None
 
                 with api_slots:
-                    metadata = self.processor.metadata_manager.fetch_metadata(
+                    metadata = manager.fetch_metadata(
                         result.file_hash, force_refresh=self.force_refresh
                     )
                 if metadata:
                     logger.debug(f"Got metadata for {file_path}")
                     return "matched", metadata
+                if known:
+                    return "removed", None
                 logger.warning(f"No metadata found for {file_path}")
                 return "not_found", None
+            except ClientError as e:
+                if known and e.status_code == 404:
+                    return "removed", None
+                if known and e.status_code < 500 and e.status_code != 429:
+                    logger.warning(f"CivitAI answered {e.status_code} for {file_path}; kept")
+                    return "checked", None
+                logger.error(f"Error fetching metadata for {file_path}: {e}")
+                return "errors", None
             except Exception as e:
                 logger.error(f"Error fetching metadata for {file_path}: {e}")
                 logger.debug("Traceback:", exc_info=True)
                 return "errors", None
 
-        fetched: Dict[str, Dict[str, Any]] = {}
-        if workers > 1 and len(filtered_files) > 1:
+        outcomes: Dict[str, Tuple[str, Optional[Dict[str, Any]]]] = {}
+        if workers > 1 and len(lookups) > 1:
             if not self.use_cached_metadata:
                 logger.info(f"Hashing and looking up with {workers} workers")
             with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-                futures = {pool.submit(fetch_one, f): f for f in filtered_files}
+                futures = {pool.submit(look_up, f, how): f for f, how in lookups}
                 for done, future in enumerate(concurrent.futures.as_completed(futures), 1):
-                    outcome, metadata = future.result()
-                    if metadata is not None:
-                        fetched[futures[future]] = metadata
-                    else:
-                        self.summary[outcome] += 1
-                    if done % 100 == 0 or done == len(filtered_files):
-                        logger.info(f"{verb} {done}/{len(filtered_files)} files")
+                    outcomes[futures[future]] = future.result()
+                    if done % 100 == 0 or done == len(lookups):
+                        logger.info(f"{verb} {done}/{len(lookups)} files")
         else:
-            for file_path in filtered_files:
-                outcome, metadata = fetch_one(file_path)
-                if metadata is not None:
-                    fetched[file_path] = metadata
-                else:
-                    self.summary[outcome] += 1
+            for file_path, how in lookups:
+                outcomes[file_path] = look_up(file_path, how)
 
         # Keep discovery order so later phases behave deterministically.
-        for file_path in filtered_files:
-            if file_path in fetched:
-                self.metadata_dict[file_path] = fetched[file_path]
+        now = time.time()
+        for file_path, _ in lookups:
+            outcome, data = outcomes[file_path]
+            known = self.previous.get(file_path)
+            if outcome == "cached" and data is not None:
+                self.metadata_dict[file_path] = data
+            elif outcome in ("matched", "refreshed") and data is not None:
+                base = known or self.previous_foreign.get(file_path)
+                merged = merge_refreshed(base, data, now)
+                self.metadata_dict[file_path] = merged
+                self.fresh_source[file_path] = images_source(merged)
+                self.updated.add(file_path)
+                self.summary["refreshed" if known else "new"] += 1
+            elif outcome == "removed" and known is not None:
+                self.metadata_dict[file_path] = mark_removed(known, "version", now)
+                self.updated.add(file_path)
+                self.summary["removed"] += 1
+            elif outcome == "checked" and known is not None:
+                self.metadata_dict[file_path] = mark_checked(known, now)
+                self.summary["checked"] += 1
+            else:
+                self.summary[outcome] += 1
 
         self.processor.file_processor.flush()
 
@@ -316,6 +412,18 @@ class ScanJob:
             self.metadata_dict = enricher.enrich_batch(
                 self.metadata_dict, force_refresh=self.force_refresh
             )
+
+        # CivitAI answered 404 for the whole model: flag every file of it (its data,
+        # previews and page stay as they are).
+        if enricher.removed_models:
+            now = time.time()
+            for file_path, meta in list(self.metadata_dict.items()):
+                if meta.get("modelId") in enricher.removed_models:
+                    was_removed = bool(bookkeeping(meta).get("removed"))
+                    self.metadata_dict[file_path] = mark_removed(meta, "model", now)
+                    self.updated.add(file_path)
+                    if not was_removed:
+                        self.summary["removed"] += 1
 
     # --- Phase 2: organization -------------------------------------------------
 
@@ -358,9 +466,23 @@ class ScanJob:
 
         logger.info(f"Processing {len(self.metadata_dict)} files with metadata")
 
+        image_manager = self.processor.image_manager
         originals_needing_sidecar = []
+        synced = []  # process paths with a preview sync to finish once saved
         for file_path, metadata in self.metadata_dict.items():
             process_path = self.organized_files_mapping.get(file_path, file_path) or file_path
+            if file_path in self.fresh_source:
+                # Fresh images: rename preview files to follow them (nothing is
+                # deleted) and save the matching list, so files and list agree.
+                mirror = self.mirror_mode and process_path != file_path
+                metadata = image_manager.sync_previews(
+                    process_path,
+                    self.previous.get(file_path),
+                    metadata,
+                    self.fresh_source[file_path],
+                    mirror=mirror,
+                )
+                synced.append(process_path)
             self.items_to_process.append((process_path, metadata))
             if self.mirror_mode and process_path != file_path:
                 originals_needing_sidecar.append((file_path, metadata))
@@ -383,9 +505,16 @@ class ScanJob:
         for process_path, metadata in self.items_to_process:
             if metadata_manager.save_metadata(process_path, metadata, dry_run):
                 written.append((process_path, metadata))
+                if process_path in synced and not dry_run:
+                    image_manager.finish_sync(process_path)
             else:
                 self.results.append((process_path, None))
         self.items_to_process = written
+        # Pages of models whose data changed are regenerated (skip_existing_html
+        # only skips unchanged ones).
+        self.updated = {
+            self.organized_files_mapping.get(f, f) or f for f in self.updated
+        }
 
         invalidate_version_index()
         if not dry_run:
@@ -416,7 +545,7 @@ class ScanJob:
             ) -> Tuple[str, Optional[Dict[str, Any]]]:
                 path, meta = item
                 processed = processor.save_and_process_with_metadata(
-                    path, meta, force_refresh=force_refresh
+                    path, meta, force_refresh=force_refresh or path in self.updated
                 )
                 return (path, processed)
 
@@ -439,7 +568,9 @@ class ScanJob:
         else:
             for process_path, metadata in items:
                 processed_metadata = processor.save_and_process_with_metadata(
-                    process_path, metadata, force_refresh=force_refresh
+                    process_path,
+                    metadata,
+                    force_refresh=force_refresh or process_path in self.updated,
                 )
                 self.results.append((process_path, processed_metadata))
 
@@ -487,7 +618,7 @@ class ScanJob:
         for file_path in self.files:
             if file_path in self.metadata_dict or not os.path.isfile(file_path):
                 continue
-            if has_metadata(file_path, self.job_specific_config):
+            if self.previous.get(file_path) is not None:
                 continue
             file_hash = processor.file_processor.cached_hash(file_path)
             if file_hash and processor.metadata_manager.is_known_not_found(file_hash):
@@ -502,7 +633,7 @@ class ScanJob:
         """Log what the job did."""
         summary = self.summary
         summary["output_failed"] = sum(1 for _, meta in self.results if meta is None)
-        skipped = len(self.files) - len(self.filtered_files)
+        skipped = len(self.files) - len(self.filtered_files) - len(self.refresh_files)
         if self.use_cached_metadata:
             # Offline job: files are skipped because they have NO sidecar yet, and
             # nothing is looked up on CivitAI.
@@ -515,11 +646,15 @@ class ScanJob:
                 f"{summary['output_failed']} failed while writing output"
             )
             return
+        refused = f" ({summary['checked']} refused by CivitAI, kept)" if summary["checked"] else ""
         logger.info(
             f"Job {self.job_name} summary: {len(self.files)} found, "
-            f"{skipped} skipped (already have metadata), "
-            f"{len(self.metadata_dict)} matched, {summary['not_found']} not found on CivitAI "
+            f"{skipped} skipped (have metadata, not due for a refresh), "
+            f"{summary['new']} new matched, "
+            f"{summary['refreshed']} refreshed, "
+            f"{summary['removed']} removed from CivitAI (local copy kept), "
+            f"{summary['not_found']} not found on CivitAI "
             f"(+{summary['not_found_cached']} known unknown, not re-queried), "
-            f"{summary['unreadable']} unreadable, {summary['errors']} lookup errors, "
+            f"{summary['unreadable']} unreadable, {summary['errors']} lookup errors{refused}, "
             f"{summary['output_failed']} failed while writing output"
         )

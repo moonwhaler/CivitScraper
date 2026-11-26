@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from ..api.client import CivitAIClient
 from ..utils.cache import DiskCache
+from .sidecar import DIRTY_FLAG as SIDECAR_DIRTY_FLAG
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +24,9 @@ FAILED_MODEL_CACHE_VALIDITY = 7 * 24 * 60 * 60
 SIBLING_VERSIONS_CACHE_VALIDITY_DEFAULT = 86400
 # Field stamped into sidecar metadata recording when siblingVersions was fetched
 SIBLING_VERSIONS_TS_FIELD = "siblingVersionsFetchedAt"
-# Transient in-memory marker telling save_metadata to bypass skip_existing.
-# Popped before serialization; never written to disk.
-DIRTY_FLAG = "_civitscraper_dirty"
+# Transient in-memory marker telling save_metadata to bypass skip_existing
+# (defined with the other sidecar bookkeeping).
+DIRTY_FLAG = SIDECAR_DIRTY_FLAG
 
 
 class VersionEnricher:
@@ -59,7 +60,9 @@ class VersionEnricher:
 
         # Get cache directory from config or use default
         cache_dir = self.config.get("scanner", {}).get("cache_dir", ".civitscraper_cache")
-        failed_models_cache_dir = os.path.join(cache_dir, "failed_models")
+        # v2: the first cache also recorded temporary errors (network, 5xx) as
+        # failures; it is ignored so those models are looked up again.
+        failed_models_cache_dir = os.path.join(cache_dir, "failed_models_v2")
 
         # Disk cache for failed model IDs (persisted across runs)
         self._failed_models_cache = DiskCache[bool](
@@ -68,6 +71,10 @@ class VersionEnricher:
 
         # In-memory set of failed model IDs for current batch
         self._batch_failed_models: Set[int] = set()
+        # Models CivitAI answered 404 for (now or within the failed-model cache):
+        # deleted on CivitAI. The scan flags their local files instead of
+        # touching their data.
+        self.removed_models: Set[int] = set()
 
     def _is_model_known_failed(self, model_id: int) -> bool:
         """
@@ -188,11 +195,6 @@ class VersionEnricher:
             f"({already_enriched} already enriched)"
         )
 
-        # Count models to skip due to known failures
-        models_to_skip = sum(1 for mid in files_by_model if self._is_model_known_failed(mid))
-        if models_to_skip > 0:
-            logger.info(f"Skipping {models_to_skip} models with known failed lookups (cached 404s)")
-
         # Fetch parent models in parallel for better performance
         parent_model_cache: Dict[int, Dict[str, Any]] = {}
         fetched_count = 0
@@ -201,9 +203,12 @@ class VersionEnricher:
         start_time = time.time()
 
         # Filter out known failed models
-        model_ids_to_fetch = [
-            mid for mid in files_by_model.keys() if not self._is_model_known_failed(mid)
-        ]
+        model_ids_to_fetch = []
+        for mid in files_by_model:
+            if self._is_model_known_failed(mid):
+                self.removed_models.add(mid)
+            else:
+                model_ids_to_fetch.append(mid)
         skipped_count = len(files_by_model) - len(model_ids_to_fetch)
 
         if skipped_count > 0:
@@ -215,11 +220,20 @@ class VersionEnricher:
         max_workers = min(8, len(model_ids_to_fetch)) if model_ids_to_fetch else 1
 
         def fetch_parent_model(model_id: int) -> tuple:
-            """Fetch a single parent model and return (model_id, data or None)."""
-            parent_data = self.api_client.get_parent_model_with_versions(
-                model_id, current_version_id=0, force_refresh=(model_id in force_models)
-            )
-            return (model_id, parent_data)
+            """
+            Fetch one parent model: (model_id, data, error).
+
+            data is None with no error for a 404 (model deleted on CivitAI). Any
+            other failure is returned as the error, so one model can never stop
+            the whole batch, and it is not remembered as a failure.
+            """
+            try:
+                parent_data = self.api_client.get_parent_model_with_versions(
+                    model_id, current_version_id=0, force_refresh=(model_id in force_models)
+                )
+                return (model_id, parent_data, None)
+            except Exception as e:  # noqa: BLE001 - reported and retried next run
+                return (model_id, None, e)
 
         if model_ids_to_fetch:
             logger.info(
@@ -235,7 +249,7 @@ class VersionEnricher:
                 completed = 0
                 for future in concurrent.futures.as_completed(future_to_model):
                     completed += 1
-                    model_id, parent_data = future.result()
+                    model_id, parent_data, error = future.result()
 
                     if parent_data:
                         parent_model_cache[model_id] = parent_data
@@ -244,10 +258,18 @@ class VersionEnricher:
                             f"Fetched parent model {model_id}: "
                             f"{len(parent_data.get('siblingVersions', []))} versions"
                         )
-                    else:
+                    elif error is None:
+                        # 404: deleted on CivitAI
                         self._mark_model_failed(model_id)
+                        self.removed_models.add(model_id)
                         failed_count += 1
-                        logger.debug(f"Failed to fetch parent model {model_id}, cached as failed")
+                        logger.debug(f"Parent model {model_id} is gone (404), cached as failed")
+                    else:
+                        failed_count += 1
+                        logger.warning(
+                            f"Could not fetch parent model {model_id} ({error}); "
+                            f"its version list is kept and retried next run"
+                        )
 
                     # Progress logging every 10 completions
                     if completed % 10 == 0 or completed == len(model_ids_to_fetch):
@@ -335,13 +357,18 @@ class VersionEnricher:
         # Skip if known to have failed
         if self._is_model_known_failed(model_id):
             logger.debug(f"Skipping model {model_id}, known failed lookup")
+            self.removed_models.add(model_id)
             return metadata
 
         # Stale-but-present siblings must bypass the HTTP request cache.
         force_fetch = force_refresh or self._siblings_expired(metadata)
-        parent_data = self.api_client.get_parent_model_with_versions(
-            model_id, current_version_id=version_id or 0, force_refresh=force_fetch
-        )
+        try:
+            parent_data = self.api_client.get_parent_model_with_versions(
+                model_id, current_version_id=version_id or 0, force_refresh=force_fetch
+            )
+        except Exception as e:  # noqa: BLE001 - temporary; keep what we have
+            logger.warning(f"Could not fetch parent model {model_id}: {e}")
+            return metadata
 
         if parent_data:
             metadata["parentModel"] = parent_data["parentModel"]
@@ -354,7 +381,8 @@ class VersionEnricher:
             )
         else:
             self._mark_model_failed(model_id)
-            logger.debug(f"Failed to fetch parent model {model_id}, cached as failed")
+            self.removed_models.add(model_id)
+            logger.debug(f"Parent model {model_id} is gone (404), cached as failed")
 
         return metadata
 

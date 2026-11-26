@@ -306,6 +306,12 @@ civitscraper --config /path/to/your/custom_config.yaml
 *   **Safety First:** Always test with `dry_run: true` in the config or `--dry-run` on the command line first to see what *would* happen without actually changing anything! Back up your models before using `move`.
 *   **Details:** For available templates and custom structures, see [Organization Settings in CONFIGURATION.md](CONFIGURATION.md#organization).
 
+### Staying Up to Date (Without Losing Anything)
+
+*   **Problem:** Models get new versions, new preview images, or disappear from CivitAI.
+*   **Solution:** Known models are refreshed automatically once their data is two weeks old (`scanner.refresh_after_days`). New versions show up as *Update available*, reordered previews are renamed so prompts stay with their pictures, and new images are downloaded. Nothing local is ever deleted: previews the creator removed are kept as "No longer on CivitAI", and models removed from CivitAI keep their data and are flagged *Removed from CivitAI*.
+*   **Details:** [Keeping Models Up to Date in CONFIGURATION.md](CONFIGURATION.md#keeping-models-up-to-date).
+
 ### Understanding the Metadata (`.json` Files)
 
 *   **Problem:** You need the model's trigger words or other details without opening the web UI.

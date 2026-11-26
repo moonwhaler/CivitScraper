@@ -37,8 +37,8 @@
         <svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg>
     </button>
     {% if model_url %}
-    <a class="btn" href="{{ model_url }}" target="_blank" rel="noopener noreferrer">
-        <span class="m-hide-sm">Open on </span>CivitAI<svg class="icon sm" aria-hidden="true"><use href="#i-external"/></svg>
+    <a class="btn" href="{{ model_url }}" target="_blank" rel="noopener noreferrer"{% if removed %} title="CivitAI no longer lists this {{ removed.what }}; the page may be gone"{% endif %}>
+        <span class="m-hide-sm">Open on </span>CivitAI{% if removed %}<span class="m-hide-sm">&nbsp;(may be gone)</span>{% endif %}<svg class="icon sm" aria-hidden="true"><use href="#i-external"/></svg>
     </a>
     {% endif %}
 </header>
@@ -92,6 +92,12 @@
                 {% if version %}<span class="stamp-truncate">{{ version }}</span>{% endif %}
             </div>
             <h1 class="m-title">{{ model_name }}</h1>
+            {% if removed %}
+            <p class="m-notice" role="note">
+                <svg class="icon sm" aria-hidden="true"><use href="#i-archive"/></svg>
+                <span><strong>Removed from CivitAI</strong>{% if removed.date %} on {{ removed.date }}{% endif %}: CivitAI no longer lists this {{ 'model' if removed.what == 'model' else 'version' }}. Everything here is the last data fetched, and your files are kept.</span>
+            </p>
+            {% endif %}
             <p class="m-meta">
                 {% if creator %}<span>by <strong>{{ creator }}</strong></span>{% endif %}
                 {% if stats.downloadCount %}<span title="{{ stats.downloadCount }} downloads"><svg class="icon sm" aria-hidden="true"><use href="#i-download"/></svg>{{ stats.downloadCount|compact }}</span>{% endif %}
@@ -174,7 +180,7 @@
         <h2 class="m-section-title" id="previews-title">Previews <span class="m-count">{{ images|length }}</span></h2>
         <ul class="m-shots" role="list">
             {% for image in images %}
-            <li class="m-shot mount{% if image.nsfw %} is-nsfw{% endif %}">
+            <li class="m-shot mount{% if image.nsfw %} is-nsfw{% endif %}{% if image.archived %} is-archived{% endif %}">
                 <button type="button" class="m-shot-open" data-action="open-viewer" data-index="{{ loop.index0 }}" aria-label="Open preview {{ loop.index }} with prompt and settings">
                     <span class="mount-window">
                         {% if image.is_video %}
@@ -189,6 +195,7 @@
                     <svg class="icon sm" aria-hidden="true"><use href="#i-play"/></svg>
                 </button>
                 {% endif %}
+                {% if image.archived %}<span class="m-shot-flag">No longer on CivitAI</span>{% endif %}
                 <div class="m-shot-caption">
                     <p class="m-shot-prompt">{{ image.prompt or 'No prompt' }}</p>
                     {% if image.prompt %}

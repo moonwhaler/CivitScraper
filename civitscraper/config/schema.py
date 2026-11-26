@@ -46,6 +46,8 @@ _SCANNER = {
     "rehash": LEAF,
     "not_found_validity": LEAF,
     "hash_workers": LEAF,
+    "refresh_after_days": LEAF,
+    "refresh_max_per_run": LEAF,
 }
 
 _LOGGING = {

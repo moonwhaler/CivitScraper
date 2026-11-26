@@ -120,7 +120,9 @@
     }
     $('.viewer-media', viewer).classList.toggle('is-nsfw', !!image.nsfw);
     $('.viewer-count', viewer).textContent = `${current + 1} / ${images.length}`;
-    $('.viewer-title', viewer).textContent = `Preview ${current + 1}`;
+    $('.viewer-title', viewer).textContent = image.archived
+      ? `Preview ${current + 1} · no longer on CivitAI`
+      : `Preview ${current + 1}`;
 
     const hasPrompt = !!image.prompt;
     const hasNeg = !!image.negative_prompt;

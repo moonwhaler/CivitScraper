@@ -138,7 +138,7 @@ def test_list_preview_files_matches_template_and_glob_chars(tmp_path, name, temp
     assert [(i, v) for _, i, v in result] == [(1, False), (2, True), (10, False)]
 
 
-def test_image_manager_counts_and_cleans_in_base_dir(tmp_path):
+def test_lower_max_count_deletes_no_preview_in_base_dir(tmp_path):
     config, models = make_config(tmp_path)
     model = make_model(models)
     paths = []
@@ -149,9 +149,10 @@ def test_image_manager_counts_and_cleans_in_base_dir(tmp_path):
         paths.append(p)
     manager = ImageManager(config, MagicMock())
 
-    assert manager._count_existing_previews(model) == 3
-    manager._clean_up_old_previews(model, max_count=2)
-    assert [os.path.exists(p) for p in paths] == [True, True, False]
+    assert len(manager._existing_preview_paths(model, None)) == 3
+    manager.download_images(model, {"images": [{"url": f"https://x/{i}.jpeg"} for i in range(3)]},
+                            max_count=2)
+    assert all(os.path.exists(p) for p in paths)
 
 
 def test_skip_existing_images_not_redownloaded_in_base_dir(tmp_path):

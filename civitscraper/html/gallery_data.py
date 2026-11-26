@@ -153,7 +153,7 @@ def make_cards_portable(cards: List[Dict[str, Any]], gallery_dir: str, portable:
 # Version fields gallery.js reads; the rest only feeds the health flags.
 _VERSION_KEYS_FOR_JS = ("name", "link", "is_local", "is_current")
 # Card fields left out of models_data.js when empty (gallery.js treats missing as empty)
-_OMIT_WHEN_EMPTY = ("duplicates", "health", "update_version")
+_OMIT_WHEN_EMPTY = ("duplicates", "health", "update_version", "removed")
 # Card fields only the Python side needs (merging versions); gallery.js never reads them
 _PYTHON_ONLY = ("model_id",)
 

@@ -33,7 +33,10 @@
   let results = [];
   let rendered = 0;
 
-  const HEALTH_LABELS = { update: 'Update available', no_preview: 'No preview', duplicate: 'Duplicate' };
+  const HEALTH_LABELS = {
+    update: 'Update available', no_preview: 'No preview', duplicate: 'Duplicate',
+    removed: 'Removed from CivitAI'
+  };
   const SORT_DEFAULT_DIR = { name: 'asc', file_modified: 'desc', updated_at: 'desc', created_at: 'desc', downloads: 'desc', rating: 'desc' };
   const VIEWS = ['cards', 'wall', 'table'];
   // One collator for all comparisons: localeCompare with options builds a new one per call.
@@ -242,6 +245,11 @@
     if (health.includes('update')) {
       const title = model.update_version ? `Newer version on CivitAI: ${model.update_version}` : 'Newer version on CivitAI';
       html += `<span class="chip update" title="${esc(title)}"><svg class="icon sm" aria-hidden="true"><use href="#i-update"/></svg>Update</span>`;
+    }
+    if (health.includes('removed')) {
+      const r = model.removed || {};
+      const title = `CivitAI no longer lists this ${r.what === 'model' ? 'model' : 'version'}${r.date ? ` (noticed ${r.date})` : ''}; the local copy is kept`;
+      html += `<span class="chip removed" title="${esc(title)}"><svg class="icon sm" aria-hidden="true"><use href="#i-archive"/></svg>Removed</span>`;
     }
     if (health.includes('duplicate')) {
       const n = (model.duplicates || []).length;
@@ -500,7 +508,8 @@
   function renderHealth() {
     const count = flag => models.filter(m => (m.health || []).includes(flag)).length;
     const chips = [];
-    [['update', 'i-update', 'with updates'], ['duplicate', 'i-layers', 'stored twice'], ['no_preview', 'i-image-off', 'without preview']]
+    [['update', 'i-update', 'with updates'], ['removed', 'i-archive', 'removed from CivitAI'],
+      ['duplicate', 'i-layers', 'stored twice'], ['no_preview', 'i-image-off', 'without preview']]
       .forEach(([flag, icon, text]) => {
         const n = count(flag);
         if (n) chips.push(`<button type="button" class="chip health ${flag}" data-health="${flag}" aria-pressed="false"><svg class="icon sm" aria-hidden="true"><use href="#${icon}"/></svg>${n} ${text}</button>`);
@@ -573,7 +582,7 @@
       ${stampHtml(model)}
       <h2 id="peek-title" class="peek-title">${esc(model.name)}</h2>
       ${meta.length ? `<p class="peek-meta">${meta.join('<span class="sep" aria-hidden="true">·</span>')}</p>` : ''}
-      ${badgesHtml(model) ? `<div class="peek-badges">${badgesHtml(model)}${model.update_version ? `<span class="peek-note">Newest on CivitAI: ${esc(model.update_version)}</span>` : ''}</div>` : ''}
+      ${badgesHtml(model) ? `<div class="peek-badges">${badgesHtml(model)}${model.update_version ? `<span class="peek-note">Newest on CivitAI: ${esc(model.update_version)}</span>` : ''}${model.removed ? `<span class="peek-note">Gone from CivitAI${model.removed.date ? ` since ${esc(model.removed.date)}` : ''}; local copy kept</span>` : ''}</div>` : ''}
 
       ${words.length ? `
       <section class="peek-section">

@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .base_client import BaseClient
 from .endpoints import ImagesEndpoint, ModelsEndpoint, VersionsEndpoint
+from .exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,10 @@ class CivitAIClient:
         """Get model version by file hash."""
         return self._versions.get_by_hash(hash_value, force_refresh=force_refresh)
 
+    def get_model_version(self, version_id: int, force_refresh: bool = False) -> Dict[str, Any]:
+        """Get model version by ID (prompts included, like the by-hash lookup)."""
+        return self._versions.get(version_id, force_refresh=force_refresh)
+
     def get_images(
         self,
         *,
@@ -93,45 +98,51 @@ class CivitAIClient:
             force_refresh: Force refresh cache
 
         Returns:
-            Dictionary with parentModel and siblingVersions, or None if failed
+            Dictionary with parentModel and siblingVersions, or None if CivitAI
+            answered 404 (the model was deleted)
+
+        Raises:
+            CivitAIError: Network errors, server errors, rate limits, an open circuit
+                breaker; ValueError for a response without model data. These are
+                temporary: the caller keeps what it has and tries again next run.
         """
         try:
             model_data = self.get_model(model_id, force_refresh=force_refresh)
-            if not model_data:
-                logger.warning(f"Failed to fetch parent model {model_id}")
+        except ClientError as e:
+            if e.status_code == 404:
+                logger.info(f"Parent model {model_id} is not on CivitAI (404)")
                 return None
+            raise
+        if not isinstance(model_data, dict) or not model_data.get("id"):
+            raise ValueError(f"No model data in the response for model {model_id}")
 
-            sibling_versions: List[Dict[str, Any]] = []
-            parent_model = {
-                "id": model_data.get("id"),
-                "name": model_data.get("name"),
-                "type": model_data.get("type"),
-                "nsfw": model_data.get("nsfw", False),
-                "creator": {"username": model_data.get("creator", {}).get("username", "Unknown")},
-                "tags": model_data.get("tags", []),
-            }
-            for version in model_data.get("modelVersions", []):
-                stats = version.get("stats", {})
-                version_id = version.get("id")
-                sibling_versions.append(
-                    {
-                        "id": version_id,
-                        "name": version.get("name"),
-                        "baseModel": version.get("baseModel"),
-                        "createdAt": version.get("createdAt"),
-                        "downloadCount": stats.get("downloadCount", 0),
-                        "isCurrent": version_id == current_version_id,
-                    }
-                )
+        sibling_versions: List[Dict[str, Any]] = []
+        parent_model = {
+            "id": model_data.get("id"),
+            "name": model_data.get("name"),
+            "type": model_data.get("type"),
+            "nsfw": model_data.get("nsfw", False),
+            "creator": {"username": model_data.get("creator", {}).get("username", "Unknown")},
+            "tags": model_data.get("tags", []),
+        }
+        for version in model_data.get("modelVersions", []):
+            stats = version.get("stats", {})
+            version_id = version.get("id")
+            sibling_versions.append(
+                {
+                    "id": version_id,
+                    "name": version.get("name"),
+                    "baseModel": version.get("baseModel"),
+                    "createdAt": version.get("createdAt"),
+                    "downloadCount": stats.get("downloadCount", 0),
+                    "isCurrent": version_id == current_version_id,
+                }
+            )
 
-            # Sort by creation date (newest first)
-            sibling_versions.sort(key=lambda v: v.get("createdAt") or "", reverse=True)
+        # Sort by creation date (newest first)
+        sibling_versions.sort(key=lambda v: v.get("createdAt") or "", reverse=True)
 
-            return {
-                "parentModel": parent_model,
-                "siblingVersions": sibling_versions,
-            }
-
-        except Exception as e:
-            logger.error(f"Error fetching parent model {model_id}: {e}")
-            return None
+        return {
+            "parentModel": parent_model,
+            "siblingVersions": sibling_versions,
+        }

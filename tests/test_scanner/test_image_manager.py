@@ -26,17 +26,14 @@ def make_manager(tmp_path, max_count=1, skip_existing=False, dry_run=False):
     return manager, model_path
 
 
-def test_clean_up_ignores_non_numbered_preview_file(tmp_path):
-    """A stray preview file without a trailing number (e.g. left over from a
-    misconfigured filename pattern) must not crash cleanup."""
+def test_sync_ignores_non_numbered_preview_file(tmp_path):
+    """A stray preview without a number (old filename pattern) is left alone."""
     manager, model_path = make_manager(tmp_path)
     stray = tmp_path / "model.preview.jpeg"
     stray.write_bytes(b"data")
 
-    # Must not raise ValueError("Invalid preview filename")
-    manager._clean_up_old_previews(str(model_path), max_count=1)
+    manager.sync_previews(str(model_path), {"images": []}, {"images": []}, "showcase")
 
-    # The unrecognized file is left alone rather than deleted.
     assert stray.exists()
 
 
