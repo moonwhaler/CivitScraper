@@ -40,6 +40,16 @@ def parse_args():
         "--dry-run", action="store_true", help="Simulate file operations without making changes"
     )
 
+    # Sorting
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Sort job: move only the confident suggestions, without asking",
+    )
+    parser.add_argument(
+        "--undo", action="store_true", help="Sort job: move the last sort run's models back"
+    )
+
     # Cache
     parser.add_argument(
         "--force-refresh", action="store_true", help="Ignore cache and force refresh metadata"
@@ -73,6 +83,11 @@ def main():
         if args.dry_run:
             # Set dry_run at the top level of the configuration only
             config["dry_run"] = True
+
+        if getattr(args, "yes", False):
+            config["yes"] = True
+        if getattr(args, "undo", False):
+            config["undo"] = True
 
         if args.force_refresh:
             # Set force_refresh in the scanner section

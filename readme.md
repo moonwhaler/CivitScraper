@@ -10,6 +10,7 @@ Tired of digging through messy folders to find your AI models? **CivitScraper** 
 *   **Gets Model Info:** Downloads details like creator, type, trigger words, and ratings from CivitAI.
 *   **Downloads Previews:** Grabs preview images so you can see what the model does.
 *   **Organizes Files (Optional):** Arranges your models, info files, and images into a clean folder structure.
+*   **Sorts Misfiled Models:** Finds models that sit in the wrong base model folder (a Flux LoRA among your SDXL ones, a checkpoint in the LoRA folder) by checking what the file really is, and moves them with everything that belongs to them, after asking you.
 *   **Creates Visual Previews:** Generates HTML pages for each model and a main gallery page to easily browse your collection (light and dark theme, cards, image wall or table): search by name, trigger word, tag or creator, peek at a model without leaving the gallery, copy trigger words and file paths with one click, copy a preview's prompt and settings straight into Forge, and spot available updates, missing previews, duplicates and files CivitAI doesn't know.
 
 ### Screenshots
@@ -31,6 +32,10 @@ All screenshots show a demo catalogue with made-up models and generated preview 
 **Preview viewer:** prompt and settings of each preview, and *Copy for Forge* to paste them straight into Forge.
 
 ![Preview viewer with prompt, negative prompt and generation settings](docs/screenshots/viewer_dark.jpg)
+
+**Sorting:** models in the wrong folder are flagged in the gallery, with the folder they belong in.
+
+![Gallery filtered to models in the wrong folder, with the quick look showing where one belongs](docs/screenshots/gallery_misplaced.jpg)
 
 **On a phone:**
 
@@ -275,6 +280,11 @@ civitscraper --all-jobs
 # (Requires organization to be enabled in the job config)
 civitscraper --job <job_name_with_org> --dry-run
 
+# Find models in the wrong folder and move them (asks first; see below)
+civitscraper -j sort --dry-run   # report only
+civitscraper -j sort             # walk through each suggestion
+civitscraper -j sort --undo      # move the last run's models back
+
 # Force CivitScraper to ignore cached API data and get fresh info
 civitscraper --force-refresh
 
@@ -311,6 +321,13 @@ civitscraper --config /path/to/your/custom_config.yaml
 *   **Problem:** Models get new versions, new preview images, or disappear from CivitAI.
 *   **Solution:** Known models are refreshed automatically once their data is two weeks old (`scanner.refresh_after_days`). New versions show up as *Update available*, reordered previews are renamed so prompts stay with their pictures, and new images are downloaded. Nothing local is ever deleted: previews the creator removed are kept as "No longer on CivitAI", and models removed from CivitAI keep their data and are flagged *Removed from CivitAI*.
 *   **Details:** [Keeping Models Up to Date in CONFIGURATION.md](CONFIGURATION.md#keeping-models-up-to-date).
+
+### Sorting Models into the Right Folders
+
+*   **Problem:** With hundreds of LoRAs it is easy to drop one into the wrong base model's folder, or a checkpoint into the LoRA folder.
+*   **Solution:** The `sort-models` job checks what every file really is: its CivitAI data and the file's own structure (the tensor layout in its header, compared with your other models). It learns which folder holds which base model from where most of your files already are, and suggests moves for the rest: `Lora/SDXL/style/x` to `Lora/Flux/style/x`, keeping your category folders. You review each one in the terminal; the model moves with its info file, page and previews, Krita's LoRA references are updated, and the pages and gallery are rebuilt.
+*   **Safety:** Nothing is overwritten or deleted, every run can be undone with `--undo`, and `--dry-run` only reports. `--yes` moves only the obvious cases.
+*   **Details:** [Sorting Models in CONFIGURATION.md](CONFIGURATION.md#sorting-models-into-the-right-folders).
 
 ### Understanding the Metadata (`.json` Files)
 

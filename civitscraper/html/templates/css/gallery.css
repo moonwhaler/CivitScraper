@@ -167,6 +167,7 @@
 .chip.health.update { color: var(--ok); }
 .chip.health.duplicate { color: var(--warn); }
 .chip.health.removed { color: var(--danger); }
+.chip.health.misplaced { color: var(--warn); }
 .chip.health[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 
 .g-unmatched {
@@ -324,6 +325,7 @@ mark { background: var(--highlight); color: inherit; border-radius: 2px; padding
 }
 .card-badges .chip { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); }
 .card-badges .chip.update { background: color-mix(in srgb, var(--mount) 82%, var(--ok)); }
+.card-badges .chip.misplaced { background: color-mix(in srgb, var(--mount) 82%, var(--warn)); }
 .card-badges .chip.duplicate { background: color-mix(in srgb, var(--mount) 82%, var(--warn)); }
 .card-badges .chip.removed { background: color-mix(in srgb, var(--mount) 84%, var(--danger)); }
 

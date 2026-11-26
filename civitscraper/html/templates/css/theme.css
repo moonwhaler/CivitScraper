@@ -289,6 +289,7 @@ code, kbd, .mono { font-family: var(--mono); }
 .chip.trigger.copied { border-style: solid; border-color: var(--ok); color: var(--ok); }
 .chip.update { border-color: transparent; background: var(--ok-soft); color: var(--ok); font-weight: 600; }
 .chip.duplicate { border-color: transparent; background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+.chip.misplaced { border-color: transparent; background: var(--warn-soft); color: var(--warn); font-weight: 600; }
 .chip.removed { border-color: transparent; background: color-mix(in srgb, var(--danger) 13%, transparent); color: var(--danger); font-weight: 600; }
 
 /* --- Top bar -------------------------------------------------------------- */

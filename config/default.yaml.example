@@ -66,6 +66,16 @@ input_paths:
     type: TextualInversion         # Model type identifier
     patterns: ["*.pt", "*.safetensors"]  # File patterns to match
 
+  # VAE and text encoders (only used by the sort job, which reports misplaced ones)
+  vae:
+    path: "path/to/vae"
+    type: VAE
+    patterns: ["*.safetensors"]
+  text_encoder:
+    path: "path/to/text_encoder"
+    type: TextEncoder
+    patterns: ["*.safetensors"]
+
 # =============================================================================
 # Default Job
 # The job to run when no job is specified
@@ -214,6 +224,43 @@ jobs:
     loras_file: "path/to/loras.json"
     overwrite_triggers: true  # [true/false] Overwrite existing trigger words
     paths: ["lora"]
+
+  # Rebuild every page and the gallery from the sidecars, offline (no API calls)
+  regenerate-html:
+    type: scan-paths
+    recursive: true
+    use_cached_metadata: true
+    paths: ["lora"]
+    output:
+      metadata:
+        html:
+          enabled: true
+          skip_existing_html: false
+          generate_gallery: true
+          gallery_path: "path/to/html-output/model_gallery.html"
+          gallery_title: "Model Gallery"
+      images:
+        save: false
+
+  # Find models in the wrong base model folder and move them (see CONFIGURATION.md)
+  #   civitscraper -j sort --dry-run | (walk-through) | --yes | --undo
+  sort:
+    type: sort-models
+    description: "Move models into their base model's folder"
+    paths: ["lora", "checkpoints", "embeddings", "vae", "text_encoder"]
+
+# =============================================================================
+# Sorting (sort-models job and the gallery's "misplaced" flag)
+# =============================================================================
+sorting:
+  regenerate_job: regenerate-html   # Rebuild pages and gallery after moving
+  decisions_file: sort-decisions.json  # Your answers (relative to this file)
+  gallery_flag: true                # Flag misplaced models in the gallery
+  # base_folders:                   # Only where folders cannot be learned
+  #   "Pony": Pony
+  #   "Flux.1 D": { lora: Flux, checkpoint: flux1-dev }
+  krita:
+    enabled: true                   # Update Krita's LoRA paths after moves (backup first)
 
 # =============================================================================
 # Scanner Settings

@@ -35,6 +35,7 @@ HEALTH_UPDATE = "update"
 HEALTH_NO_PREVIEW = "no_preview"
 HEALTH_DUPLICATE = "duplicate"
 HEALTH_REMOVED = "removed"
+HEALTH_MISPLACED = "misplaced"
 
 
 def clean_trigger_words(trained_words: Any) -> List[str]:
@@ -341,6 +342,8 @@ class ContextBuilder:
         self.image_handler = ImageHandler(config)
         self.org_config = OrganizationConfig.from_dict(config)
         self.model_extensions = model_file_extensions(config)
+        # Normalized model path -> {"to": folder, "why": reason} (sorting.gallery_flags)
+        self.misplaced: Dict[str, Dict[str, Any]] = {}
 
     def build_model_context(self, file_path: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -552,6 +555,11 @@ class ContextBuilder:
             "trigger_words": card_trigger_words(metadata.get("trainedWords")),
             "file_path": os.path.abspath(model_file) if model_file else None,
             "removed": _removed_for_page(removed_info(metadata)),
+            "misplaced": (
+                self.misplaced.get(os.path.normcase(os.path.abspath(model_file)))
+                if model_file
+                else None
+            ),
             # Raw sibling versions for gallery merging (local + remote linking)
             "sibling_versions": metadata.get("siblingVersions", []),
         }
@@ -686,6 +694,8 @@ class ContextBuilder:
             merged_card["removed"] = removed
             if removed:
                 health.append(HEALTH_REMOVED)
+            if merged_card.get("misplaced"):
+                health.append(HEALTH_MISPLACED)
             if duplicates:
                 health.append(HEALTH_DUPLICATE)
             merged_card["health"] = health

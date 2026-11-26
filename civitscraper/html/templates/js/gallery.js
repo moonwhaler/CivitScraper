@@ -35,7 +35,7 @@
 
   const HEALTH_LABELS = {
     update: 'Update available', no_preview: 'No preview', duplicate: 'Duplicate',
-    removed: 'Removed from CivitAI'
+    removed: 'Removed from CivitAI', misplaced: 'In the wrong folder'
   };
   const SORT_DEFAULT_DIR = { name: 'asc', file_modified: 'desc', updated_at: 'desc', created_at: 'desc', downloads: 'desc', rating: 'desc' };
   const VIEWS = ['cards', 'wall', 'table'];
@@ -250,6 +250,11 @@
       const r = model.removed || {};
       const title = `CivitAI no longer lists this ${r.what === 'model' ? 'model' : 'version'}${r.date ? ` (noticed ${r.date})` : ''}; the local copy is kept`;
       html += `<span class="chip removed" title="${esc(title)}"><svg class="icon sm" aria-hidden="true"><use href="#i-archive"/></svg>Removed</span>`;
+    }
+    if (health.includes('misplaced')) {
+      const m = model.misplaced || {};
+      const title = m.to ? `${m.why || 'Looks misplaced'}. Belongs in ${m.to}` : (m.why || 'Looks misplaced');
+      html += `<span class="chip misplaced" title="${esc(title)}"><svg class="icon sm" aria-hidden="true"><use href="#i-move"/></svg>Misplaced</span>`;
     }
     if (health.includes('duplicate')) {
       const n = (model.duplicates || []).length;
@@ -509,7 +514,7 @@
     const count = flag => models.filter(m => (m.health || []).includes(flag)).length;
     const chips = [];
     [['update', 'i-update', 'with updates'], ['removed', 'i-archive', 'removed from CivitAI'],
-      ['duplicate', 'i-layers', 'stored twice'], ['no_preview', 'i-image-off', 'without preview']]
+      ['misplaced', 'i-move', 'in the wrong folder'], ['duplicate', 'i-layers', 'stored twice'], ['no_preview', 'i-image-off', 'without preview']]
       .forEach(([flag, icon, text]) => {
         const n = count(flag);
         if (n) chips.push(`<button type="button" class="chip health ${flag}" data-health="${flag}" aria-pressed="false"><svg class="icon sm" aria-hidden="true"><use href="#${icon}"/></svg>${n} ${text}</button>`);
@@ -582,7 +587,7 @@
       ${stampHtml(model)}
       <h2 id="peek-title" class="peek-title">${esc(model.name)}</h2>
       ${meta.length ? `<p class="peek-meta">${meta.join('<span class="sep" aria-hidden="true">·</span>')}</p>` : ''}
-      ${badgesHtml(model) ? `<div class="peek-badges">${badgesHtml(model)}${model.update_version ? `<span class="peek-note">Newest on CivitAI: ${esc(model.update_version)}</span>` : ''}${model.removed ? `<span class="peek-note">Gone from CivitAI${model.removed.date ? ` since ${esc(model.removed.date)}` : ''}; local copy kept</span>` : ''}</div>` : ''}
+      ${badgesHtml(model) ? `<div class="peek-badges">${badgesHtml(model)}${model.update_version ? `<span class="peek-note">Newest on CivitAI: ${esc(model.update_version)}</span>` : ''}${model.removed ? `<span class="peek-note">Gone from CivitAI${model.removed.date ? ` since ${esc(model.removed.date)}` : ''}; local copy kept</span>` : ''}${model.misplaced ? `<span class="peek-note">${esc(model.misplaced.why || 'Looks misplaced')}${model.misplaced.to ? `; belongs in ${esc(model.misplaced.to)}` : ''}. Move it with <code>civitscraper -j sort</code>.</span>` : ''}</div>` : ''}
 
       ${words.length ? `
       <section class="peek-section">

@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..api.client import CivitAIClient
-from ..utils.fs import atomic_write
+from ..utils.fs import atomic_write, move_no_clobber
 from ..utils.imagesize import image_size
 from .discovery import get_image_path, list_preview_files
 from .sidecar import (
@@ -39,9 +39,7 @@ _JOURNAL_SUFFIX = ".civitscraper-sync.json"
 
 def _move_no_clobber(source: str, target: str) -> None:
     """Rename ``source`` to ``target``; never replaces an existing file."""
-    if os.path.lexists(target):
-        raise FileExistsError(target)
-    os.rename(source, target)
+    move_no_clobber(source, target)
 
 
 def _orphan() -> Dict[str, Any]:

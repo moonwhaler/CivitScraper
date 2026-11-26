@@ -91,7 +91,10 @@ def load_yaml_config(path: str) -> Dict[str, Any]:
             return {}
         # Expand ${VAR}/$VAR references so env vars work anywhere in the config,
         # not just the special-cased CIVITAI_API_KEY override.
-        return cast(Dict[str, Any], expand_env_vars(config))
+        config = cast(Dict[str, Any], expand_env_vars(config))
+        # Relative paths that belong next to the config (sort decisions) resolve here.
+        config.setdefault("_config_dir", os.path.dirname(os.path.abspath(path)))
+        return config
     except FileNotFoundError:
         logger.error(f"Configuration file not found: {path}")
         raise

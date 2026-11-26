@@ -67,3 +67,7 @@ model-gallery-details.md
 !CONFIGURATION.md
 !docs/
 !docs/**/*.md
+
+# Sort decisions (sort-models job)
+config/sort-decisions.json
+sort-decisions.json
