@@ -5,11 +5,11 @@ import json
 import os
 
 import pytest
+from test_sorting.conftest import alpha_lora, checkpoint, write_safetensors
 
 from civitscraper.updates import downloader as dl
 from civitscraper.updates import job as job_module
 from civitscraper.updates.job import UpdateJob
-from test_sorting.conftest import alpha_lora, checkpoint, write_safetensors
 
 from .conftest import FakeClient, FakeSession, blob, file_entry, sibling
 
@@ -18,10 +18,16 @@ def write_lora(path, vid, mid, base, siblings=(), created="2026-01-01"):
     write_safetensors(path, alpha_lora(vid % 7))
     with open(path, "rb") as f:
         content = f.read()
-    meta = {"id": vid, "modelId": mid, "name": f"v{vid}", "baseModel": base, "createdAt": created,
-            "model": {"name": f"Model {mid}", "type": "LORA", "nsfw": False},
-            "files": [file_entry(vid, os.path.basename(path), content)],
-            "siblingVersions": list(siblings) or [sibling(vid, created, base)]}
+    meta = {
+        "id": vid,
+        "modelId": mid,
+        "name": f"v{vid}",
+        "baseModel": base,
+        "createdAt": created,
+        "model": {"name": f"Model {mid}", "type": "LORA", "nsfw": False},
+        "files": [file_entry(vid, os.path.basename(path), content)],
+        "siblingVersions": list(siblings) or [sibling(vid, created, base)],
+    }
     with open(os.path.splitext(path)[0] + ".json", "w") as f:
         json.dump(meta, f)
     return content
@@ -35,27 +41,51 @@ def cross(tmp_path, monkeypatch):
     unet.mkdir(parents=True)
     # Folders the layout learns: MOSS/ and krea2/ (3 labelled files each); no Pony folder.
     for i in range(3):
-        write_lora(str(lora / "MOSS" / "misc" / f"m{i}.safetensors"), 600 + i, 700 + i, "MOSS Image")
+        write_lora(
+            str(lora / "MOSS" / "misc" / f"m{i}.safetensors"), 600 + i, 700 + i, "MOSS Image"
+        )
         write_lora(str(lora / "krea2" / "misc" / f"k{i}.safetensors"), 610 + i, 710 + i, "Krea 2")
     # Model 500 "Chair": you have the MOSS version; CivitAI also has Krea 2 (two) and Pony.
-    sibs = [sibling(51, "2026-03-01", "MOSS Image"), sibling(52, "2025-11-01", "Krea 2"),
-            sibling(53, "2025-12-01", "Krea 2"), sibling(54, "2026-04-01", "Pony")]
-    write_lora(str(lora / "MOSS" / "style" / "chair.safetensors"), 51, 500, "MOSS Image", sibs,
-               "2026-03-01")
+    sibs = [
+        sibling(51, "2026-03-01", "MOSS Image"),
+        sibling(52, "2025-11-01", "Krea 2"),
+        sibling(53, "2025-12-01", "Krea 2"),
+        sibling(54, "2026-04-01", "Pony"),
+    ]
+    write_lora(
+        str(lora / "MOSS" / "style" / "chair.safetensors"),
+        51,
+        500,
+        "MOSS Image",
+        sibs,
+        "2026-03-01",
+    )
     contents = {52: blob(52), 53: blob(53), 54: blob(54)}
-    versions = {v: {"id": v, "name": f"v{v}", "trainedWords": ["chair"],
-                    "files": [file_entry(v, f"chair_{v}.safetensors", c)]}
-                for v, c in contents.items()}
+    versions = {
+        v: {
+            "id": v,
+            "name": f"v{v}",
+            "trainedWords": ["chair"],
+            "files": [file_entry(v, f"chair_{v}.safetensors", c)],
+        }
+        for v, c in contents.items()
+    }
     files = {v * 10: c for v, c in contents.items()}
     config = {
-        "api": {"base_url": "https://civitai.com/api/v1", "key": "KEY", "max_retries": 1,
-                "batch": {"retry_delay": 0}},
+        "api": {
+            "base_url": "https://civitai.com/api/v1",
+            "key": "KEY",
+            "max_retries": 1,
+            "batch": {"retry_delay": 0},
+        },
         "input_paths": {
             "lora": {"path": str(lora), "type": "LORA", "patterns": ["*.safetensors"]},
             "unet": {"path": str(unet), "type": "Checkpoint", "patterns": ["*.safetensors"]},
         },
-        "jobs": {"fetch-all": {"type": "scan-paths"},
-                 "updates": {"type": "download-updates", "paths": ["lora", "unet"]}},
+        "jobs": {
+            "fetch-all": {"type": "scan-paths"},
+            "updates": {"type": "download-updates", "paths": ["lora", "unet"]},
+        },
         "scanner": {"cache_dir": str(tmp_path / "cache")},
         "updates": {"min_free_gb": 0},
         "sorting": {"krita": {"enabled": False}},
@@ -68,12 +98,17 @@ def run(lib, answers=(), interactive=True, **flags):
     config, models, client, session = lib
     full = dict(config, **flags)
     out, ran, answers = [], [], list(answers)
-    job = UpdateJob(full, "updates", full["jobs"]["updates"], client,
-                    run_job=lambda n: ran.append(n) or True,
-                    input_fn=lambda p: answers.pop(0) if answers else "q",
-                    output_fn=out.append, interactive=interactive,
-                    downloader=dl.Downloader("KEY", "civitai.com", session=session,
-                                             sleep=lambda s: None))
+    job = UpdateJob(
+        full,
+        "updates",
+        full["jobs"]["updates"],
+        client,
+        run_job=lambda n: ran.append(n) or True,
+        input_fn=lambda p: answers.pop(0) if answers else "q",
+        output_fn=out.append,
+        interactive=interactive,
+        downloader=dl.Downloader("KEY", "civitai.com", session=session, sleep=lambda s: None),
+    )
     assert job.run()
     return "\n".join(out), ran
 
@@ -125,7 +160,8 @@ def test_dry_run_writes_no_decisions(cross):
     config, models, client, session = cross
     client.versions[53]["files"] = [file_entry(53, "x.safetensors", b"")]
     client.versions[53]["files"][0]["hashes"]["SHA256"] = hashlib.sha256(
-        (models / "Lora" / "MOSS" / "style" / "chair.safetensors").read_bytes()).hexdigest()
+        (models / "Lora" / "MOSS" / "style" / "chair.safetensors").read_bytes()
+    ).hexdigest()
     run(cross, dry_run=True)
     assert not (models.parent / "update-decisions.json").exists()
 

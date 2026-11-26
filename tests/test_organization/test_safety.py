@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from civitscraper.config.loader import merge_configs
 from civitscraper.jobs.executor import JobExecutor
 from civitscraper.organization.config import OrganizationConfig
 from civitscraper.organization.organizer import (
@@ -155,9 +156,7 @@ def test_organize_file_leaves_already_organized_file_in_place(tmp_path):
     target_dir.mkdir(parents=True)
     moved = target_dir / "foo.safetensors"
     moved.write_bytes(b"x")
-    job_config = JobExecutor.__new__(JobExecutor)
-    job_config.config = config
-    cfg = job_config._build_job_config(config["jobs"]["scan"])
+    cfg = merge_configs(config, config["jobs"]["scan"])
 
     result = FileOrganizer(cfg).organize_file(str(moved), METADATA)
 

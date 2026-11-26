@@ -1,0 +1,25 @@
+# Example configuration showing how to regenerate HTML without refetching metadata
+# This configuration assumes you already have cached metadata files
+
+jobs:
+  # Example job to regenerate HTML files without refetching metadata from API
+  regenerate-html:
+    type: scan-paths
+    recursive: true
+    skip_existing: true          # Skip metadata fetching - use cached metadata
+    verify_hashes: false         # Don't verify hashes to avoid API calls
+    paths: ["lora"]              # Process LORA models
+    output:
+      metadata:
+        format: json
+        path: "{model_dir}"
+        filename: "{model_name}.json"
+        html:
+          enabled: true                 # Generate HTML
+          filename: "{model_name}.html"
+          skip_existing_html: false     # Force HTML regeneration even if exists
+          generate_gallery: true
+          gallery_path: "path/to/html-output/model_gallery.html"
+          gallery_title: "Regenerated Model Gallery"
+      images:
+        save: false             # Don't download images again

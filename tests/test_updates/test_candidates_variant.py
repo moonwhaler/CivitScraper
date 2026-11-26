@@ -1,7 +1,12 @@
 """Finding updates (same base model, decisions) and picking the matching file."""
 
 from civitscraper.updates.candidates import (
-    EARLY_ACCESS, FREE, GENERATION_ONLY, PAID, access_state, find_candidates,
+    EARLY_ACCESS,
+    FREE,
+    GENERATION_ONLY,
+    PAID,
+    access_state,
+    find_candidates,
 )
 from civitscraper.updates.decisions import UpdateDecisions, decisions_path
 from civitscraper.updates.variant import gguf_quant, rank_files
@@ -38,9 +43,15 @@ def test_ignored_models_and_removed_models_are_skipped(library):
     decisions = UpdateDecisions.for_config(config)
     decisions.ignore_model(300, "baz")
     decisions.save()
-    write_model(models / "Lora" / "Flux" / "gone.safetensors", 41, 400, "Flux.1 D",
-                [sibling(41, "2026-01-01"), sibling(42, "2026-02-01")], "2026-01-01",
-                civitscraper={"removed": {"what": "model"}})
+    write_model(
+        models / "Lora" / "Flux" / "gone.safetensors",
+        41,
+        400,
+        "Flux.1 D",
+        [sibling(41, "2026-01-01"), sibling(42, "2026-02-01")],
+        "2026-01-01",
+        civitscraper={"removed": {"what": "model"}},
+    )
     found, counts = candidates(config)
     assert set(found) == {100} and counts["ignored"] == 1
 
@@ -48,7 +59,9 @@ def test_ignored_models_and_removed_models_are_skipped(library):
 def test_access_states():
     assert access_state({})[0] == FREE
     assert access_state({"earlyAccessEndsAt": "2099-01-01T00:00:00Z"}) == (
-        EARLY_ACCESS, "2099-01-01T00:00:00Z")
+        EARLY_ACCESS,
+        "2099-01-01T00:00:00Z",
+    )
     assert access_state({"earlyAccessEndsAt": "2000-01-01T00:00:00Z"})[0] == FREE
     assert access_state({"paidAccess": {"permanent": True, "endsAt": None}})[0] == PAID
     assert access_state({"usageControl": "Generation"})[0] == GENERATION_ONLY
@@ -59,12 +72,22 @@ def _files(*entries):
 
 
 def test_the_same_variant_as_the_local_file_wins():
-    local = {"files": [{"name": "a.safetensors", "metadata": {"format": "SafeTensor",
-                                                               "fp": "fp16", "size": "pruned"}}]}
+    local = {
+        "files": [
+            {
+                "name": "a.safetensors",
+                "metadata": {"format": "SafeTensor", "fp": "fp16", "size": "pruned"},
+            }
+        ]
+    }
     version = _files(
         ("b_fp32.safetensors", "Model", True, {"format": "SafeTensor", "fp": "fp32"}),
-        ("b_fp16.safetensors", "Pruned Model", False,
-         {"format": "SafeTensor", "fp": "fp16", "size": "pruned"}),
+        (
+            "b_fp16.safetensors",
+            "Pruned Model",
+            False,
+            {"format": "SafeTensor", "fp": "fp16", "size": "pruned"},
+        ),
         ("b.pt", "Model", False, {"format": "PickleTensor", "fp": "fp16", "size": "pruned"}),
         ("train.zip", "Training Data", False, {}),
     )

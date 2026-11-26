@@ -46,8 +46,8 @@ from ..sorting.mover import (
     plan_move,
 )
 from ..utils import trash as trash_module
-from ..utils.hash_cache import get_hash_cache
 from ..utils.fs import move_no_clobber
+from ..utils.hash_cache import get_hash_cache
 from ..utils.terminal import InputFn, OutputFn, Style, ask, human_size, version_links
 from . import downloader as dl
 from .bases import UsedBases, used_bases

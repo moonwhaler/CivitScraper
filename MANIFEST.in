@@ -1,6 +1,6 @@
 include readme.md
-include requirements.txt
+include CONFIGURATION.md
 include config/default.yaml.example
+include config/default.yaml.minimal
 recursive-include civitscraper/html/templates *
-recursive-include docs *
-recursive-include examples *
+recursive-include examples *.yaml

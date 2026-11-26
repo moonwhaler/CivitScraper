@@ -59,6 +59,7 @@ _LOGGING = {
         "directory": LEAF,
         "max_size": LEAF,
         "backup_count": LEAF,
+        "keep_files": LEAF,
     },
 }
 

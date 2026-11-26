@@ -7,6 +7,7 @@ import logging
 import os
 from typing import Any, Dict, Optional
 
+from .. import __version__
 from ..utils.cache import CacheManager
 from .circuit_breaker import CircuitBreaker
 from .rate_limiter import RateLimiter
@@ -31,7 +32,7 @@ class BaseClient:
         self.api_key = config["api"].get("key") or os.environ.get("CIVITAI_API_KEY")
         self.timeout = config["api"].get("timeout", 30)
         self.max_retries = config["api"].get("max_retries", 3)
-        self.user_agent = config["api"].get("user_agent", "CivitScraper/0.1.0")
+        self.user_agent = config["api"].get("user_agent", f"CivitScraper/{__version__}")
 
         self.dry_run = config.get("dry_run", False)
 

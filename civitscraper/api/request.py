@@ -297,44 +297,6 @@ class RequestHandler:
         """
         return self.request("GET", endpoint, params=params, force_refresh=force_refresh)
 
-    def post(self, endpoint: str, data: Optional[Dict[str, Any]] = None) -> str:
-        """
-        Make POST request.
-
-        Args:
-            endpoint: API endpoint
-            data: Request data
-
-        Returns:
-            Response text
-        """
-        return self.request("POST", endpoint, data=data)
-
-    def put(self, endpoint: str, data: Optional[Dict[str, Any]] = None) -> str:
-        """
-        Make PUT request.
-
-        Args:
-            endpoint: API endpoint
-            data: Request data
-
-        Returns:
-            Response text
-        """
-        return self.request("PUT", endpoint, data=data)
-
-    def delete(self, endpoint: str) -> str:
-        """
-        Make DELETE request.
-
-        Args:
-            endpoint: API endpoint
-
-        Returns:
-            Response text
-        """
-        return self.request("DELETE", endpoint)
-
     def download(
         self, url: str, output_path: str, dry_run: bool = False
     ) -> Tuple[bool, Optional[str]]:

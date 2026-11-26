@@ -26,7 +26,7 @@ import json
 import logging
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -45,9 +45,7 @@ SOURCE_FEED = "feed"
 
 def has_civitai_metadata(metadata: Any) -> bool:
     """Whether a sidecar holds CivitAI data (Forge writes sidecars without it)."""
-    return isinstance(metadata, dict) and bool(metadata.get("id")) and bool(
-        metadata.get("modelId")
-    )
+    return isinstance(metadata, dict) and bool(metadata.get("id")) and bool(metadata.get("modelId"))
 
 
 def load_sidecar(path: str) -> Optional[Dict[str, Any]]:
@@ -212,12 +210,3 @@ def removed_info(metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Return the ``removed`` record of a sidecar, or None."""
     value = bookkeeping(metadata).get("removed")
     return value if isinstance(value, dict) else None
-
-
-def current_images(metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Return the sidecar's images that are still on CivitAI (not archived)."""
-    return [
-        i
-        for i in metadata.get("images") or []
-        if isinstance(i, dict) and not i.get("civitscraperArchived")
-    ]

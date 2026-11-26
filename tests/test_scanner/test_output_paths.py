@@ -18,6 +18,7 @@ from civitscraper.scanner.discovery import (
     has_metadata,
     is_within,
     list_preview_files,
+    load_cached_metadata,
 )
 from civitscraper.scanner.image_manager import ImageManager
 from civitscraper.scanner.metadata_manager import MetadataManager
@@ -79,11 +80,9 @@ def test_cached_metadata_loads_from_base_dir(tmp_path):
     config, models = make_config(tmp_path)
     model = make_model(models)
     write_sidecar(config, model)
-    executor = JobExecutor.__new__(JobExecutor)
-    executor.config = config
 
-    assert executor._has_cached_metadata(model, config)
-    assert executor._load_cached_metadata(model, config)["id"] == 1
+    assert has_metadata(model, config)
+    assert load_cached_metadata(model, config)["id"] == 1
 
 
 def test_gallery_card_built_for_base_dir_model(tmp_path):
@@ -149,9 +148,10 @@ def test_lower_max_count_deletes_no_preview_in_base_dir(tmp_path):
         paths.append(p)
     manager = ImageManager(config, MagicMock())
 
-    assert len(manager._existing_preview_paths(model, None)) == 3
-    manager.download_images(model, {"images": [{"url": f"https://x/{i}.jpeg"} for i in range(3)]},
-                            max_count=2)
+    assert len(list_preview_files(model, config)) == 3
+    manager.download_images(
+        model, {"images": [{"url": f"https://x/{i}.jpeg"} for i in range(3)]}, max_count=2
+    )
     assert all(os.path.exists(p) for p in paths)
 
 

@@ -535,33 +535,6 @@ class ContextBuilder:
 
         return context
 
-    def build_gallery_context(
-        self, file_paths: List[str], title: str, output_path: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """
-        Build context for gallery template.
-
-        Args:
-            file_paths: List of model file paths or HTML file paths
-            title: Gallery title
-            output_path: Path to output HTML file (for relative path calculation)
-
-        Returns:
-            Template context
-        """
-        context: Dict[str, Any] = {
-            "title": title,
-            "models": [],
-            "output_path": output_path,
-        }
-
-        for file_path in file_paths:
-            model_data = self._process_gallery_model(file_path, output_path)
-            if model_data:
-                context["models"].append(model_data)
-
-        return context
-
     def _process_gallery_model(
         self, file_path: str, output_path: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:

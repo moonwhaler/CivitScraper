@@ -27,10 +27,6 @@ from ..organization import FileOrganizer, OrganizationConfig
 from ..organization.organizer import is_in_organized_output
 from ..scanner.discovery import find_model_files, get_metadata_path
 from ..scanner.processor import ModelProcessor
-from ..sorting.analysis import gallery_flags
-from ..sorting.mover import pending_journals
-from ..updates.bases import used_bases as learn_used_bases
-from ..updates.decisions import load_if_present as load_update_decisions
 from ..scanner.sidecar import (
     bookkeeping,
     has_civitai_metadata,
@@ -41,6 +37,10 @@ from ..scanner.sidecar import (
     mark_removed,
     merge_refreshed,
 )
+from ..sorting.analysis import gallery_flags
+from ..sorting.mover import pending_journals
+from ..updates.bases import used_bases as learn_used_bases
+from ..updates.decisions import load_if_present as load_update_decisions
 
 DEFAULT_REFRESH_AFTER_DAYS = 14
 
@@ -533,9 +533,7 @@ class ScanJob:
         self.items_to_process = written
         # Pages of models whose data changed are regenerated (skip_existing_html
         # only skips unchanged ones).
-        self.updated = {
-            self.organized_files_mapping.get(f, f) or f for f in self.updated
-        }
+        self.updated = {self.organized_files_mapping.get(f, f) or f for f in self.updated}
 
         invalidate_version_index()
         if not dry_run:
@@ -601,9 +599,7 @@ class ScanJob:
         """Generate the gallery page, if enabled for this job."""
         # The merged config, like the model pages: a gallery_path set globally is
         # where the pages link to, so the gallery must be written there too.
-        html_config = (
-            self.job_specific_config.get("output", {}).get("metadata", {}).get("html", {})
-        )
+        html_config = self.job_specific_config.get("output", {}).get("metadata", {}).get("html", {})
         if not html_config.get("generate_gallery", False):
             return
 
