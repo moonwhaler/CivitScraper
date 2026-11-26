@@ -214,3 +214,12 @@ def test_walk_through_links_to_civitai_on_both_domains(library):
     page = next(i for i, line in enumerate(lines) if line.strip().startswith("Page"))
     assert "https://civitai.red/models/1000?modelVersionId=999" in lines[page]
     assert "https://civitai.com/models/1000?modelVersionId=999" in lines[page + 1]
+
+
+def test_report_links_to_civitai(library):
+    config, models = library
+    p = write_safetensors(models / "Lora" / "Alpha" / "style" / "wrong.safetensors", beta_lora(9))
+    sidecar(p, "Beta", version_id=999)
+    text, _ = run(config, interactive=False)
+    assert "https://civitai.com/models/1000?modelVersionId=999" in text
+    assert "https://civitai.red/models/1000?modelVersionId=999" in text

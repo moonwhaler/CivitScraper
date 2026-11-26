@@ -260,6 +260,8 @@ class SortJob:
                         f"  {self.rel(suggestion.path)}\n    -> {self.rel(option.target)}"
                         f"  [{STATE_LABELS[suggestion.state]}{tag}]"
                     )
+                for n, url in enumerate(self._links(suggestion.verdict.item)):
+                    self.print(f"       {url if n == 0 else s.dim(url)}")
 
     # --- Evidence -------------------------------------------------------------
 
