@@ -41,16 +41,19 @@ DONE = "done"
 UNDONE = "undone"
 
 
-def journal_dir(config: Dict[str, Any]) -> str:
-    """Return the directory holding sort journals."""
+SORT_JOURNALS = "sort-journal"
+
+
+def journal_dir(config: Dict[str, Any], subdir: str = SORT_JOURNALS) -> str:
+    """Return the directory holding a job's journals (sort runs by default)."""
     cache_dir = (config.get("scanner") or {}).get("cache_dir", ".civitscraper_cache")
-    return os.path.join(os.path.abspath(os.path.expanduser(cache_dir)), "sort-journal")
+    return os.path.join(os.path.abspath(os.path.expanduser(cache_dir)), subdir)
 
 
-def pending_journals(config: Dict[str, Any]) -> List[str]:
-    """Journals of sort runs that were interrupted."""
+def pending_journals(config: Dict[str, Any], subdir: str = SORT_JOURNALS) -> List[str]:
+    """Journals of runs that were interrupted."""
     result = []
-    for path in sorted(glob.glob(os.path.join(journal_dir(config), "*.json"))):
+    for path in sorted(glob.glob(os.path.join(journal_dir(config, subdir), "*.json"))):
         try:
             with open(path, "r", encoding="utf-8") as f:
                 if json.load(f).get("state") == RUNNING:
@@ -230,9 +233,9 @@ class Journal:
         }
 
     @classmethod
-    def create(cls, config: Dict[str, Any]) -> "Journal":
+    def create(cls, config: Dict[str, Any], subdir: str = SORT_JOURNALS) -> "Journal":
         """Start a new journal file."""
-        directory = journal_dir(config)
+        directory = journal_dir(config, subdir)
         os.makedirs(directory, exist_ok=True)
         stamp = time.strftime("%Y%m%d-%H%M%S")
         path = os.path.join(directory, f"{stamp}.json")
@@ -249,9 +252,12 @@ class Journal:
             return cls(path, json.load(f))
 
     @classmethod
-    def latest(cls, config: Dict[str, Any], state: str = DONE) -> Optional["Journal"]:
+    def latest(
+        cls, config: Dict[str, Any], state: str = DONE, subdir: str = SORT_JOURNALS
+    ) -> Optional["Journal"]:
         """Return the newest journal in ``state``."""
-        for path in sorted(glob.glob(os.path.join(journal_dir(config), "*.json")), reverse=True):
+        pattern = os.path.join(journal_dir(config, subdir), "*.json")
+        for path in sorted(glob.glob(pattern), reverse=True):
             try:
                 journal = cls.load(path)
             except (OSError, ValueError):
@@ -366,7 +372,9 @@ class Mover:
         self.hash_cache.save()
         return messages
 
-    def undo(self, journal: Journal) -> Tuple[List[Tuple[str, str]], List[str]]:
+    def undo(
+        self, journal: Journal, finish: bool = True
+    ) -> Tuple[List[Tuple[str, str]], List[str]]:
         """
         Move every model of ``journal`` back.
 
@@ -397,6 +405,7 @@ class Mover:
             entry["status"] = UNDONE
             restored.append((target, source))
         if not self.dry_run:
-            journal.finish(UNDONE if not problems else DONE)
+            if finish:
+                journal.finish(UNDONE if not problems else DONE)
             self.hash_cache.save()
         return restored, problems

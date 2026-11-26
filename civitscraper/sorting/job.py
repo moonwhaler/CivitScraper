@@ -12,9 +12,9 @@ import sys
 from collections import Counter
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from ..api.domains import build_model_url, get_domain_settings, is_nsfw
 from ..config.loader import merge_configs
 from ..html.context import _version_index_cache
+from ..utils.terminal import Style, ask, version_links
 from .analysis import Analysis, analyze
 from .classifier import Item
 from .decisions import KEEP, Decisions, decisions_path, file_key
@@ -60,26 +60,7 @@ _ORDER = {MISPLACED: 0, UNSORTED: 1, WRONG_ROOT: 2, STATE_CONFLICT: 3, STATE_UNK
 
 InputFn = Callable[[str], str]
 OutputFn = Callable[[str], None]
-
-
-class _Style:
-    def __init__(self, enabled: bool):
-        self.enabled = enabled
-
-    def _wrap(self, code: str, text: str) -> str:
-        return f"\033[{code}m{text}\033[0m" if self.enabled else text
-
-    def bold(self, text: str) -> str:
-        return self._wrap("1", text)
-
-    def dim(self, text: str) -> str:
-        return self._wrap("2", text)
-
-    def accent(self, text: str) -> str:
-        return self._wrap("36", text)
-
-    def warn(self, text: str) -> str:
-        return self._wrap("33", text)
+_Style = Style
 
 
 class SortJob:
@@ -135,16 +116,7 @@ class SortJob:
 
     def ask(self, prompt: str, valid: str, default: str) -> str:
         """Ask until the answer is one of ``valid``."""
-        while True:
-            try:
-                answer = self.input(prompt).strip().lower()
-            except EOFError:
-                return "q"
-            if not answer:
-                return default
-            if answer[0] in valid:
-                return answer[0]
-            self.print(f"  Please answer one of: {', '.join(valid)}")
+        return ask(self.input, self.print, prompt, valid, default)
 
     # --- Entry point ----------------------------------------------------------
 
@@ -320,15 +292,7 @@ class SortJob:
         """Return the CivitAI pages of the file's version, its routed domain first."""
         meta = item.metadata or {}
         model_id = (meta.get("parentModel") or {}).get("id") or meta.get("modelId")
-        version_id = meta.get("id")
-        if not model_id or not version_id:
-            return []
-        domains, threshold, _ = get_domain_settings(self.config)
-        nsfw = is_nsfw(meta, threshold)
-        return [
-            build_model_url(model_id, version_id, nsfw, domains),
-            build_model_url(model_id, version_id, not nsfw, domains),
-        ]
+        return version_links(self.config, model_id, meta.get("id"), meta)
 
     def _describe(self, option: Option, plan_companions: int) -> str:
         extra = f"  (+{plan_companions} file(s))" if plan_companions else ""
