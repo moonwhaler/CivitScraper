@@ -39,6 +39,9 @@
                 <svg class="icon" aria-hidden="true"><use href="#i-sort"/></svg>
             </button>
         </div>
+        <button type="button" class="btn icon-only" data-action="toggle-group" aria-pressed="false" title="Group by type, base model and folder" aria-label="Group by type, base model and folder">
+            <svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg>
+        </button>
         <div class="segmented" role="group" aria-label="View">
             <button type="button" class="btn icon-only" data-view="cards" aria-pressed="true" title="Cards" aria-label="Cards view">
                 <svg class="icon" aria-hidden="true"><use href="#i-cards"/></svg>
@@ -97,6 +100,8 @@
             </button>
         </div>
 
+        <div id="crumbs" class="g-crumbs" hidden></div>
+        <section id="groups" class="g-groups" aria-label="Groups" hidden></section>
         <div id="results" class="g-results view-cards"></div>
         <div id="sentinel" class="g-sentinel" aria-hidden="true"></div>
 
@@ -115,6 +120,7 @@
             <span><kbd>Space</kbd> quick look</span>
             <span><kbd>←</kbd><kbd>→</kbd> previous / next in quick look</span>
             <span><kbd>Esc</kbd> close</span>
+            <span><kbd>⌫</kbd> up one group</span>
         </p>
     </div>
 </div>
@@ -143,5 +149,6 @@
 {% block scripts %}
 <script src="{{ js_common_path }}"></script>
 <script src="{{ models_data_js_path }}"></script>
+<script src="{{ js_grouping_path }}"></script>
 <script src="{{ js_gallery_path }}"></script>
 {% endblock %}

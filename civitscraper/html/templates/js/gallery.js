@@ -14,6 +14,8 @@
   // --- DOM ---------------------------------------------------------------
   const $ = (sel, root = document) => root.querySelector(sel);
   const resultsEl = $('#results');
+  const crumbsEl = $('#crumbs');
+  const groupsEl = $('#groups');
   const sentinel = $('#sentinel');
   const searchInput = $('#search');
   const sortSelect = $('#sort-by');
@@ -35,7 +37,7 @@
 
   const HEALTH_LABELS = {
     update: 'Update available', no_preview: 'No preview', duplicate: 'Duplicate',
-    removed: 'Removed from CivitAI', misplaced: 'In the wrong folder'
+    removed: 'Removed from CivitAI', misplaced: 'In the wrong folder', other_bases: 'Also for other bases'
   };
   const SORT_DEFAULT_DIR = { name: 'asc', file_modified: 'desc', updated_at: 'desc', created_at: 'desc', downloads: 'desc', rating: 'desc' };
   const VIEWS = ['cards', 'wall', 'table'];
@@ -53,7 +55,12 @@
   };
   const facetKeys = Object.keys(facetConfig);
 
-  const state = { q: '', sort: 'name', dir: 'asc', view: 'cards', peek: null };
+  const state = { q: '', sort: 'name', dir: 'asc', view: 'cards', peek: null, grouped: false, at: [] };
+  const G = window.CS.grouping;
+  // The level shown when grouped (null when flat or searching)
+  let level = null;
+  // Every model that passes search and filters (results is narrowed to one level)
+  let filteredAll = [];
   facetKeys.forEach(k => { state[k] = []; });
 
   // --- Pure helpers (also exercised by the node test harness) ------------
@@ -195,19 +202,37 @@
     const view = params.get('view');
     if (VIEWS.includes(view)) state.view = view;
     state.peek = params.get('peek');
+    const g = params.get('g');
+    state.grouped = g === '1' || (g !== '0' && pref('grouped', '0') === '1');
+    const at = params.get('at');
+    state.at = at ? at.split('/').filter(Boolean) : [];
     return params;
   }
 
-  function writeHash() {
+  function hashFor(overrides = {}) {
+    const s = Object.assign({}, state, overrides);
     const params = new URLSearchParams();
-    facetKeys.forEach(k => { if (state[k].length) params.set(facetConfig[k].param, state[k].join('|')); });
-    if (state.q) params.set('q', state.q);
-    if (state.sort !== 'name') params.set('sort', state.sort);
-    if (state.dir !== SORT_DEFAULT_DIR[state.sort]) params.set('dir', state.dir);
-    if (state.view !== 'cards') params.set('view', state.view);
-    if (state.peek) params.set('peek', state.peek);
-    const hash = params.toString();
+    facetKeys.forEach(k => { if (s[k].length) params.set(facetConfig[k].param, s[k].join('|')); });
+    if (s.q) params.set('q', s.q);
+    if (s.sort !== 'name') params.set('sort', s.sort);
+    if (s.dir !== SORT_DEFAULT_DIR[s.sort]) params.set('dir', s.dir);
+    if (s.view !== 'cards') params.set('view', s.view);
+    if (s.grouped !== (pref('grouped', '0') === '1')) params.set('g', s.grouped ? '1' : '0');
+    if (s.grouped && s.at.length) params.set('at', s.at.join('/'));
+    if (s.peek) params.set('peek', s.peek);
+    return params.toString();
+  }
+
+  // Filters, sort and view replace the history entry; moving through the groups
+  // adds one (navigateTo), so the browser's Back button goes up a level.
+  function writeHash() {
+    const hash = hashFor();
     history.replaceState(null, '', hash ? '#' + hash : window.location.pathname + window.location.search);
+  }
+
+  function navigateTo(at) {
+    const hash = hashFor({ at, peek: null });
+    window.location.hash = hash || 'g=' + (state.grouped ? '1' : '0');
   }
 
   const pref = (key, fallback) => CS.storageGet(PREF + key, fallback);
@@ -263,6 +288,12 @@
     return html;
   }
 
+  // Where a search result sits in the groups (only while grouped and searching).
+  function groupPathHtml(model) {
+    if (!state.grouped || !state.q) return '';
+    return `<p class="card-path">${esc(G.pathOf(model).join(' › '))}</p>`;
+  }
+
   function triggerChips(model, limit) {
     const words = model.trigger_words || [];
     if (!words.length) return '';
@@ -308,7 +339,7 @@
           <div class="card-badges">${badgesHtml(model)}</div>
         </div>
         <div class="card-body">
-          ${stampHtml(model)}
+          ${stampHtml(model)}${groupPathHtml(model)}
           <h3 class="card-name"><a class="card-link" href="${esc(detailHref(model))}">${highlight(model.name, terms)}</a></h3>
           <div class="card-triggers">${triggerChips(model, 2)}</div>
           <div class="card-foot">
@@ -344,7 +375,7 @@
         <td class="row-thumb"><div class="mount-window">${previewHtml(model)}</div></td>
         <td class="row-name">
           <a class="card-link" href="${esc(detailHref(model))}">${highlight(model.name, terms)}</a>
-          <div class="row-sub">${badgesHtml(model)}${versionsChip(model)}<span class="row-folder">${esc(model.folder_name || '')}</span></div>
+          <div class="row-sub">${badgesHtml(model)}${versionsChip(model)}<span class="row-folder">${esc(state.grouped && state.q ? G.pathOf(model).join(' › ') : model.folder_name || '')}</span></div>
         </td>
         <td>${stampHtml(model, false)}</td>
         <td class="mono row-version">${esc(versionLabel(model.version))}</td>
@@ -409,7 +440,15 @@
 
   function renderResults() {
     results = compute();
+    filteredAll = results;
     rendered = 0;
+    if (state.grouped && !state.q) {
+      level = G.buildLevel(results, state.at);
+      results = level.direct;
+    } else {
+      level = null;
+    }
+    renderGroups();
     resultsEl.className = `g-results view-${state.view}`;
     document.body.dataset.view = state.view;
     resultsEl.innerHTML = state.view === 'table' ? TABLE_HEAD : '';
@@ -419,9 +458,84 @@
         btn.closest('th').setAttribute('aria-sort', active ? (state.dir === 'asc' ? 'ascending' : 'descending') : 'none');
       });
     }
-    $('#no-results').hidden = results.length > 0 || models.length === 0;
+    $('#no-results').hidden = results.length > 0 || (level && level.groups.length > 0) || models.length === 0;
     renderBatch();
     updateChrome();
+  }
+
+  // --- Groups (drill-down) ---------------------------------------------------
+
+  function tileMediaHtml(model) {
+    const src = esc(CS.toFileUrl(model.preview_image_path));
+    const nsfw = model.nsfw ? ' class="is-nsfw"' : '';
+    if (model.is_video) return `<video${nsfw} src="${src}" muted playsinline preload="metadata" aria-hidden="true"></video>`;
+    return `<img${nsfw} src="${src}" alt="" loading="lazy" decoding="async">`;
+  }
+
+  function groupTileHtml(group, i) {
+    const st = G.tileStats(group.models);
+    const cells = st.previews.length
+      ? st.previews.map(m => `<span class="gm-cell">${tileMediaHtml(m)}</span>`).join('')
+      : '<span class="gm-cell mount-empty"><span>No preview</span></span>';
+    const meta = [`${st.count.toLocaleString()} model${st.count === 1 ? '' : 's'}`];
+    if (st.size) meta.push(G.humanSize(st.size));
+    if (st.newest) meta.push(`newest ${shortDate(st.newest)}`);
+    const flags = [['update', 'i-update', 'with updates'], ['misplaced', 'i-move', 'in the wrong folder'],
+      ['duplicate', 'i-layers', 'stored twice'], ['other_bases', 'i-folder', 'also for other bases']]
+      .filter(([f]) => st.health[f])
+      .map(([f, icon, text]) => `<span class="chip ${f}" title="${st.health[f]} ${text}"><svg class="icon sm" aria-hidden="true"><use href="#${icon}"/></svg>${st.health[f]}</span>`)
+      .join('');
+    const slug = ` t-${typeSlug(level && level.at.length ? level.at[0] : group.name)}`;
+    return `
+      <button type="button" class="group-tile${slug}" data-group="${esc(group.name)}" style="--i:${Math.min(i, 14)}">
+        <span class="group-mosaic" data-n="${Math.max(1, st.previews.length)}" aria-hidden="true">${cells}</span>
+        <span class="group-body">
+          <span class="group-name">${esc(group.name)}</span>
+          <span class="group-meta">${meta.join('<span class="sep" aria-hidden="true">·</span>')}</span>
+          ${flags ? `<span class="group-flags">${flags}</span>` : ''}
+        </span>
+      </button>`;
+  }
+
+  function crumbsHtml() {
+    const parts = [`<a href="#${esc(hashFor({ at: [], peek: null }))}" class="crumb">All</a>`];
+    level.at.forEach((step, i) => {
+      const last = i === level.at.length - 1;
+      // An auto-skipped step leads back to where it is: not a link.
+      const skipped = !last && G.buildLevel(filteredAll, level.at.slice(0, i + 1)).at.length > i + 1;
+      const label = esc(step);
+      if (last) parts.push(`<span class="crumb current" aria-current="page">${label}</span>`);
+      else if (skipped) parts.push(`<span class="crumb skipped" title="The only group here">${label}</span>`);
+      else parts.push(`<a href="#${esc(hashFor({ at: level.at.slice(0, i + 1), peek: null }))}" class="crumb">${label}</a>`);
+    });
+    return parts.join('<span class="crumb-sep" aria-hidden="true">›</span>');
+  }
+
+  function renderGroups() {
+    const show = Boolean(level);
+    crumbsEl.hidden = !show;
+    groupsEl.hidden = !show || !level.groups.length;
+    if (!show) {
+      groupsEl.innerHTML = '';
+      return;
+    }
+    crumbsEl.innerHTML = `<nav aria-label="Groups">${crumbsHtml()}</nav>`;
+    const groups = G.sortGroups(level.groups, state.sort, state.dir);
+    groupsEl.innerHTML = groups.length
+      ? `<h2 class="eyebrow group-level">${esc(level.label)}</h2><div class="group-grid">${groups.map(groupTileHtml).join('')}</div>`
+      : '';
+  }
+
+  function goUp() {
+    if (!level || !level.at.length) return false;
+    navigateTo(G.parentPath(filteredAll, level));
+    return true;
+  }
+
+  function setGrouped(on) {
+    state.grouped = on;
+    setPref('grouped', on ? '1' : '0');
+    update();
   }
 
   // --- Facets ---------------------------------------------------------------
@@ -477,9 +591,18 @@
     const total = models.length;
     const n = results.length;
     const filtered = activeFilterCount() > 0 || state.q;
-    countEl.textContent = filtered
-      ? `${n.toLocaleString()} of ${total.toLocaleString()} models`
-      : `${total.toLocaleString()} models`;
+    if (level) {
+      const groups = level.groups.length;
+      countEl.textContent = `${level.total.toLocaleString()} model${level.total === 1 ? '' : 's'}` +
+        (groups ? ` in ${groups} group${groups === 1 ? '' : 's'}` : '') +
+        (filtered ? ` (of ${total.toLocaleString()})` : '');
+    } else {
+      countEl.textContent = filtered
+        ? `${n.toLocaleString()} of ${total.toLocaleString()} models`
+        : `${total.toLocaleString()} models`;
+    }
+    const groupBtn = $('[data-action="toggle-group"]');
+    if (groupBtn) groupBtn.setAttribute('aria-pressed', String(state.grouped));
 
     pillsEl.innerHTML = facetKeys.flatMap(k => state[k].map(v => `
       <button type="button" class="chip pill" data-remove-facet="${k}" data-value="${esc(v)}" aria-label="Remove filter ${esc(facetConfig[k].label)}: ${esc(v)}">
@@ -514,7 +637,8 @@
     const count = flag => models.filter(m => (m.health || []).includes(flag)).length;
     const chips = [];
     [['update', 'i-update', 'with updates'], ['removed', 'i-archive', 'removed from CivitAI'],
-      ['misplaced', 'i-move', 'in the wrong folder'], ['duplicate', 'i-layers', 'stored twice'], ['no_preview', 'i-image-off', 'without preview']]
+      ['misplaced', 'i-move', 'in the wrong folder'], ['duplicate', 'i-layers', 'stored twice'], ['no_preview', 'i-image-off', 'without preview'],
+      ['other_bases', 'i-folder', 'also for other bases']]
       .forEach(([flag, icon, text]) => {
         const n = count(flag);
         if (n) chips.push(`<button type="button" class="chip health ${flag}" data-health="${flag}" aria-pressed="false"><svg class="icon sm" aria-hidden="true"><use href="#${icon}"/></svg>${n} ${text}</button>`);
@@ -607,6 +731,7 @@
       </section>` : ''}
 
       ${versions ? `<section class="peek-section"><h3 class="eyebrow">Versions</h3><ul class="versions" role="list">${versions}</ul></section>` : ''}
+      ${alsoForHtml(model)}
       ${dups ? `<section class="peek-section"><h3 class="eyebrow">Stored ${model.duplicates.length} times</h3><ul class="dups" role="list">${dups}</ul></section>` : ''}
       ${(model.tags || []).length ? `<section class="peek-section"><h3 class="eyebrow">Tags</h3><div class="chips">${model.tags.map(t => `<button type="button" class="chip tag" data-search="${esc(t)}">${esc(t)}</button>`).join('')}</div></section>` : ''}
       ${model.description ? `<section class="peek-section"><h3 class="eyebrow">About</h3><p class="peek-desc">${esc(model.description)}</p></section>` : ''}
@@ -615,6 +740,20 @@
         <a class="btn primary" href="${esc(detailHref(model))}">Open details<svg class="icon sm" aria-hidden="true"><use href="#i-right"/></svg></a>
       </div>
       </div>`;
+  }
+
+  // The same CivitAI model for other base models: your cards, and versions on CivitAI.
+  function alsoForHtml(model) {
+    const entries = model.also_for || [];
+    if (!entries.length) return '';
+    const items = entries.map(e => {
+      const href = e.local ? esc(CS.toFileUrl(e.link) + '#from=gallery') : esc(e.link || '#');
+      const ext = e.local ? '' : ' target="_blank" rel="noopener noreferrer"';
+      return `<li><a class="ver${e.local ? ' local' : ''}" href="${href}"${ext}><i aria-hidden="true"></i><span>${esc(e.base)}</span><span class="ver-where">${e.local ? 'on disk' : 'CivitAI'}</span>${e.local ? '' : '<svg class="icon sm" aria-hidden="true"><use href="#i-external"/></svg>'}</a></li>`;
+    }).join('');
+    const hint = entries.some(e => !e.local)
+      ? '<p class="peek-note">Download them with <code>civitscraper -j updates</code>.</p>' : '';
+    return `<section class="peek-section"><h3 class="eyebrow">Also for</h3><ul class="versions" role="list">${items}</ul>${hint}</section>`;
   }
 
   function openPeek(idx, { focus = true } = {}) {
@@ -759,6 +898,8 @@
       if (text) CS.copyWithFeedback(text, copyBtn, what);
       return;
     }
+    const tile = event.target.closest('[data-group]');
+    if (tile && level) return navigateTo(level.at.concat(tile.dataset.group));
     const el = event.target.closest('[data-action], [data-view], [data-health], [data-remove-facet], [data-sort], [data-search]');
     if (!el) return;
     if (el.dataset.view) return setView(el.dataset.view);
@@ -789,6 +930,7 @@
         facetKeys.forEach(k => { state[k] = []; });
         return setSearch('');
       case 'sort-dir': return setSort(state.sort, state.dir === 'asc' ? 'desc' : 'asc');
+      case 'toggle-group': return setGrouped(!state.grouped);
       case 'toggle-blur': {
         const on = !document.body.classList.contains('nsfw-blur');
         document.body.classList.toggle('nsfw-blur', on);
@@ -807,7 +949,7 @@
   }
 
   function onKeydown(event) {
-    const typing = event.target.matches('input, textarea, select');
+    const typing = Boolean(event.target.matches && event.target.matches('input, textarea, select'));
     if (event.key === 'Escape') {
       if (!peekEl.hidden || document.body.classList.contains('filters-open')) { closeOverlay(); return; }
       if (event.target === searchInput && searchInput.value) { setSearch(''); return; }
@@ -815,6 +957,10 @@
     }
     if (event.key === 'Tab') { trapFocus(event); return; }
     if (typing) return;
+    if (event.key === 'Backspace' && peekEl.hidden && !document.body.classList.contains('filters-open')) {
+      if (goUp()) event.preventDefault();
+      return;
+    }
     if (event.key === '/' && peekEl.hidden) {
       event.preventDefault();
       searchInput.focus();

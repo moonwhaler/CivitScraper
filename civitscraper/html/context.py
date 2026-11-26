@@ -10,7 +10,7 @@ import os
 import re
 import threading
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, Callable, Dict, List, Optional, Set, TypedDict
 
 from ..api.domains import DEFAULT_DOMAINS, build_model_url, get_domain_settings, is_nsfw
 from ..organization.config import OrganizationConfig
@@ -35,6 +35,8 @@ HEALTH_UPDATE = "update"
 HEALTH_NO_PREVIEW = "no_preview"
 HEALTH_DUPLICATE = "duplicate"
 HEALTH_REMOVED = "removed"
+# Not a problem: versions for base models you use are on CivitAI (a filter, not a warning)
+HEALTH_OTHER_BASES = "other_bases"
 HEALTH_MISPLACED = "misplaced"
 
 
@@ -69,12 +71,16 @@ def card_trigger_words(trained_words: Any) -> List[str]:
     return words
 
 
-def update_available(versions: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def update_available(
+    versions: List[Dict[str, Any]], declined: Optional[Set[Any]] = None
+) -> Optional[Dict[str, Any]]:
     """
     Return the newest remote version that beats the local ones on its base model.
 
     A remote version counts only if it is newer than every local version on the same
-    base model; returns None if there is no such version.
+    base model; returns None if there is no such version. Versions whose
+    ``version_id`` is in ``declined`` (answered "no" in the update walk-through) are
+    not offered.
 
     Comparing per base model keeps e.g. a new SDXL release from flagging a model the
     user only has (and wants) for SD 1.5.
@@ -93,6 +99,8 @@ def update_available(versions: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]
     for version in versions:
         if version.get("is_local"):
             continue
+        if declined and version.get("version_id") in declined:
+            continue
         base = version.get("base_model")
         created = version.get("created_at") or ""
         if base not in newest_local or not created or created <= newest_local[base]:
@@ -100,6 +108,70 @@ def update_available(versions: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]
         if best is None or created > (best.get("created_at") or ""):
             best = version
     return best
+
+
+def _size_of(path: str) -> Optional[int]:
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return None
+
+
+def _attach_also_for(
+    cards: List[Dict[str, Any]],
+    siblings: Dict[Any, Dict[Any, Dict[str, Any]]],
+    domains: Dict[str, str],
+    declined: Optional[Callable[[Any, List[Dict[str, Any]]], Set[Any]]],
+    used_bases: Optional[Set[str]],
+) -> None:
+    """Link each card to the same model's cards and versions for other base models."""
+    by_model: Dict[Any, List[Dict[str, Any]]] = {}
+    for card in cards:
+        if card.get("model_id") is not None:
+            by_model.setdefault(card["model_id"], []).append(card)
+    for model_id, model_cards in by_model.items():
+        local = {c.get("base_model"): c for c in model_cards}
+        remote: Dict[Any, List[Dict[str, Any]]] = {}
+        for sibling in (siblings.get(model_id) or {}).values():
+            base = sibling.get("baseModel")
+            if base not in local:
+                remote.setdefault(base, []).append(sibling)
+        offered: List[Dict[str, Any]] = []
+        for base, versions in sorted(remote.items(), key=lambda kv: str(kv[0])):
+            if not used_bases or base not in used_bases:
+                continue
+            probe = [
+                {
+                    "is_local": False,
+                    "version_id": v.get("id"),
+                    "created_at": v.get("createdAt"),
+                    "base_model": base,
+                }
+                for v in versions
+            ]
+            hidden = declined(model_id, probe) if declined else set()
+            open_versions = [v for v in versions if v.get("id") not in hidden]
+            if not open_versions:
+                continue
+            newest = max(open_versions, key=lambda v: str(v.get("createdAt") or ""))
+            nsfw = bool(model_cards[0].get("nsfw"))
+            offered.append(
+                {
+                    "base": base,
+                    "link": build_model_url(model_id, newest.get("id"), nsfw, domains),
+                    "local": False,
+                }
+            )
+        for card in model_cards:
+            entries = [
+                {"base": base, "link": other.get("html_path"), "local": True}
+                for base, other in sorted(local.items(), key=lambda kv: str(kv[0]))
+                if other is not card
+            ]
+            card["also_for"] = entries + offered
+            card["other_bases_available"] = bool(offered)
+            if offered:
+                card.setdefault("health", []).append(HEALTH_OTHER_BASES)
 
 
 # Define a typed dictionary for the preview image result
@@ -344,6 +416,31 @@ class ContextBuilder:
         self.model_extensions = model_file_extensions(config)
         # Normalized model path -> {"to": folder, "why": reason} (sorting.gallery_flags)
         self.misplaced: Dict[str, Dict[str, Any]] = {}
+        self._roots: Optional[List[Any]] = None
+
+    def group_path(self, model_file: Optional[str]) -> List[str]:
+        """
+        Folders below the model's base folder, for the gallery's drill-down.
+
+        The first folder below the outermost input path is the base folder (as in
+        the sort job); the rest is your category path. A file directly in an input
+        path, directly in its base folder (or an inbox such as ``pre-sort``), or
+        outside every input path has no category.
+        """
+        if not model_file:
+            return []
+        if self._roots is None:
+            from ..updates.candidates import configured_roots
+
+            self._roots = configured_roots(self.config)
+        from ..updates.candidates import outermost
+
+        root = outermost(self._roots, model_file)
+        if root is None:
+            return []
+        rel = os.path.relpath(os.path.dirname(os.path.abspath(model_file)), root.path)
+        parts = [p for p in rel.replace("\\", "/").split("/") if p and p != "."]
+        return parts[1:]
 
     def build_model_context(self, file_path: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -525,9 +622,12 @@ class ContextBuilder:
             mtime_path = model_file if model_file else file_path
         else:
             mtime_path = file_path
+        file_size = None
         try:
-            mtime = os.path.getmtime(mtime_path)
-            file_modified = datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
+            stat = os.stat(mtime_path)
+            file_modified = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
+            if model_file:
+                file_size = stat.st_size
         except OSError:
             logger.debug(f"Could not get mtime for {mtime_path}")
 
@@ -554,6 +654,8 @@ class ContextBuilder:
             "tags": [str(t) for t in tags if t][:MAX_CARD_TAGS],
             "trigger_words": card_trigger_words(metadata.get("trainedWords")),
             "file_path": os.path.abspath(model_file) if model_file else None,
+            "file_size": file_size,
+            "group_path": self.group_path(model_file),
             "removed": _removed_for_page(removed_info(metadata)),
             "misplaced": (
                 self.misplaced.get(os.path.normcase(os.path.abspath(model_file)))
@@ -568,12 +670,19 @@ class ContextBuilder:
     def merge_gallery_models(
         models_data: List[Dict[str, Any]],
         domains: Optional[Dict[str, str]] = None,
+        declined: Optional[Callable[[Any, List[Dict[str, Any]]], Set[Any]]] = None,
+        used_bases: Optional[Set[str]] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Merge gallery cards so each CivitAI model is shown as a single card.
+        Merge gallery cards so each CivitAI model is shown as one card per base model.
 
-        Cards sharing the same ``model_id`` are collapsed into one
-        representative card. The representative is the newest local version
+        Cards sharing the same ``model_id`` and ``base_model`` are collapsed into one
+        representative card (a "Chair" model with a Krea 2 and a MOSS LoRA is two
+        cards). Each card lists the model's other base models in ``also_for``: the
+        local ones (linking to their card's page) and, with ``used_bases``, versions
+        for base models you use that you do not have (linking to CivitAI).
+
+        The representative is the newest local version
         that has a preview image (falling back to the newest local version).
         A ``versions`` list is attached describing every version of the model:
         local versions (with links to their local HTML pages) and remote-only
@@ -600,15 +709,20 @@ class ContextBuilder:
         order: List[Any] = []
         for index, card in enumerate(models_data):
             model_id = card.get("model_id")
-            key = model_id if model_id is not None else ("__none__", index)
+            key = (
+                (model_id, card.get("base_model")) if model_id is not None else ("__none__", index)
+            )
             if key not in groups:
                 groups[key] = []
                 order.append(key)
             groups[key].append(card)
 
         merged: List[Dict[str, Any]] = []
+        # model_id -> every sibling version (all bases), for also_for
+        all_siblings: Dict[Any, Dict[Any, Dict[str, Any]]] = {}
         for key in order:
             members = groups[key]
+            card_base = members[0].get("base_model")
 
             # Pick representative: newest member with a preview image,
             # falling back to the newest member overall.
@@ -646,12 +760,16 @@ class ContextBuilder:
                     }
                 )
 
-            # Add remote-only siblings (those without a local card), deduped.
-            model_id = key if not isinstance(key, tuple) else None
+            # Add remote-only siblings of this base (those without a local card), deduped.
+            model_id = key[0] if key[0] != "__none__" else None
             seen_remote = set()
             for member in members:
                 for sibling in member.get("sibling_versions", []) or []:
                     sib_id = sibling.get("id")
+                    if model_id is not None:
+                        all_siblings.setdefault(model_id, {}).setdefault(sib_id, sibling)
+                    if model_id is not None and sibling.get("baseModel") != card_base:
+                        continue
                     if sib_id in member_ids or sib_id in seen_remote:
                         continue
                     seen_remote.add(sib_id)
@@ -679,7 +797,12 @@ class ContextBuilder:
 
             duplicates = [paths for paths in copies.values() if len(paths) > 1]
             merged_card["duplicates"] = [p for paths in duplicates for p in paths]
-            update = update_available(versions)
+            distinct = {os.path.normcase(os.path.abspath(p)) for ps in copies.values() for p in ps}
+            sizes = [s for s in (_size_of(p) for p in distinct) if s is not None]
+            if sizes:
+                merged_card["file_size"] = sum(sizes)
+            skip = declined(model_id, versions) if declined and model_id is not None else None
+            update = update_available(versions, skip)
             merged_card["update_version"] = update.get("name") if update else None
             health = []
             if update:
@@ -701,6 +824,7 @@ class ContextBuilder:
             merged_card["health"] = health
             merged.append(merged_card)
 
+        _attach_also_for(merged, all_siblings, domains, declined, used_bases)
         return merged
 
     def _filter_model_files(self, file_path: str, metadata: Dict[str, Any]) -> Dict[str, Any]:

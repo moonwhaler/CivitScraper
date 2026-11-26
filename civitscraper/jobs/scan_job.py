@@ -15,7 +15,7 @@ import logging
 import os
 import threading
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from ..api.client import CivitAIClient
 from ..api.exceptions import ClientError
@@ -29,6 +29,8 @@ from ..scanner.discovery import find_model_files, get_metadata_path
 from ..scanner.processor import ModelProcessor
 from ..sorting.analysis import gallery_flags
 from ..sorting.mover import pending_journals
+from ..updates.bases import used_bases as learn_used_bases
+from ..updates.decisions import load_if_present as load_update_decisions
 from ..scanner.sidecar import (
     bookkeeping,
     has_civitai_metadata,
@@ -41,6 +43,16 @@ from ..scanner.sidecar import (
 )
 
 DEFAULT_REFRESH_AFTER_DAYS = 14
+
+
+def update_job_name(config: Dict[str, Any]) -> Optional[str]:
+    """Name of the first download-updates job, for the summary hint."""
+    for name, job in (config.get("jobs") or {}).items():
+        if isinstance(job, dict) and job.get("type") == "download-updates":
+            return str(name)
+    return None
+
+
 DEFAULT_REFRESH_MAX_PER_RUN = 100
 
 logger = logging.getLogger(__name__)
@@ -89,6 +101,7 @@ class ScanJob:
         # Files whose sidecar changed: their pages are regenerated
         self.updated: set = set()
         self.misplaced_count = 0
+        self.update_count = 0
         self.summary = {
             "new": 0,
             "refreshed": 0,
@@ -612,7 +625,30 @@ class ScanJob:
             include_existing=include_existing,
             unmatched=self.unmatched_files(),
             misplaced=self.misplaced_models(),
+            update_declined=self.update_declined(),
+            used_bases=self.used_bases(),
         )
+        self.update_count = getattr(self.html_generator, "update_count", 0)
+
+    def used_bases(self) -> Any:
+        """Learn the base models you use and your base folders ("Also for", grouping)."""
+        if not (self.job_specific_config.get("sorting") or {}).get("gallery_flag", True):
+            return None
+        try:
+            return learn_used_bases(self.job_specific_config)
+        except Exception as e:  # never let the hint break the gallery
+            logger.warning(f"Could not learn which base models you use: {e}")
+            logger.debug("Traceback:", exc_info=True)
+            return None
+
+    def update_declined(self) -> Optional[Callable[[Any, List[Dict[str, Any]]], Set[Any]]]:
+        """Versions declined in the update walk-through, hidden from the update flag."""
+        try:
+            decisions = load_update_decisions(self.job_specific_config)
+        except Exception as e:  # never let the hint break the gallery
+            logger.warning(f"Could not read the update decisions: {e}")
+            return None
+        return decisions.declined_ids if decisions else None
 
     def misplaced_models(self) -> Dict[str, Dict[str, Any]]:
         """Models in the wrong folder, for the gallery's "misplaced" flag."""
@@ -653,6 +689,12 @@ class ScanJob:
 
     def log_summary(self) -> None:
         """Log what the job did."""
+        if self.update_count:
+            job = update_job_name(self.config)
+            logger.info(
+                f"{self.update_count} model(s) have a newer version on CivitAI"
+                + (f": run civitscraper -j {job} to download them" if job else "")
+            )
         if self.misplaced_count:
             logger.info(
                 f"{self.misplaced_count} model(s) seem to be in the wrong folder: "

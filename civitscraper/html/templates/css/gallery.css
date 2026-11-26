@@ -229,6 +229,89 @@
 .g-size input { width: 110px; accent-color: var(--signal); }
 .g-filters-open { display: none; }
 
+/* --- Groups: drill-down by type, base model and folder ------------------- */
+.g-crumbs { margin: 0 0 14px; font-size: var(--fs-15); }
+.g-crumbs nav { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.crumb { color: var(--ink-2); }
+a.crumb:hover { color: var(--signal); }
+.crumb.current { color: var(--ink); font-weight: 600; }
+.crumb.skipped { color: var(--ink-3); }
+.crumb-sep { color: var(--ink-3); }
+.g-groups { margin-bottom: 26px; }
+.group-level { margin: 0 0 10px; }
+.group-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--mount-min), 1fr));
+    gap: 22px 18px;
+}
+/* A box of slides: one mount on top, two edges peeking out behind it. */
+.group-tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 6px 6px 10px;
+    text-align: left;
+    color: inherit;
+    font: inherit;
+    background: var(--mount);
+    border: 1px solid var(--line);
+    border-radius: var(--r-mount);
+    cursor: pointer;
+    box-shadow:
+        5px -5px 0 -1px var(--mount), 5px -5px 0 0 var(--line),
+        10px -10px 0 -1px var(--mount), 10px -10px 0 0 var(--line);
+    margin: 10px 10px 0 0;
+    transition: transform 0.2s var(--ease), border-color 0.2s;
+    animation: rise 0.4s var(--ease) both;
+    animation-delay: calc(var(--i, 0) * 22ms);
+}
+.group-tile::before {
+    content: "";
+    position: absolute;
+    left: -1px;
+    bottom: 18px;
+    width: 3px;
+    height: 20px;
+    border-radius: 0 3px 3px 0;
+    background: var(--type, var(--line-strong));
+}
+.group-tile:hover { transform: translateY(-2px); border-color: var(--line-strong); }
+.group-tile:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
+.group-mosaic {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 1px;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    border-radius: calc(var(--r-mount) - 4px);
+    background: var(--line);
+}
+.gm-cell { position: relative; overflow: hidden; background: var(--well); min-height: 0; }
+/* Fewer previews fill the window: 1 whole, 2 side by side, 3 as one large and two small. */
+.group-mosaic[data-n="1"] .gm-cell { grid-column: 1 / -1; grid-row: 1 / -1; }
+.group-mosaic[data-n="2"] .gm-cell { grid-row: 1 / -1; }
+.group-mosaic[data-n="3"] .gm-cell:first-child { grid-row: 1 / -1; }
+.gm-cell > img, .gm-cell > video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.group-body { display: flex; flex-direction: column; gap: 4px; padding: 0 4px 0 8px; min-width: 0; }
+.group-name {
+    font-weight: 650;
+    font-size: var(--fs-15);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.group-meta { display: flex; flex-wrap: wrap; gap: 0 6px; color: var(--ink-3); font: var(--fs-12)/1.5 var(--mono); }
+.group-meta .sep { color: var(--line-strong); }
+.group-flags { display: flex; flex-wrap: wrap; gap: 4px; }
+.card-path { margin: 0; color: var(--ink-3); font: var(--fs-12)/1.4 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip.other_bases { border-color: var(--line); background: var(--signal-soft); color: var(--signal); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) {
+    .group-tile { animation: none; transition: none; }
+    .group-tile:hover { transform: none; }
+}
+
 /* --- Results: cards ------------------------------------------------------- */
 .g-results.view-cards {
     display: grid;

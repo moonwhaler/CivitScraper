@@ -203,12 +203,21 @@ def test_gallery_ships_new_assets(tmp_path, sample_config):
     HTMLGenerator(sample_config).generate_gallery([str(model)], str(out), include_existing=False)
 
     html = out.read_text()
-    for asset in ("css/theme.css", "css/gallery.css", "js/common.js", "js/gallery.js"):
+    for asset in (
+        "css/theme.css",
+        "css/gallery.css",
+        "js/common.js",
+        "js/grouping.js",
+        "js/gallery.js",
+    ):
         assert f'"{asset}"' in html
         assert os.path.isfile(out.parent / asset)
     assert "base.css" not in html
     assert (
-        html.index("js/common.js") < html.index("data/models_data.js") < html.index("js/gallery.js")
+        html.index("js/common.js")
+        < html.index("data/models_data.js")
+        < html.index("js/grouping.js")
+        < html.index("js/gallery.js")
     )
 
 
