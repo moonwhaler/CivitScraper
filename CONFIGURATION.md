@@ -9,6 +9,7 @@ At start-up CivitScraper warns about keys it does not know, since those are igno
 - [Output Location Configuration](#output-location-configuration)
 - [HTML Generation Configuration](#html-generation-configuration)
 - [Advanced Organization Settings](#advanced-organization-settings)
+- [Keeping Models Up to Date](#keeping-models-up-to-date)
 - [Scanner Settings (Caching)](#scanner-settings-caching)
 - [Logging Configuration](#logging-configuration)
 - [Batch Processing Details](#batch-processing-details)
@@ -122,11 +123,12 @@ output:
     -   *Update available*: CivitAI has a version newer than every local version on the same base model. A new SDXL release does not flag a model you only keep for SD 1.5.
     -   *No preview*: no preview image was found.
     -   *Duplicate*: the same CivitAI version is stored at two or more locations. Organized copies and symlinks (copy/symlink mode) are not counted.
+    -   *Removed from CivitAI*: CivitAI no longer lists the version (or the whole model). The card and page show the last data fetched; nothing local is deleted. See [Keeping Models Up to Date](#keeping-models-up-to-date).
     -   *Not on CivitAI*: scanned files that have no sidecar because CivitAI answered "not found" for their hash. Other files without a sidecar (never looked up, or the lookup failed) are listed as *No metadata yet*. Both are in the collapsible panel above the results.
 -   **Blur NSFW** blurs previews of models above `api.nsfw.level_threshold` until you hover them. The setting is remembered.
 -   **Light and dark theme**: follows the system setting; the moon/sun button switches it.
 -   Filters, search, sort and view are part of the page address, so a filtered view can be bookmarked. Going back from a model page returns to the same place in the gallery.
--   Version lists (and so *Update available*) are as fresh as each model's last lookup. With `skip_existing: true` only new files are looked up, so run a job with `skip_existing: false` now and then to refresh them. Tags come from the parent model data, so older sidecars show them after such a refresh.
+-   Version lists (and so *Update available*) are as fresh as each model's last refresh (at most `scanner.refresh_after_days`, 14 by default).
 
 ### Model Pages
 
@@ -234,6 +236,29 @@ sync-triggers:
 
 - `--dry-run` (or `dry_run: true`) reports what would change without touching the file.
 - Before changing `loras.json`, the previous version is saved as `loras.json.bak`; the file is written atomically and left untouched when nothing changed.
+
+## Keeping Models Up to Date
+
+`scan-paths` jobs look up new model files by hash. Models that already have a sidecar are refreshed once their data is older than `scanner.refresh_after_days` (default 14), also with `skip_existing: true`:
+
+```yaml
+scanner:
+  refresh_after_days: 14    # 0 turns automatic refreshes off
+  refresh_max_per_run: 100  # oldest first; the rest follow on later runs
+```
+
+-   A refresh asks CivitAI for the version by its id (no re-hashing) and updates the sidecar: stats, description, trigger words, files, images and, through the parent model, the version list and tags. Keys CivitAI does not send are kept, e.g. the "activation text", "preferred weight" and "notes" Forge's Lora editor writes into the same file.
+-   **Previews follow CivitAI without losing anything.** Files are matched to images by CivitAI's image id, not by position:
+    -   When the creator reorders the images, the files are renamed so every prompt stays with its picture.
+    -   New images are downloaded into free slots (up to `output.images.max_count`).
+    -   Images the creator removed stay on disk as *archived* previews: shown after the current ones as "No longer on CivitAI", with their prompt and settings, and not counted against `max_count`.
+    -   For NSFW models the previews come from CivitAI's community image feed, whose selection changes all the time. Those previews keep their numbers; a refresh only fills empty slots.
+    -   No preview file is ever deleted or overwritten. To download a preview again, delete its file.
+-   **Models removed from CivitAI** (the version or the whole model answers "not found") keep their sidecar, previews and page exactly as they were. They are flagged *Removed from CivitAI* in the gallery and on their page, with the date it was noticed.
+-   Network errors, server errors and rate limits change nothing; the model is tried again on the next run. Other refusals (e.g. early access) just move the next check back.
+-   `skip_existing: false` refreshes every file now (by hash), with the same rules. Offline jobs (`use_cached_metadata: true`) never refresh.
+-   Sidecars Forge wrote on its own (without CivitAI data) are looked up like new files; their keys are kept.
+-   The job summary counts new, refreshed and removed models.
 
 ## Scanner Settings (Caching)
 

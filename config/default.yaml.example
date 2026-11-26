@@ -82,8 +82,9 @@ jobs:
   fetch-all:
     type: scan-paths
     recursive: false      # Search in subdirectories
-    skip_existing: true   # Skip files that already have metadata (false re-fetches metadata
-                          # and re-downloads every preview on each run)
+    skip_existing: true   # Look up only new files; known ones are refreshed after
+                          # scanner.refresh_after_days. false re-fetches every file now
+                          # (previews are never deleted, only missing ones downloaded)
     verify_hashes: true  # Verify file hashes against CivitAI data
     paths: ["lora"]      # Process these path types
     output:
@@ -224,6 +225,8 @@ scanner:
   force_refresh: false             # [true/false] Ignore cache and force refresh
   not_found_validity: 604800       # [seconds] Skip re-querying hashes CivitAI answered 404 for
   hash_workers: 4                  # Parallel hash + lookup workers (1 for HDD, 2 for NAS)
+  refresh_after_days: 14           # Refresh a known model's data after this many days (0: never)
+  refresh_max_per_run: 100         # At most this many refreshes per run (oldest first)
 
 # =============================================================================
 # Logging Configuration
