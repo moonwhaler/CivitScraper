@@ -3,9 +3,8 @@
 import os
 
 from civitscraper.html.context import HEALTH_MISPLACED, ContextBuilder
-from civitscraper.sorting.analysis import gallery_flags
+from civitscraper.sorting.analysis import analyze, gallery_flags
 from civitscraper.sorting.decisions import KEEP, Decisions, decisions_path, file_key
-from civitscraper.sorting.analysis import analyze
 
 from .conftest import beta_lora, sidecar, write_safetensors
 
@@ -35,8 +34,15 @@ def test_kept_files_are_not_flagged(library):
 
 
 def test_merged_card_gets_the_health_flag():
-    card = {"model_id": 1, "version_id": 2, "name": "x", "html_path": "/a.html",
-            "file_path": "/a.safetensors", "misplaced": {"to": "Lora/Beta", "why": "CivitAI: Beta"},
-            "preview_image_path": "/a.jpeg", "sibling_versions": []}
+    card = {
+        "model_id": 1,
+        "version_id": 2,
+        "name": "x",
+        "html_path": "/a.html",
+        "file_path": "/a.safetensors",
+        "misplaced": {"to": "Lora/Beta", "why": "CivitAI: Beta"},
+        "preview_image_path": "/a.jpeg",
+        "sibling_versions": [],
+    }
     (merged,) = ContextBuilder.merge_gallery_models([card])
     assert HEALTH_MISPLACED in merged["health"]

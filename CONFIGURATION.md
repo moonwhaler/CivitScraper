@@ -468,14 +468,14 @@ logging:
     enabled: true                  # Enable logging to a file
     level: DEBUG                   # Minimum level for file messages
     directory: logs                # Directory to store log files
-    filename: civitscraper.log     # Base name for log files
     max_size: 10                   # [MB] Maximum size before rotating the log file
-    backup_count: 5                # Number of backup log files to keep (e.g., civitscraper.log.1, .2, etc.)
+    backup_count: 5                # Rotated pieces kept when one run's log exceeds max_size (.log.1, .log.2, ...)
+    keep_files: 10                 # Log files of the newest N runs kept; older ones are deleted (0 = keep all)
 ```
 
 -   Set `level` under `logging`, `console`, and `file` to control verbosity. `DEBUG` is the most verbose.
 -   `simple: true` in `console` provides less detailed output, suitable for general use.
--   File logging (`file.enabled: true`) creates rotating logs in the specified `directory`.
+-   File logging (`file.enabled: true`) writes one `civitscraper_<timestamp>.log` per run into `directory`, rotated by `max_size`/`backup_count`. Only the newest `keep_files` runs are kept.
 
 ## Batch Processing Details
 

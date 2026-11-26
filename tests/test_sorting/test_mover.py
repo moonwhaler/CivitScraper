@@ -36,7 +36,11 @@ def test_model_moves_with_every_companion(model):
     journal = Journal.create(config)
     assert Mover(config).apply(plan, journal) is None
     assert names(os.path.dirname(dst)) == [
-        "m.html", "m.json", "m.preview1.jpeg", "m.preview2.mp4", "m.safetensors",
+        "m.html",
+        "m.json",
+        "m.preview1.jpeg",
+        "m.preview2.mp4",
+        "m.safetensors",
         "m.safetensors.rgthree-info.json",
     ]
     assert not any(n.startswith("m.") for n in os.listdir(os.path.dirname(src)))
@@ -104,8 +108,9 @@ def test_interrupted_run_is_finished(model):
     config, models, src, dst = model
     plan = plan_move(src, dst, config)
     journal = Journal.create(config)
-    journal.models.append({"source": src, "target": dst, "moves": plan.moves,
-                           "created_dirs": [], "status": "running"})
+    journal.models.append(
+        {"source": src, "target": dst, "moves": plan.moves, "created_dirs": [], "status": "running"}
+    )
     journal.save()
     # crash after the model file and one companion moved
     os.makedirs(os.path.dirname(dst))
@@ -170,6 +175,8 @@ def test_hash_cache_follows_the_file(model):
 def test_dry_run_changes_nothing(model):
     config, models, src, dst = model
     before = tree(models)
-    assert Mover(config, dry_run=True).apply(plan_move(src, dst, config),
-                                             Journal.create(config)) is None
+    assert (
+        Mover(config, dry_run=True).apply(plan_move(src, dst, config), Journal.create(config))
+        is None
+    )
     assert tree(models) == before

@@ -14,17 +14,17 @@ from civitscraper.api.domains import (
 @pytest.mark.parametrize(
     "metadata,expected",
     [
-        ({"nsfwLevel": 1}, False),   # PG
-        ({"nsfwLevel": 2}, False),   # PG-13
-        ({"nsfwLevel": 3}, False),   # PG | PG-13, still below Mature
-        ({"nsfwLevel": 4}, True),    # Mature
-        ({"nsfwLevel": 60}, True),   # Mature|X|XX|XXX
-        ({"nsfw": True}, True),      # explicit top-level flag, no level
+        ({"nsfwLevel": 1}, False),  # PG
+        ({"nsfwLevel": 2}, False),  # PG-13
+        ({"nsfwLevel": 3}, False),  # PG | PG-13, still below Mature
+        ({"nsfwLevel": 4}, True),  # Mature
+        ({"nsfwLevel": 60}, True),  # Mature|X|XX|XXX
+        ({"nsfw": True}, True),  # explicit top-level flag, no level
         ({"nsfw": False}, False),
-        ({"model": {"nsfw": True}}, True),   # real by-hash shape: nsfw nested under model
+        ({"model": {"nsfw": True}}, True),  # real by-hash shape: nsfw nested under model
         ({"model": {"nsfw": False}}, False),
         ({"nsfwLevel": 1, "model": {"nsfw": True}}, True),  # nested flag overrides low level
-        ({}, False),                 # missing => SFW
+        ({}, False),  # missing => SFW
     ],
 )
 def test_is_nsfw(metadata, expected):

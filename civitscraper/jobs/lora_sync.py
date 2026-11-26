@@ -100,8 +100,7 @@ def update_entry(
         current_triggers = entry.get("metadata", {}).get("lora_triggers")
         if current_triggers:
             logger.debug(
-                f"Skipping update for {filename} as it already has triggers: "
-                f"{current_triggers}"
+                f"Skipping update for {filename} as it already has triggers: " f"{current_triggers}"
             )
             return SKIPPED
 

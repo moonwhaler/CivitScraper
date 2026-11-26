@@ -113,8 +113,9 @@ def test_checkpoint_in_lora_folder_moves_to_unet(library):
 
 def test_cross_root_proposes_the_folder_name_used_elsewhere(library):
     config, models = library
-    p = write_safetensors(models / "Lora" / "Beta" / "concept" / "bck.safetensors",
-                          checkpoint(3072))
+    p = write_safetensors(
+        models / "Lora" / "Beta" / "concept" / "bck.safetensors", checkpoint(3072)
+    )
     sidecar(p, "Beta", "Checkpoint", version_id=994)
     s = by_name(analyze(config, PATHS))["bck.safetensors"]
     assert s.options[0].target == str(models / "unet" / "Beta" / "bck.safetensors")

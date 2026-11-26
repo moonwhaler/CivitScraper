@@ -19,18 +19,29 @@ URL = "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/0a1b2c3d-uuid/original=t
 
 def _old():
     return {
-        "id": 1, "modelId": 2, "name": "v1", "stats": {"downloadCount": 5},
+        "id": 1,
+        "modelId": 2,
+        "name": "v1",
+        "stats": {"downloadCount": 5},
         "images": [{"url": URL, "meta": {"prompt": "old"}}],
         "parentModel": {"id": 2, "tags": ["style"]},
-        "siblingVersions": [{"id": 1}], "siblingVersionsFetchedAt": 100.0,
-        "activation text": "my trigger", "preferred weight": 0.8, "notes": "mine",
+        "siblingVersions": [{"id": 1}],
+        "siblingVersionsFetchedAt": 100.0,
+        "activation text": "my trigger",
+        "preferred weight": 0.8,
+        "notes": "mine",
     }
 
 
 def test_refresh_keeps_keys_civitai_does_not_send():
-    fresh = {"id": 1, "modelId": 2, "name": "v1", "stats": {"downloadCount": 9},
-             "images": [{"url": URL.replace("0a1b", "ffff"), "meta": {}}],
-             IMAGES_INFO: {"source": "showcase", "degraded": False}}
+    fresh = {
+        "id": 1,
+        "modelId": 2,
+        "name": "v1",
+        "stats": {"downloadCount": 9},
+        "images": [{"url": URL.replace("0a1b", "ffff"), "meta": {}}],
+        IMAGES_INFO: {"source": "showcase", "degraded": False},
+    }
     merged = merge_refreshed(_old(), fresh, now=500.0)
     assert merged["stats"] == {"downloadCount": 9}
     assert merged["activation text"] == "my trigger"
@@ -38,14 +49,15 @@ def test_refresh_keeps_keys_civitai_does_not_send():
     assert merged["parentModel"]["tags"] == ["style"]
     assert merged["siblingVersions"] == [{"id": 1}]
     assert merged["images"] == fresh["images"]
-    assert merged[NAMESPACE] == {"fetchedAt": 500.0, "checkedAt": 500.0,
-                                 "imagesSource": "showcase"}
+    assert merged[NAMESPACE] == {"fetchedAt": 500.0, "checkedAt": 500.0, "imagesSource": "showcase"}
     assert merged[DIRTY_FLAG] is True and IMAGES_INFO not in merged
 
 
 def test_degraded_or_empty_images_keep_the_old_list():
-    for fresh_images, info in (([{"url": "sfw"}], {"source": "showcase", "degraded": True}),
-                               ([], {"source": "showcase", "degraded": False})):
+    for fresh_images, info in (
+        ([{"url": "sfw"}], {"source": "showcase", "degraded": True}),
+        ([], {"source": "showcase", "degraded": False}),
+    ):
         merged = merge_refreshed(_old(), {"id": 1, "images": fresh_images, IMAGES_INFO: info})
         assert merged["images"] == _old()["images"]
 
@@ -77,8 +89,10 @@ def test_image_identity_and_source():
     assert image_key({}) == ""
     assert images_source({"images": [{"url": URL}]}) == "showcase"
     assert images_source({"images": [{"id": 5, "url": URL}]}) == "feed"
-    assert images_source({NAMESPACE: {"imagesSource": "showcase"},
-                          "images": [{"id": 5}]}) == "showcase"
+    assert (
+        images_source({NAMESPACE: {"imagesSource": "showcase"}, "images": [{"id": 5}]})
+        == "showcase"
+    )
 
 
 def test_forge_only_sidecar_has_no_civitai_metadata():

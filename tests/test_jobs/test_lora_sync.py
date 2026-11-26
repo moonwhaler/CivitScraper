@@ -93,8 +93,9 @@ def test_sync_reads_files_as_utf8(tmp_path, monkeypatch):
         return real_open(path, mode, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "open", spy)
-    config = {"input_paths": {"l": {"path": str(models), "type": "LORA",
-                                    "patterns": ["*.safetensors"]}}}
+    config = {
+        "input_paths": {"l": {"path": str(models), "type": "LORA", "patterns": ["*.safetensors"]}}
+    }
     job = {"paths": ["l"], "loras_file": str(loras_file)}
     assert LoraTriggerSync(config, "sync", job).run()
     assert encodings and set(encodings.values()) == {"utf-8"}

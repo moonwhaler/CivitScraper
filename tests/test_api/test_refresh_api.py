@@ -11,8 +11,9 @@ from civitscraper.scanner.version_enricher import VersionEnricher
 
 
 def _client(tmp_path):
-    return CivitAIClient({"api": {"base_url": "https://civitai.com/api/v1"},
-                          "scanner": {"cache_dir": str(tmp_path)}})
+    return CivitAIClient(
+        {"api": {"base_url": "https://civitai.com/api/v1"}, "scanner": {"cache_dir": str(tmp_path)}}
+    )
 
 
 def test_get_model_version_calls_the_version_endpoint(tmp_path):
@@ -61,16 +62,18 @@ def test_old_failed_model_cache_is_ignored(tmp_path):
     from civitscraper.utils.cache import DiskCache
 
     DiskCache[bool](str(tmp_path / "failed_models")).set("failed_model_3", True)
-    assert not VersionEnricher(MagicMock(), {"scanner": {"cache_dir": str(tmp_path)}}
-                               )._is_model_known_failed(3)
+    assert not VersionEnricher(
+        MagicMock(), {"scanner": {"cache_dir": str(tmp_path)}}
+    )._is_model_known_failed(3)
 
 
 def test_every_retry_takes_a_rate_limit_token():
     limiter = MagicMock()
     breaker = MagicMock()
     breaker.is_open.return_value = False
-    handler = RequestHandler("https://civitai.com/api/v1", limiter, breaker,
-                             max_retries=2, base_retry_delay=0)
+    handler = RequestHandler(
+        "https://civitai.com/api/v1", limiter, breaker, max_retries=2, base_retry_delay=0
+    )
     response = MagicMock(status_code=503, text="down")
     handler.session.request = MagicMock(return_value=response)
     with pytest.raises(ServerError):

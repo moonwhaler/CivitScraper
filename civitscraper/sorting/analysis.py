@@ -26,10 +26,6 @@ class Analysis:
     suggestions: List[Suggestion] = field(default_factory=list)
     keys: Dict[str, Optional[str]] = field(default_factory=dict)
 
-    def by_path(self) -> Dict[str, Suggestion]:
-        """Suggestions keyed by normalized path."""
-        return {os.path.normcase(os.path.abspath(s.path)): s for s in self.suggestions}
-
 
 def _load_sidecar(path: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     sidecar = get_metadata_path(path, config)

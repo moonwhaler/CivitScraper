@@ -28,7 +28,7 @@ def get_domain_settings(config: Dict[str, Any]) -> Tuple[Dict[str, str], int, st
 
 
 def is_nsfw(metadata: Dict[str, Any], level_threshold: int = DEFAULT_LEVEL_THRESHOLD) -> bool:
-    """True when the model/version is NSFW.
+    """Return True when the model/version is NSFW.
 
     NSFW if the version ``nsfwLevel >= level_threshold``, or a truthy ``nsfw`` flag
     is present. Real by-hash responses put ``nsfwLevel`` at the top level (verified)

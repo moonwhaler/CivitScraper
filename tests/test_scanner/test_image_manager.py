@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from civitscraper.scanner.discovery import list_preview_files
 from civitscraper.scanner.image_manager import ImageManager
 
 
@@ -43,7 +44,7 @@ def test_existing_preview_paths_ignore_non_numbered_preview_file(tmp_path):
     stray.write_bytes(b"data")
 
     # Must not raise ValueError("Invalid preview filename")
-    result = manager._existing_preview_paths(str(model_path), 1)
+    result = list_preview_files(str(model_path), manager.config)
 
     assert result == []
 

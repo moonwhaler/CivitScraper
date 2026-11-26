@@ -1,6 +1,6 @@
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
+    rev: v6.0.0
     hooks:
     -   id: trailing-whitespace
     -   id: end-of-file-fixer
@@ -8,27 +8,26 @@ repos:
     -   id: check-added-large-files
 
 -   repo: https://github.com/psf/black
-    rev: 23.3.0
+    rev: 26.10.1
     hooks:
     -   id: black
 
 -   repo: https://github.com/pycqa/isort
-    rev: 5.12.0
+    rev: 9.0.2
     hooks:
     -   id: isort
-        args: ["--profile", "black"]
 
 -   repo: https://github.com/pycqa/flake8
-    rev: 6.0.0
+    rev: 7.5.0
     hooks:
     -   id: flake8
         additional_dependencies: [flake8-docstrings]
-        args: ["--max-line-length=100", "--extend-ignore=E203"]
 
 -   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.3.0
+    rev: v2.4.1
     hooks:
     -   id: mypy
+        files: ^civitscraper/
         additional_dependencies: [types-requests, types-PyYAML]
         args: ["--ignore-missing-imports"]
 
@@ -48,5 +47,6 @@ repos:
             "PyYAML>=5.4.0",
             "requests>=2.25.0",
             "jinja2>=3.0.0",
-            "blake3>=0.3.0"
+            "blake3>=0.3.0",
+            "nh3>=0.2.14"
         ]

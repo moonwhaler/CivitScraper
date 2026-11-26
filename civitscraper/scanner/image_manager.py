@@ -454,20 +454,6 @@ class ImageManager:
                 present.setdefault(i + 1, []).append(path)
         return [paths[0] for _, paths in sorted(present.items())]
 
-    def _existing_preview_paths(self, file_path: str, max_count: Optional[int]) -> List[str]:
-        """
-        Paths of a model's numbered preview files, lowest number first.
-
-        Args:
-            file_path: Path to model file
-            max_count: Maximum number of images
-
-        Returns:
-            Preview file paths
-        """
-        paths = [path for path, _, _ in list_preview_files(file_path, self.config)]
-        return paths[:max_count] if max_count is not None else paths
-
     def _download_single_image(
         self, file_path: str, image: Dict[str, Any], index: int, total_count: int
     ) -> Optional[str]:

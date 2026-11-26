@@ -85,26 +85,3 @@ class CircuitBreaker:
         with self.lock:
             if endpoint in self.failures:
                 self.failures[endpoint] = 0
-
-    def get_failure_count(self, endpoint: str) -> int:
-        """
-        Get failure count for endpoint.
-
-        Args:
-            endpoint: API endpoint
-
-        Returns:
-            Failure count
-        """
-        with self.lock:
-            return self.failures.get(endpoint, 0)
-
-    def get_open_circuits(self) -> Dict[str, float]:
-        """
-        Get all open circuits.
-
-        Returns:
-            Dictionary of endpoint -> open time
-        """
-        with self.lock:
-            return self.open_circuits.copy()

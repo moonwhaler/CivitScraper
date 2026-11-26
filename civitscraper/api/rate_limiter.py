@@ -30,10 +30,8 @@ class RateLimiter:
 
         if per_second:
             self.refill_rate = float(rate_limit)
-            self.refill_interval = 1.0
         else:
             self.refill_rate = float(rate_limit) / 60.0
-            self.refill_interval = 60.0
 
         logger.debug(
             f"Initialized rate limiter with {rate_limit} requests per "

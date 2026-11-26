@@ -14,13 +14,10 @@ MANIFEST
 logs/
 *.log
 
-# Examples
-examples/
-
 # Config
 config/default.yaml
 
-# Unit test / coverage reports
+# Unit test / coverage / type-check caches
 htmlcov/
 .tox/
 .nox/
@@ -33,6 +30,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+.mypy_cache/
 .test_cache/
 
 # Virtual environments
@@ -55,11 +53,11 @@ Thumbs.db
 # Project specific cache
 .civitscraper_cache/
 
+# Local tooling (CodeGraph index)
+.codegraph/
+
 # Pre-commit
 .pre-commit-config.yaml.bak
-
-# Documentation
-model-gallery-details.md
 
 # Ignore all Markdown except readme.md, CONFIGURATION.md, and the docs/ dir
 *.md
@@ -68,9 +66,12 @@ model-gallery-details.md
 !docs/
 !docs/**/*.md
 
-# Sort decisions (sort-models job)
-config/sort-decisions.json
-# Update decisions (download-updates job)
-config/update-decisions.json
-update-decisions.json
+# Decisions remembered by the sort-models and download-updates jobs
 sort-decisions.json
+update-decisions.json
+
+# Config backups
+config/*.bak-*
+
+# Local reference copy of the CivitAI API docs (not ours to redistribute)
+civitai_REST_API_Reference.pdf

@@ -10,7 +10,7 @@ api:
   base_url: "https://civitai.com/api/v1"  # API endpoint
   timeout: 30             # [seconds] API request timeout
   max_retries: 3         # Number of times to retry failed requests
-  user_agent: "CivitScraper/0.2.0"  # User agent string
+  user_agent: "CivitScraper/0.3.0"  # User agent string
 
   # Domain routing: NSFW models live on civitai.red, SFW on civitai.com (split 2026-04-15)
   domains:
@@ -317,4 +317,5 @@ logging:
     level: DEBUG                   # File log level
     directory: logs                # Log file directory
     max_size: 10                  # [MB] Max log file size
-    backup_count: 5               # Number of backup files to keep
+    backup_count: 5               # Rotated pieces kept when one run's log exceeds max_size
+    keep_files: 10                # Log files of the newest N runs kept; older ones deleted (0 = keep all)

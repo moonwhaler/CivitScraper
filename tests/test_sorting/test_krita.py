@@ -16,8 +16,13 @@ def setup_krita(tmp_path):
         {"id": "Alpha/style/m.safetensors.bak", "name": "other"},
     ]
     (db / "loras.json").write_text(json.dumps(loras, indent=2) + "\n")
-    style = {"name": "s", "loras": [{"name": "Alpha/style/m.safetensors", "strength": 1.0},
-                                    {"name": "m.safetensors", "strength": 0.5}]}
+    style = {
+        "name": "s",
+        "loras": [
+            {"name": "Alpha/style/m.safetensors", "strength": 1.0},
+            {"name": "m.safetensors", "strength": 0.5},
+        ],
+    }
     (styles / "s.json").write_text(json.dumps(style, indent=4))
     config = {"sorting": {"krita": {"loras_file": str(db / "loras.json")}}}
     return config, db, styles
@@ -60,8 +65,9 @@ def test_windows_separators_match_too(tmp_path):
 
 def test_default_paths_come_from_the_trigger_sync_job(tmp_path):
     config, db, styles = setup_krita(tmp_path)
-    config = {"jobs": {"sync": {"type": "sync-lora-triggers",
-                                "loras_file": str(db / "loras.json")}}}
+    config = {
+        "jobs": {"sync": {"type": "sync-lora-triggers", "loras_file": str(db / "loras.json")}}
+    }
     krita = KritaReferences(config)
     assert krita.loras_file == str(db / "loras.json")
     assert krita.styles_dir == str(styles)

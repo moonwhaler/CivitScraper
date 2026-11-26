@@ -127,11 +127,6 @@ class Candidate:
         if not self.target and self.newer:
             self.target = self.newer[0]
 
-    @property
-    def nsfw_meta(self) -> Dict[str, Any]:
-        """Metadata used to route the CivitAI links."""
-        return self.anchor_meta
-
 
 def _local_hashes(members: List[Tuple[str, Dict[str, Any]]]) -> FrozenSet[str]:
     """SHA256 of each local file, from its sidecar entry."""

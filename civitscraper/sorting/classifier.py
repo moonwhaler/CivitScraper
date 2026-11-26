@@ -282,7 +282,7 @@ class Classifier:
             best_sim[base] = max(best_sim.get(base, 0.0), sim)
         total = sum(weights.values())
         ranked = sorted(weights.items(), key=lambda pair: pair[1], reverse=True)
-        base, weight = ranked[0]
+        base = ranked[0][0]
         runner_up = (ranked[1][0], ranked[1][1] / total) if len(ranked) > 1 else None
         # Votes inside one structural family count for the winner's family.
         family_bases = self.structural_family(family, base)

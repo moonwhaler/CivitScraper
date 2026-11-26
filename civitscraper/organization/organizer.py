@@ -281,39 +281,6 @@ class FileOrganizer:
         ext = os.path.splitext(related_path)[1]
         return get_image_path(target_path, self.config, f"preview{preview_index}", ext)
 
-    def get_target_paths(
-        self,
-        file_paths: List[str],
-        metadata_dict: Dict[str, Dict[str, Any]],
-    ) -> Dict[str, str]:
-        """
-        Get target paths for files without performing operations.
-
-        Args:
-            file_paths: List of file paths
-            metadata_dict: Dictionary of file path -> metadata
-
-        Returns:
-            Dictionary mapping source paths to target paths
-        """
-        if not self.org_config.enabled:
-            logger.debug("Organization is disabled")
-            return {}
-
-        target_paths = {}
-
-        for file_path in file_paths:
-            metadata = metadata_dict.get(file_path)
-            if not metadata:
-                logger.warning(f"No metadata found for {file_path}")
-                continue
-
-            target_path = self.get_target_path(file_path, metadata)
-            if target_path:
-                target_paths[file_path] = target_path
-
-        return target_paths
-
     def organize_files(
         self,
         file_paths: List[str],

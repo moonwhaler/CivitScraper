@@ -58,8 +58,14 @@ def write_model(path, version_id, model_id, base, siblings, created, name="v1", 
 
 
 def sibling(version_id, created, base="Flux.1 D", name=None):
-    return {"id": version_id, "name": name or f"v{version_id}", "baseModel": base,
-            "createdAt": created, "downloadCount": 1, "isCurrent": False}
+    return {
+        "id": version_id,
+        "name": name or f"v{version_id}",
+        "baseModel": base,
+        "createdAt": created,
+        "downloadCount": 1,
+        "isCurrent": False,
+    }
 
 
 class FakeClient:
@@ -96,7 +102,7 @@ class Response:
         for i in range(0, len(self.body), 512):
             if self.drop_after is not None and sent >= self.drop_after:
                 raise requests.ConnectionError("connection reset")
-            chunk = self.body[i:i + 512]
+            chunk = self.body[i : i + 512]
             sent += len(chunk)
             yield chunk
 
@@ -141,8 +147,14 @@ class FakeSession:
         if rng and not self.ignore_range:
             start = int(rng.split("=")[1].rstrip("-"))
             part = body[start:]
-            resp = Response(206, {"Content-Range": f"bytes {start}-{len(body) - 1}/{len(body)}",
-                                  "Content-Length": str(len(part))}, part)
+            resp = Response(
+                206,
+                {
+                    "Content-Range": f"bytes {start}-{len(body) - 1}/{len(body)}",
+                    "Content-Length": str(len(part)),
+                },
+                part,
+            )
         else:
             resp = Response(200, {"Content-Length": str(len(body))}, body)
         drop = self.drop_once.pop(file_id, None)
@@ -158,33 +170,63 @@ def library(tmp_path, monkeypatch):
     models = tmp_path / "models"
     lora = models / "Lora"
     # Model 100: local v1 (Flux), remote v2 and v3 newer on Flux, v4 on SDXL (other base)
-    sibs = [sibling(11, "2026-01-01"), sibling(12, "2026-02-01"), sibling(13, "2026-03-01"),
-            sibling(14, "2026-04-01", base="SDXL 1.0")]
-    write_model(lora / "Flux" / "style" / "foo_v1.safetensors", 11, 100, "Flux.1 D", sibs,
-                "2026-01-01")
+    sibs = [
+        sibling(11, "2026-01-01"),
+        sibling(12, "2026-02-01"),
+        sibling(13, "2026-03-01"),
+        sibling(14, "2026-04-01", base="SDXL 1.0"),
+    ]
+    write_model(
+        lora / "Flux" / "style" / "foo_v1.safetensors", 11, 100, "Flux.1 D", sibs, "2026-01-01"
+    )
     # Model 200: up to date
-    write_model(lora / "Flux" / "concept" / "bar.safetensors", 21, 200, "Flux.1 D",
-                [sibling(21, "2026-01-01")], "2026-01-01")
+    write_model(
+        lora / "Flux" / "concept" / "bar.safetensors",
+        21,
+        200,
+        "Flux.1 D",
+        [sibling(21, "2026-01-01")],
+        "2026-01-01",
+    )
     # Model 300: newer version is early access
-    write_model(lora / "Flux" / "concept" / "baz.safetensors", 31, 300, "Flux.1 D",
-                [sibling(31, "2026-01-01"), sibling(32, "2026-05-01")], "2026-01-01")
+    write_model(
+        lora / "Flux" / "concept" / "baz.safetensors",
+        31,
+        300,
+        "Flux.1 D",
+        [sibling(31, "2026-01-01"), sibling(32, "2026-05-01")],
+        "2026-01-01",
+    )
 
     contents = {12: blob(12, 8192), 13: blob(13, 6000), 32: blob(32)}
     versions = {
-        12: {"id": 12, "name": "v12", "files": [file_entry(12, "foo_v2.safetensors", contents[12])],
-             "trainedWords": ["new trigger"]},
-        13: {"id": 13, "name": "v13", "trainedWords": ["new trigger"],
-             "description": "<p>Better <b>hands</b></p>", "files": [
-            file_entry(13, "foo_v3_fp32.safetensors", blob(13, 7000), file_id=131, fp="fp32"),
-            file_entry(13, "foo_v3.safetensors", contents[13], file_id=130, primary=False)]},
-        32: {"id": 32, "name": "v32", "files": [file_entry(32, "baz_v2.safetensors", contents[32])],
-             "earlyAccessEndsAt": "2099-01-01T00:00:00.000Z"},
+        12: {
+            "id": 12,
+            "name": "v12",
+            "files": [file_entry(12, "foo_v2.safetensors", contents[12])],
+            "trainedWords": ["new trigger"],
+        },
+        13: {
+            "id": 13,
+            "name": "v13",
+            "trainedWords": ["new trigger"],
+            "description": "<p>Better <b>hands</b></p>",
+            "files": [
+                file_entry(13, "foo_v3_fp32.safetensors", blob(13, 7000), file_id=131, fp="fp32"),
+                file_entry(13, "foo_v3.safetensors", contents[13], file_id=130, primary=False),
+            ],
+        },
+        32: {
+            "id": 32,
+            "name": "v32",
+            "files": [file_entry(32, "baz_v2.safetensors", contents[32])],
+            "earlyAccessEndsAt": "2099-01-01T00:00:00.000Z",
+        },
     }
     files = {120: contents[12], 130: contents[13], 131: blob(13, 7000), 320: contents[32]}
     config = {
         "api": {"base_url": API, "key": "KEY", "max_retries": 2, "batch": {"retry_delay": 0}},
-        "input_paths": {"lora": {"path": str(lora), "type": "LORA",
-                                 "patterns": ["*.safetensors"]}},
+        "input_paths": {"lora": {"path": str(lora), "type": "LORA", "patterns": ["*.safetensors"]}},
         "jobs": {
             "fetch-all": {"type": "scan-paths", "paths": ["lora"]},
             "regenerate-html": {"type": "scan-paths", "use_cached_metadata": True},

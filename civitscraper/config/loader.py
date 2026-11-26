@@ -53,6 +53,7 @@ def expand_env_vars(config: Any) -> Any:
         return _expand_str(config)
     return config
 
+
 DEFAULT_CONFIG_PATH = "./config/default.yaml"
 USER_CONFIG_PATHS = [
     "./civitscraper.yaml",

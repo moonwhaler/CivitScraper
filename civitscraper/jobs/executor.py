@@ -5,11 +5,9 @@ This module looks up jobs defined in the configuration and runs them.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from ..api.client import CivitAIClient
-from ..config.loader import merge_configs
-from ..scanner.discovery import find_metadata_file, has_metadata, load_cached_metadata
 from ..sorting.job import SortJob
 from ..updates.job import UpdateJob
 from .lora_sync import LoraTriggerSync
@@ -89,31 +87,3 @@ class JobExecutor:
                 logger.error(f"Job {job_name} failed")
 
         return results
-
-    def _build_job_config(self, job_config: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Merge a job's settings over the global configuration.
-
-        Dict values are merged recursively; other values override.
-
-        Args:
-            job_config: Job configuration
-
-        Returns:
-            Job-specific configuration
-        """
-        return merge_configs(self.config, job_config)
-
-    def _find_metadata_file(self, file_path: str, config: Dict[str, Any]) -> Optional[str]:
-        """Find a model's metadata file (see ``scanner.discovery.find_metadata_file``)."""
-        return find_metadata_file(file_path, config)
-
-    def _has_cached_metadata(self, file_path: str, config: Optional[Dict[str, Any]] = None) -> bool:
-        """Check if a model has a sidecar at the configured location."""
-        return has_metadata(file_path, config or self.config)
-
-    def _load_cached_metadata(
-        self, file_path: str, config: Optional[Dict[str, Any]] = None
-    ) -> Optional[Dict[str, Any]]:
-        """Load a model's sidecar (see ``scanner.discovery.load_cached_metadata``)."""
-        return load_cached_metadata(file_path, config or self.config)

@@ -101,8 +101,12 @@ def test_enrich_batch_stamps_and_marks_dirty(tmp_path):
 
 def test_enrich_batch_skips_fresh(tmp_path):
     enricher, api = make_enricher(tmp_path, ttl=86400)
-    meta = {"id": 100, "modelId": 10, "siblingVersions": [{"id": 100}],
-            SIBLING_VERSIONS_TS_FIELD: time.time()}
+    meta = {
+        "id": 100,
+        "modelId": 10,
+        "siblingVersions": [{"id": 100}],
+        SIBLING_VERSIONS_TS_FIELD: time.time(),
+    }
     enricher.enrich_batch({"/f.safetensors": meta})
     api.get_parent_model_with_versions.assert_not_called()
 
@@ -119,8 +123,12 @@ def test_enrich_batch_first_time_uses_cached_fetch(tmp_path):
 def test_enrich_batch_stale_forces_http_cache_bypass(tmp_path):
     enricher, api = make_enricher(tmp_path, ttl=100)
     api.get_parent_model_with_versions.return_value = parent_payload()
-    meta = {"id": 100, "modelId": 10, "siblingVersions": [{"id": 100}],
-            SIBLING_VERSIONS_TS_FIELD: time.time() - 1000}  # present but stale
+    meta = {
+        "id": 100,
+        "modelId": 10,
+        "siblingVersions": [{"id": 100}],
+        SIBLING_VERSIONS_TS_FIELD: time.time() - 1000,
+    }  # present but stale
     enricher.enrich_batch({"/f.safetensors": meta})
     _, kwargs = api.get_parent_model_with_versions.call_args
     assert kwargs["force_refresh"] is True
@@ -131,8 +139,12 @@ def test_enrich_batch_shared_model_union_forces_when_any_stale(tmp_path):
     api.get_parent_model_with_versions.return_value = parent_payload()
     # Two files share modelId 10: one first-time-missing, one present-but-stale.
     missing = {"id": 100, "modelId": 10}
-    stale = {"id": 101, "modelId": 10, "siblingVersions": [{"id": 101}],
-             SIBLING_VERSIONS_TS_FIELD: time.time() - 1000}
+    stale = {
+        "id": 101,
+        "modelId": 10,
+        "siblingVersions": [{"id": 101}],
+        SIBLING_VERSIONS_TS_FIELD: time.time() - 1000,
+    }
     enricher.enrich_batch({"/a.safetensors": missing, "/b.safetensors": stale})
     # Model fetched once, forced because at least one contributor is stale.
     assert api.get_parent_model_with_versions.call_count == 1

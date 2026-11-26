@@ -10,8 +10,12 @@ from .conftest import FakeSession, blob
 
 def make(files, key="KEY"):
     session = FakeSession(files)
-    return dl.Downloader(key, "civitai.com", max_retries=2, retry_delay=0, session=session,
-                         sleep=lambda s: None), session
+    return (
+        dl.Downloader(
+            key, "civitai.com", max_retries=2, retry_delay=0, session=session, sleep=lambda s: None
+        ),
+        session,
+    )
 
 
 URL = "https://civitai.com/api/download/models/1?fileId=10"
@@ -37,7 +41,8 @@ def test_downloads_and_verifies_and_sends_the_key_only_to_civitai(tmp_path):
 def test_url_of_the_chosen_file_keeps_its_file_id():
     entry = {"id": 7, "downloadUrl": "https://civitai.red/api/download/models/3?fileId=7"}
     assert dl.download_url(entry, 3, "https://civitai.com/api/v1") == (
-        "https://civitai.com/api/download/models/3?fileId=7")
+        "https://civitai.com/api/download/models/3?fileId=7"
+    )
     assert dl.download_url({"id": 8}, 3, "https://civitai.com/api/v1").endswith("/3?fileId=8")
 
 
