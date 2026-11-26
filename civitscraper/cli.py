@@ -40,14 +40,17 @@ def parse_args():
         "--dry-run", action="store_true", help="Simulate file operations without making changes"
     )
 
-    # Sorting
+    # Interactive jobs (sort-models, download-updates)
     parser.add_argument(
         "--yes",
         action="store_true",
-        help="Sort job: move only the confident suggestions, without asking",
+        help="Sort: move only the confident suggestions; updates: download only the small "
+        "free ones. Without asking",
     )
     parser.add_argument(
-        "--undo", action="store_true", help="Sort job: move the last sort run's models back"
+        "--undo",
+        action="store_true",
+        help="Revert the last run of the sort or update job (with --all-jobs: of each)",
     )
 
     # Cache
