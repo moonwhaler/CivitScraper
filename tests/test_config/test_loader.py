@@ -173,9 +173,7 @@ def test_load_config_with_default_values(temp_dir: Path, monkeypatch: pytest.Mon
     default_config_file.write_text(
         'api:\n  timeout: 30\n  base_url: "https://civitai.com/api/v1"\n'
     )
-    monkeypatch.setattr(
-        "civitscraper.config.loader.DEFAULT_CONFIG_PATH", str(default_config_file)
-    )
+    monkeypatch.setattr("civitscraper.config.loader.DEFAULT_CONFIG_PATH", str(default_config_file))
 
     # Create a minimal config file
     minimal_config_file = temp_dir / "minimal.yaml"

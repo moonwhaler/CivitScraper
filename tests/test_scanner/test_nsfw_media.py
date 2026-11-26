@@ -44,7 +44,7 @@ def test_nsfw_model_replaces_images_with_feed():
     assert len(metadata["images"]) == 1
     img = metadata["images"][0]
     assert img["url"] == "https://image.civitai.com/x.jpeg"
-    assert img["nsfw"] is True          # level 8 >= threshold 4
+    assert img["nsfw"] is True  # level 8 >= threshold 4
     assert img["meta"] == {"prompt": "p"}
 
 

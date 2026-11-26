@@ -144,11 +144,7 @@ class ImageHandler:
             if not isinstance(image, dict):
                 continue
             is_archived = bool(image.get("civitscraperArchived"))
-            if (
-                not is_archived
-                and self.max_count is not None
-                and len(current) >= self.max_count
-            ):
+            if not is_archived and self.max_count is not None and len(current) >= self.max_count:
                 continue
             found = files.get(i + 1)
             if not found:

@@ -24,10 +24,15 @@ def run(config, answers=None, interactive=True, **flags):
     answers = list(answers or [])
     full = dict(config, **flags)
     regenerated = []
-    job = SortJob(full, "sort", full["jobs"]["sort"],
-                  run_job=lambda name: regenerated.append(name) or True,
-                  input_fn=lambda prompt: answers.pop(0) if answers else "q",
-                  output_fn=out.append, interactive=interactive)
+    job = SortJob(
+        full,
+        "sort",
+        full["jobs"]["sort"],
+        run_job=lambda name: regenerated.append(name) or True,
+        input_fn=lambda prompt: answers.pop(0) if answers else "q",
+        output_fn=out.append,
+        interactive=interactive,
+    )
     assert job.run()
     return "\n".join(out), regenerated
 
@@ -59,7 +64,8 @@ def test_yes_moves_only_confident_suggestions(library):
     assert "1 moved" in text
     config["jobs"]["regenerate-html"] = {"type": "scan-paths"}
     misfile_more = write_safetensors(
-        models / "Lora" / "Alpha" / "style" / "wrong2.safetensors", beta_lora(8))
+        models / "Lora" / "Alpha" / "style" / "wrong2.safetensors", beta_lora(8)
+    )
     sidecar(misfile_more, "Beta", version_id=990)
     _, regenerated = run(config, interactive=False, yes=True)
     assert regenerated == ["regenerate-html"]
@@ -94,12 +100,14 @@ def test_other_folder_with_remembered_rule(library):
 def test_batch_answer_applies_to_the_same_folders(library):
     config, models = library
     for n in range(3):
-        p = write_safetensors(models / "Lora" / "Alpha" / "style" / f"w{n}.safetensors",
-                              beta_lora(10 + n))
+        p = write_safetensors(
+            models / "Lora" / "Alpha" / "style" / f"w{n}.safetensors", beta_lora(10 + n)
+        )
         sidecar(p, "Beta", version_id=980 + n)
     text, _ = run(config, ["a"])
-    assert all((models / "Lora" / "Beta" / "style" / f"w{n}.safetensors").exists()
-               for n in range(3))
+    assert all(
+        (models / "Lora" / "Beta" / "style" / f"w{n}.safetensors").exists() for n in range(3)
+    )
     assert "3 moved" in text
 
 
@@ -171,8 +179,9 @@ def test_config_keys_are_known(library):
 
     config, _ = library
     config = dict(config, yes=True, undo=False, _config_dir="/x", dry_run=True)
-    config["sorting"].update(base_folders={"Gamma": {"lora": "Beta"}}, regenerate_job="r",
-                             gallery_flag=True)
+    config["sorting"].update(
+        base_folders={"Gamma": {"lora": "Beta"}}, regenerate_job="r", gallery_flag=True
+    )
     assert find_unknown_keys(config) == []
 
 

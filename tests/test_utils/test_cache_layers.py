@@ -19,8 +19,10 @@ def test_lru_evicts_least_recently_used():
 
 def test_disk_cache_writes_atomically(tmp_path):
     """Entries go through atomic_write and read back after a restart."""
-    with patch("civitscraper.utils.cache.atomic_write", wraps=__import__(
-            "civitscraper.utils.fs", fromlist=["atomic_write"]).atomic_write) as spy:
+    with patch(
+        "civitscraper.utils.cache.atomic_write",
+        wraps=__import__("civitscraper.utils.fs", fromlist=["atomic_write"]).atomic_write,
+    ) as spy:
         DiskCache[str](str(tmp_path)).set("k", "value")
     assert spy.call_count == 1
     assert DiskCache[str](str(tmp_path)).get("k") == "value"
@@ -30,8 +32,9 @@ def test_disk_cache_writes_atomically(tmp_path):
 
 def test_cache_manager_keeps_one_memory_copy(tmp_path):
     """The api.batch.cache_size setting sizes the single memory layer."""
-    manager = CacheManager({"scanner": {"cache_dir": str(tmp_path)},
-                            "api": {"batch": {"cache_size": 3}}})
+    manager = CacheManager(
+        {"scanner": {"cache_dir": str(tmp_path)}, "api": {"batch": {"cache_size": 3}}}
+    )
     manager.set("k", "v")
     assert manager.get("k") == "v"
     assert manager.disk_cache.memory_cache.capacity == 3

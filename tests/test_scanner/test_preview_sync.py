@@ -18,16 +18,29 @@ def png(width, height, tag=b""):
     ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
 
     def chunk(kind, data):
-        return struct.pack(">I", len(data)) + kind + data + struct.pack(
-            ">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+        return (
+            struct.pack(">I", len(data))
+            + kind
+            + data
+            + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+        )
 
-    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"tEXt", b"t\x00" + tag)
-            + chunk(b"IEND", b""))
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", ihdr)
+        + chunk(b"tEXt", b"t\x00" + tag)
+        + chunk(b"IEND", b"")
+    )
 
 
 def img(n, w=100, h=150, **extra):
-    return {"url": f"https://image.civitai.com/key/uuid-{n}/original=true/{n}.jpeg",
-            "width": w, "height": h, "meta": {"prompt": f"prompt {n}"}, **extra}
+    return {
+        "url": f"https://image.civitai.com/key/uuid-{n}/original=true/{n}.jpeg",
+        "width": w,
+        "height": h,
+        "meta": {"prompt": f"prompt {n}"},
+        **extra,
+    }
 
 
 @pytest.fixture
@@ -61,8 +74,9 @@ def content(tmp_path):
         if name.startswith("foo.preview"):
             data = (tmp_path / name).read_bytes()
             tag = data.split(b"tEXtt\x00", 1)[1].split(b"\x00\x00", 1)[0]
-            result[int(name.split("preview")[1].split(".")[0])] = tag[: tag.find(b"\x00")
-                                                                     if b"\x00" in tag else None]
+            result[int(name.split("preview")[1].split(".")[0])] = tag[
+                : tag.find(b"\x00") if b"\x00" in tag else None
+            ]
     return result
 
 
@@ -116,8 +130,9 @@ def test_lowered_max_count_and_unknown_files_delete_nothing(setup):
     manager, model, d = setup
     write_previews(d, "pic1", "pic2", "pic3", "pic4", "stray5")
     before = sorted(os.listdir(d))
-    merged = sync(manager, model, [img(1), img(2), img(3), img(4)],
-                  [img(1), img(2), img(3), img(4)])
+    merged = sync(
+        manager, model, [img(1), img(2), img(3), img(4)], [img(1), img(2), img(3), img(4)]
+    )
     assert len([n for n in os.listdir(d) if n.startswith("foo.preview")]) == 5
     assert merged["images"][3] == img(4)  # still on CivitAI, past max_count 3: not archived
     assert merged["images"][4] == {ARCHIVED: True, ORPHAN: True}
@@ -160,8 +175,9 @@ def test_feed_images_keep_their_numbers_and_only_fill_gaps(setup):
 def test_mirror_mode_renames_nothing(setup):
     manager, model, d = setup
     write_previews(d, "pic1", "pic2")
-    merged = manager.sync_previews(model, {"images": [img(1), img(2)]},
-                                   {"images": [img(2), img(1)]}, "showcase", mirror=True)
+    merged = manager.sync_previews(
+        model, {"images": [img(1), img(2)]}, {"images": [img(2), img(1)]}, "showcase", mirror=True
+    )
     assert prompts(merged["images"]) == ["prompt 1", "prompt 2"]
     assert b"pic1" in (d / "foo.preview1.jpeg").read_bytes()
 
@@ -172,8 +188,10 @@ def test_interrupted_sync_is_finished_next_run(setup):
     plan = manager.plan_sync(model, {"images": [img(1), img(2)]}, [img(2), img(1)], "showcase")
     # Simulate a crash after phase 1: both files under temporary names
     journal = manager._journal_path(model)
-    moves = [(s, os.path.join(os.path.dirname(s), "." + os.path.basename(s) + ".civitscraper-move"),
-              t) for s, t in plan.moves]
+    moves = [
+        (s, os.path.join(os.path.dirname(s), "." + os.path.basename(s) + ".civitscraper-move"), t)
+        for s, t in plan.moves
+    ]
     with open(journal, "w") as f:
         json.dump({"moves": moves, "images": plan.images, "phase": 2}, f)
     for s, t, _ in moves:
@@ -199,8 +217,9 @@ def test_video_download_never_replaces_an_existing_mp4(setup):
     manager, model, d = setup
     (d / "foo.preview1.mp4").write_bytes(b"old video")
     path = manager._perform_download("https://x/1.jpeg", str(d / "foo.preview1.jpeg"), 0, 1)
-    manager.api_client.download_image.side_effect = lambda url, p: (open(p, "wb").write(b"v")
-                                                                    and (True, "video/mp4"))
+    manager.api_client.download_image.side_effect = lambda url, p: (
+        open(p, "wb").write(b"v") and (True, "video/mp4")
+    )
     path = manager._perform_download("https://x/1.jpeg", str(d / "foo.preview1.jpeg"), 0, 1)
     assert (d / "foo.preview1.mp4").read_bytes() == b"old video"
     assert path.endswith(".jpeg")

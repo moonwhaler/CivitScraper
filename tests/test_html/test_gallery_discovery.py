@@ -14,8 +14,14 @@ def _card(directory, stem, ext, version_id, name):
     directory.mkdir(parents=True, exist_ok=True)
     (directory / f"{stem}{ext}").write_bytes(name.encode())
     (directory / f"{stem}.json").write_text(
-        json.dumps({"id": version_id, "modelId": version_id * 10, "name": "v1",
-                    "model": {"name": name, "type": "LORA"}})
+        json.dumps(
+            {
+                "id": version_id,
+                "modelId": version_id * 10,
+                "name": "v1",
+                "model": {"name": name, "type": "LORA"},
+            }
+        )
     )
     (directory / f"{stem}.html").write_text("<html></html>")
 
@@ -68,10 +74,13 @@ def test_nested_input_paths_list_each_file_once(tmp_path):
     sub = lib / "Illustrious"
     sub.mkdir()
     (sub / "x.safetensors").write_bytes(b"x")
-    config["input_paths"]["sub"] = {"path": str(sub), "type": "LORA",
-                                    "patterns": ["*.safetensors"]}
-    job = ScanJob(config, "scan", {"paths": ["l", "sub"], "recursive": True,
-                                   "use_cached_metadata": True}, MagicMock())
+    config["input_paths"]["sub"] = {"path": str(sub), "type": "LORA", "patterns": ["*.safetensors"]}
+    job = ScanJob(
+        config,
+        "scan",
+        {"paths": ["l", "sub"], "recursive": True, "use_cached_metadata": True},
+        MagicMock(),
+    )
     assert job.discover()
     assert [os.path.basename(f) for f in job.files] == ["x.safetensors"]
 
@@ -102,8 +111,9 @@ def test_version_index_is_built_once_under_parallel_access(tmp_path):
         real_build(directory)
 
     with patch.object(cache, "_build_index", side_effect=slow_build):
-        threads = [threading.Thread(target=cache.get_html_path, args=(str(tmp_path), 1))
-                   for _ in range(8)]
+        threads = [
+            threading.Thread(target=cache.get_html_path, args=(str(tmp_path), 1)) for _ in range(8)
+        ]
         for t in threads:
             t.start()
         for t in threads:

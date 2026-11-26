@@ -19,8 +19,16 @@ _CB_CONFIG = {
 }
 
 
-def write_sidecar(directory, name, version_id, model_id, siblings, download_count=0,
-                  created="2024-01-01T00:00:00Z", base_model="SD 1.5"):
+def write_sidecar(
+    directory,
+    name,
+    version_id,
+    model_id,
+    siblings,
+    download_count=0,
+    created="2024-01-01T00:00:00Z",
+    base_model="SD 1.5",
+):
     """Write a model sidecar .json into directory and return its path."""
     data = {
         "id": version_id,
@@ -39,14 +47,27 @@ def write_sidecar(directory, name, version_id, model_id, siblings, download_coun
 def test_union_merges_drifted_sidecars(tmp_path):
     """Two local versions with DIFFERENT stale sibling lists -> complete union."""
     # Version A sidecar only knows about A and B (stale, missing C).
-    write_sidecar(tmp_path, "A", 100, 10,
-                  siblings=[{"id": 100, "name": "A"}, {"id": 101, "name": "B"}],
-                  created="2024-01-01T00:00:00Z")
+    write_sidecar(
+        tmp_path,
+        "A",
+        100,
+        10,
+        siblings=[{"id": 100, "name": "A"}, {"id": 101, "name": "B"}],
+        created="2024-01-01T00:00:00Z",
+    )
     # Version B sidecar knows A, B, and a remote-only D.
-    write_sidecar(tmp_path, "B", 101, 10,
-                  siblings=[{"id": 100, "name": "A"}, {"id": 101, "name": "B"},
-                            {"id": 102, "name": "D", "createdAt": "2024-03-01T00:00:00Z"}],
-                  created="2024-02-01T00:00:00Z")
+    write_sidecar(
+        tmp_path,
+        "B",
+        101,
+        10,
+        siblings=[
+            {"id": 100, "name": "A"},
+            {"id": 101, "name": "B"},
+            {"id": 102, "name": "D", "createdAt": "2024-03-01T00:00:00Z"},
+        ],
+        created="2024-02-01T00:00:00Z",
+    )
 
     cache = VersionIndexCache()
     versions = cache.get_model_versions(str(tmp_path), model_id=10, current_version_id=100)
@@ -54,8 +75,8 @@ def test_union_merges_drifted_sidecars(tmp_path):
     by_id = {v["id"]: v for v in versions}
     # Union contains every version any sidecar referenced: A, B (local) + D (remote).
     assert set(by_id) == {100, 101, 102}
-    assert by_id[100]["is_local"] is True   # A: sidecar present
-    assert by_id[101]["is_local"] is True   # B: sidecar present
+    assert by_id[100]["is_local"] is True  # A: sidecar present
+    assert by_id[101]["is_local"] is True  # B: sidecar present
     assert by_id[102]["is_local"] is False  # D: remote-only
     assert by_id[102]["link"] == "https://civitai.com/models/10?modelVersionId=102"
 
@@ -122,8 +143,9 @@ def test_get_html_path_no_isfile_requirement(tmp_path):
 def test_build_sibling_versions_context_uses_union(tmp_path):
     """With a modelId, the detail context is built from the directory union."""
     write_sidecar(tmp_path, "A", 100, 10, siblings=[{"id": 100}, {"id": 101}])
-    write_sidecar(tmp_path, "B", 101, 10,
-                  siblings=[{"id": 100}, {"id": 101}, {"id": 102, "name": "D"}])
+    write_sidecar(
+        tmp_path, "B", 101, 10, siblings=[{"id": 100}, {"id": 101}, {"id": 102, "name": "D"}]
+    )
     invalidate_version_index()  # global cache used by ContextBuilder
 
     cb = ContextBuilder(_CB_CONFIG)

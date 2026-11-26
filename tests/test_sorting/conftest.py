@@ -12,8 +12,10 @@ OLD = time.time() - 3600
 
 def write_safetensors(path, tensors, metadata=None, mtime=OLD):
     """A safetensors file with the given tensor names/shapes (data is filler)."""
-    header = {name: {"dtype": "F16", "shape": shape, "data_offsets": [0, 0]}
-              for name, shape in tensors.items()}
+    header = {
+        name: {"dtype": "F16", "shape": shape, "data_offsets": [0, 0]}
+        for name, shape in tensors.items()
+    }
     if metadata:
         header["__metadata__"] = metadata
     raw = json.dumps(header).encode()
@@ -28,8 +30,17 @@ def alpha_lora(seed=0):
     """Architecture 'Alpha': kohya-style names, width 2048."""
     t = {}
     for i in range(6):
-        for mod in ("attn_q_proj", "attn_k_proj", "attn_v_proj", "attn_out_proj", "mlp_fc1",
-                    "mlp_fc2", "norm1_linear", "norm2_linear", "adaln_mod"):
+        for mod in (
+            "attn_q_proj",
+            "attn_k_proj",
+            "attn_v_proj",
+            "attn_out_proj",
+            "mlp_fc1",
+            "mlp_fc2",
+            "norm1_linear",
+            "norm2_linear",
+            "adaln_mod",
+        ):
             t[f"lora_unet_blocks_{i}_{mod}.lora_down.weight"] = [16, 2048]
             t[f"lora_unet_blocks_{i}_{mod}.lora_up.weight"] = [2048, 16]
             t[f"lora_unet_blocks_{i}_{mod}.alpha"] = []
@@ -42,8 +53,17 @@ def beta_lora(seed=0):
     """Architecture 'Beta': PEFT-style names, width 3072."""
     t = {}
     for i in range(6):
-        for mod in ("attention.to_q", "attention.to_k", "attention.to_v", "attention.to_out",
-                    "feed_forward.w1", "feed_forward.w3", "adaln", "refiner.proj", "cap.embed"):
+        for mod in (
+            "attention.to_q",
+            "attention.to_k",
+            "attention.to_v",
+            "attention.to_out",
+            "feed_forward.w1",
+            "feed_forward.w3",
+            "adaln",
+            "refiner.proj",
+            "cap.embed",
+        ):
             t[f"diffusion_model.layers.{i}.{mod}.lora_A.weight"] = [16, 3072]
             t[f"diffusion_model.layers.{i}.{mod}.lora_B.weight"] = [3072, 16]
     if seed:
@@ -57,8 +77,9 @@ def delta_lora():
 
 
 def checkpoint(width=2048):
-    return {f"model.diffusion_model.blocks.{i}.attn.qkv.weight": [width * 3, width]
-            for i in range(120)}
+    return {
+        f"model.diffusion_model.blocks.{i}.attn.qkv.weight": [width * 3, width] for i in range(120)
+    }
 
 
 def vae():
@@ -77,10 +98,15 @@ def sidecar(model_path, base, model_type="LORA", version_id=None, **extra):
     """Write a CivitAI sidecar next to the model."""
     stem = os.path.splitext(model_path)[0]
     vid = version_id or abs(hash(model_path)) % 10**8
-    data = {"id": vid, "modelId": vid + 1, "baseModel": base, "name": "v1",
-            "model": {"name": os.path.basename(stem), "type": model_type},
-            "files": [{"name": os.path.basename(model_path),
-                       "hashes": {"SHA256": f"{vid:064x}"}}], **extra}
+    data = {
+        "id": vid,
+        "modelId": vid + 1,
+        "baseModel": base,
+        "name": "v1",
+        "model": {"name": os.path.basename(stem), "type": model_type},
+        "files": [{"name": os.path.basename(model_path), "hashes": {"SHA256": f"{vid:064x}"}}],
+        **extra,
+    }
     with open(stem + ".json", "w") as f:
         json.dump(data, f)
     os.utime(stem + ".json", (OLD, OLD))
@@ -125,13 +151,18 @@ def library(tmp_path):
     config = {
         "input_paths": {
             "lora": {"path": str(lora), "type": "LORA", "patterns": ["*.safetensors"]},
-            "unet": {"path": str(models / "unet"), "type": "Checkpoint",
-                     "patterns": ["*.safetensors"]},
+            "unet": {
+                "path": str(models / "unet"),
+                "type": "Checkpoint",
+                "patterns": ["*.safetensors"],
+            },
             "vae": {"path": str(models / "VAE"), "type": "VAE", "patterns": ["*.safetensors"]},
         },
         "scanner": {"cache_dir": str(tmp_path / "cache")},
-        "sorting": {"decisions_file": str(tmp_path / "decisions.json"),
-                    "krita": {"enabled": False}},
+        "sorting": {
+            "decisions_file": str(tmp_path / "decisions.json"),
+            "krita": {"enabled": False},
+        },
         "jobs": {"sort": {"type": "sort-models", "paths": ["lora", "unet", "vae"]}},
         "output": {"metadata": {"html": {"enabled": True}}},
     }

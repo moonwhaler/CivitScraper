@@ -28,10 +28,18 @@ def fake_fetch(client, lora):
                 if ext == ".safetensors" and not os.path.exists(sidecar) and n in by_name:
                     vid, version = by_name[n]
                     with open(sidecar, "w") as f:
-                        json.dump({"id": vid, "modelId": 100 if vid < 30 else 300,
-                                   "baseModel": "Flux.1 D", "files": version["files"],
-                                   "trainedWords": version.get("trainedWords")}, f)
+                        json.dump(
+                            {
+                                "id": vid,
+                                "modelId": 100 if vid < 30 else 300,
+                                "baseModel": "Flux.1 D",
+                                "files": version["files"],
+                                "trainedWords": version.get("trainedWords"),
+                            },
+                            f,
+                        )
         return True
+
     return run_job
 
 
@@ -42,13 +50,23 @@ def run(library, answers=None, interactive=True, downloader=None, **flags):
     answers = list(answers or [])
     fetch = fake_fetch(client, models / "Lora")
     job = UpdateJob(
-        full, "updates", full["jobs"]["updates"], client,
+        full,
+        "updates",
+        full["jobs"]["updates"],
+        client,
         run_job=lambda name: fetch(name, ran),
         input_fn=lambda prompt: answers.pop(0) if answers else "q",
-        output_fn=out.append, interactive=interactive,
-        downloader=downloader or dl.Downloader("KEY", "civitai.com", max_retries=1,
-                                               retry_delay=0, session=session,
-                                               sleep=lambda s: None),
+        output_fn=out.append,
+        interactive=interactive,
+        downloader=downloader
+        or dl.Downloader(
+            "KEY",
+            "civitai.com",
+            max_retries=1,
+            retry_delay=0,
+            session=session,
+            sleep=lambda s: None,
+        ),
     )
     assert job.run()
     return "\n".join(out), ran
@@ -117,8 +135,9 @@ def test_no_is_remembered_and_hides_the_gallery_flag(library):
     text, _ = run(library, interactive=False)
     assert "foo_v3" not in text and "1 declined or ignored earlier" in text
     decisions = UpdateDecisions.for_config(config)
-    versions = [{"is_local": False, "version_id": 12, "created_at": "2026-02-01",
-                 "base_model": "Flux.1 D"}]
+    versions = [
+        {"is_local": False, "version_id": 12, "created_at": "2026-02-01", "base_model": "Flux.1 D"}
+    ]
     assert decisions.declined_ids(100, versions) == {12}  # older than the declined v13
 
 
@@ -140,12 +159,20 @@ def test_krita_references_follow_the_new_version_and_undo_reverts(library, tmp_p
     (krita / "database").mkdir(parents=True)
     (krita / "styles").mkdir()
     loras = krita / "database" / "loras.json"
-    entries = [{"id": "Flux/style/foo_v1.safetensors", "name": "Flux/style/foo_v1",
-                "source": 0, "format": "safetensors",
-                "metadata": {"lora_strength": 0.7, "lora_triggers": "old trigger"}}]
+    entries = [
+        {
+            "id": "Flux/style/foo_v1.safetensors",
+            "name": "Flux/style/foo_v1",
+            "source": 0,
+            "format": "safetensors",
+            "metadata": {"lora_strength": 0.7, "lora_triggers": "old trigger"},
+        }
+    ]
     loras.write_text(json.dumps(entries, indent=2))
-    style = {"name": "s", "loras": [{"name": "Flux/style/foo_v1.safetensors", "strength": 0.6,
-                                     "enabled": True}]}
+    style = {
+        "name": "s",
+        "loras": [{"name": "Flux/style/foo_v1.safetensors", "strength": 0.6, "enabled": True}],
+    }
     (krita / "styles" / "s.json").write_text(json.dumps(style, indent=4))
     config["sorting"]["krita"] = {"enabled": True, "loras_file": str(loras)}
     monkeypatch.setattr("civitscraper.updates.job.krita_running", lambda: False)
@@ -155,8 +182,11 @@ def test_krita_references_follow_the_new_version_and_undo_reverts(library, tmp_p
     assert entry["id"] == "Flux/style/foo_v3.safetensors" and entry["name"] == "Flux/style/foo_v3"
     assert entry["metadata"] == {"lora_strength": 0.7, "lora_triggers": "new trigger"}
     new_style = json.loads((krita / "styles" / "s.json").read_text())
-    assert new_style["loras"][0] == {"name": "Flux/style/foo_v3.safetensors", "strength": 0.6,
-                                     "enabled": True}
+    assert new_style["loras"][0] == {
+        "name": "Flux/style/foo_v3.safetensors",
+        "strength": 0.6,
+        "enabled": True,
+    }
 
     run(library, undo=True)
     assert json.loads(loras.read_text()) == entries
@@ -181,8 +211,7 @@ class Interrupting:
 
 def test_an_interrupted_run_resumes_and_finishes_the_old_version(library):
     _, models, _, session = library
-    real = dl.Downloader("KEY", "civitai.com", retry_delay=0, session=session,
-                         sleep=lambda s: None)
+    real = dl.Downloader("KEY", "civitai.com", retry_delay=0, session=session, sleep=lambda s: None)
     stopper = Interrupting(real)
     stopper.first_bytes = session.files[130][:100]
     text, _ = run(library, ["y", "a"], downloader=stopper)
@@ -199,14 +228,24 @@ def test_an_interrupted_run_resumes_and_finishes_the_old_version(library):
 def test_gallery_hides_the_update_flag_of_declined_versions():
     from civitscraper.html.context import ContextBuilder
 
-    cards = [{"model_id": 5, "version_id": 1, "version": "v1", "created_at": "2026-01-01",
-              "base_model": "Flux.1 D", "file_path": "/m/a.safetensors",
-              "sibling_versions": [{"id": 2, "name": "v2", "createdAt": "2026-02-01",
-                                    "baseModel": "Flux.1 D"}]}]
+    cards = [
+        {
+            "model_id": 5,
+            "version_id": 1,
+            "version": "v1",
+            "created_at": "2026-01-01",
+            "base_model": "Flux.1 D",
+            "file_path": "/m/a.safetensors",
+            "sibling_versions": [
+                {"id": 2, "name": "v2", "createdAt": "2026-02-01", "baseModel": "Flux.1 D"}
+            ],
+        }
+    ]
     flagged = ContextBuilder.merge_gallery_models([dict(c) for c in cards])
     assert flagged[0]["update_version"] == "v2"
-    hidden = ContextBuilder.merge_gallery_models([dict(c) for c in cards],
-                                                 declined=lambda mid, versions: {2})
+    hidden = ContextBuilder.merge_gallery_models(
+        [dict(c) for c in cards], declined=lambda mid, versions: {2}
+    )
     assert hidden[0]["update_version"] is None and "update" not in hidden[0]["health"]
 
 
@@ -224,13 +263,17 @@ def test_an_archive_folder_inside_a_scanned_folder_is_refused_before_asking(libr
     config_answers = ["y", "a", "k"]
     _, _, client, session = library
     out = []
-    job = UpdateJob(config, "updates", config["jobs"]["updates"], client,
-                    run_job=lambda name: True,
-                    input_fn=lambda p: prompts.append(p) or (config_answers.pop(0)
-                                                             if config_answers else "q"),
-                    output_fn=out.append, interactive=True,
-                    downloader=dl.Downloader("KEY", "civitai.com", session=session,
-                                             sleep=lambda s: None))
+    job = UpdateJob(
+        config,
+        "updates",
+        config["jobs"]["updates"],
+        client,
+        run_job=lambda name: True,
+        input_fn=lambda p: prompts.append(p) or (config_answers.pop(0) if config_answers else "q"),
+        output_fn=out.append,
+        interactive=True,
+        downloader=dl.Downloader("KEY", "civitai.com", session=session, sleep=lambda s: None),
+    )
     job.run()
     text = "\n".join(out)
     assert "Archiving is off" in text and "inside a scanned folder" in text

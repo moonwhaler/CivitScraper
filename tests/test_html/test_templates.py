@@ -240,7 +240,14 @@ def test_image_data_holds_only_what_the_page_reads(model_page):
     """Settings travel in params; the old per-setting keys are gone."""
     context, _ = model_page
     assert set(context["images"][0]) == {
-        "path", "prompt", "negative_prompt", "params", "width", "height", "nsfw", "is_video",
+        "path",
+        "prompt",
+        "negative_prompt",
+        "params",
+        "width",
+        "height",
+        "nsfw",
+        "is_video",
         "archived",
     }
 

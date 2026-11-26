@@ -18,8 +18,11 @@ def _config(tmp_path, max_count=None):
 
 
 def _img(n, **extra):
-    return {"url": f"https://image.civitai.com/k/uuid-{n}/original=true/{n}.jpeg",
-            "meta": {"prompt": f"prompt {n}"}, **extra}
+    return {
+        "url": f"https://image.civitai.com/k/uuid-{n}/original=true/{n}.jpeg",
+        "meta": {"prompt": f"prompt {n}"},
+        **extra,
+    }
 
 
 def test_files_are_found_whatever_their_extension(tmp_path):
@@ -47,7 +50,9 @@ def test_archived_previews_are_shown_after_current_ones_beyond_max_count(tmp_pat
     meta = {"images": [_img(1), _img(2), _img(3, civitscraperArchived=True)]}
     images = ImageHandler(config).get_image_paths(model, meta)
     assert [(i["prompt"], i["archived"]) for i in images] == [
-        ("prompt 1", False), ("prompt 3", True)]
+        ("prompt 1", False),
+        ("prompt 3", True),
+    ]
 
 
 def test_nsfw_flag_from_level_or_feed_boolean():
@@ -61,8 +66,9 @@ def test_feed_images_keep_their_level(tmp_path):
     from unittest.mock import MagicMock
 
     api = MagicMock()
-    api.get_images.return_value = {"items": [{"id": 1, "url": "u", "nsfwLevel": 16,
-                                              "type": "video"}]}
+    api.get_images.return_value = {
+        "items": [{"id": 1, "url": "u", "nsfwLevel": 16, "type": "video"}]
+    }
     manager = MetadataManager({"scanner": {"cache_dir": str(tmp_path)}}, api)
     (image,) = manager._fetch_nsfw_images(5, False)
     assert image["nsfwLevel"] == 16 and image["type"] == "video" and image["nsfw"] is True
@@ -74,8 +80,13 @@ def _card_setup(tmp_path, images, removed=None):
     import json
 
     config, models, model = _config(tmp_path)
-    meta = {"id": 1, "modelId": 2, "name": "v1", "model": {"name": "Foo", "type": "LORA"},
-            "images": images}
+    meta = {
+        "id": 1,
+        "modelId": 2,
+        "name": "v1",
+        "model": {"name": "Foo", "type": "LORA"},
+        "images": images,
+    }
     if removed:
         meta["civitscraper"] = {"removed": removed}
     (models / "foo.json").write_text(json.dumps(meta))
@@ -86,7 +97,8 @@ def test_gallery_cover_skips_archived_previews(tmp_path):
     from civitscraper.html.context import ContextBuilder
 
     config, models, model, _ = _card_setup(
-        tmp_path, [_img(1), _img(2), _img(3, civitscraperArchived=True)])
+        tmp_path, [_img(1), _img(2), _img(3, civitscraperArchived=True)]
+    )
     (models / "foo.preview3.jpeg").write_bytes(b"x")  # archived
     (models / "foo.preview2.jpeg").write_bytes(b"x")  # current (preview1 failed)
     card = ContextBuilder(config)._process_gallery_model(model)
@@ -98,8 +110,10 @@ def test_removed_model_gets_health_flag_and_page_notice(tmp_path):
     from civitscraper.html.renderer import TemplateRenderer
 
     config, models, model, meta = _card_setup(
-        tmp_path, [_img(1), _img(2, civitscraperArchived=True)],
-        removed={"what": "model", "at": 1767225600})
+        tmp_path,
+        [_img(1), _img(2, civitscraperArchived=True)],
+        removed={"what": "model", "at": 1767225600},
+    )
     (models / "foo.preview1.jpeg").write_bytes(b"x")
     (models / "foo.preview2.jpeg").write_bytes(b"x")
     builder = ContextBuilder(config)

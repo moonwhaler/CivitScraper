@@ -15,13 +15,22 @@ DAY = 86400
 
 
 def img(n):
-    return {"url": f"https://image.civitai.com/key/uuid-{n}/original=true/{n}.jpeg",
-            "meta": {"prompt": f"prompt {n}"}}
+    return {
+        "url": f"https://image.civitai.com/key/uuid-{n}/original=true/{n}.jpeg",
+        "meta": {"prompt": f"prompt {n}"},
+    }
 
 
 def version(vid, images, **extra):
-    return {"id": vid, "modelId": vid * 10, "name": "v1", "images": images,
-            "model": {"name": f"M{vid}", "type": "LORA"}, "stats": {"downloadCount": 1}, **extra}
+    return {
+        "id": vid,
+        "modelId": vid * 10,
+        "name": "v1",
+        "images": images,
+        "model": {"name": f"M{vid}", "type": "LORA"},
+        "stats": {"downloadCount": 1},
+        **extra,
+    }
 
 
 @pytest.fixture
@@ -32,13 +41,15 @@ def lib(tmp_path, monkeypatch):
     config = {
         "api": {"base_url": "https://example.invalid"},
         "scanner": {"cache_dir": str(tmp_path / "cache")},
-        "input_paths": {"l": {"path": str(models), "type": "LORA",
-                              "patterns": ["*.safetensors"]}},
+        "input_paths": {"l": {"path": str(models), "type": "LORA", "patterns": ["*.safetensors"]}},
     }
     api = MagicMock()
-    api.get_parent_model_with_versions.side_effect = lambda mid, current_version_id=0, \
-        force_refresh=False: {"parentModel": {"id": mid, "name": "P", "tags": ["fresh"]},
-                              "siblingVersions": [{"id": mid // 10, "name": "v1"}]}
+    api.get_parent_model_with_versions.side_effect = (
+        lambda mid, current_version_id=0, force_refresh=False: {
+            "parentModel": {"id": mid, "name": "P", "tags": ["fresh"]},
+            "siblingVersions": [{"id": mid // 10, "name": "v1"}],
+        }
+    )
 
     def download(url, path):
         with open(path, "wb") as f:
@@ -52,8 +63,11 @@ def lib(tmp_path, monkeypatch):
 def add_model(models, name, vid, images, age_days, files=(), **extra):
     (models / f"{name}.safetensors").write_bytes(name.encode())
     sidecar = version(vid, images, **extra)
-    sidecar[NAMESPACE] = {"fetchedAt": time.time() - age_days * DAY,
-                          "checkedAt": time.time() - age_days * DAY, "previewsSynced": True}
+    sidecar[NAMESPACE] = {
+        "fetchedAt": time.time() - age_days * DAY,
+        "checkedAt": time.time() - age_days * DAY,
+        "previewsSynced": True,
+    }
     path = models / f"{name}.json"
     path.write_text(json.dumps(sidecar))
     for n, tag in enumerate(files, 1):
@@ -62,9 +76,12 @@ def add_model(models, name, vid, images, age_days, files=(), **extra):
 
 
 def job(config, api, **job_extra):
-    spec = {"type": "scan-paths", "paths": ["l"],
-            "output": {"metadata": {"html": {"enabled": True}}, "images": {"max_count": 3}},
-            **job_extra}
+    spec = {
+        "type": "scan-paths",
+        "paths": ["l"],
+        "output": {"metadata": {"html": {"enabled": True}}, "images": {"max_count": 3}},
+        **job_extra,
+    }
     return ScanJob(config, "fetch-all", spec, api)
 
 
@@ -92,10 +109,16 @@ def test_due_files_oldest_first_and_capped(lib):
 
 def test_refresh_merges_reorders_previews_and_keeps_forge_keys(lib):
     config, models, api = lib
-    sidecar = add_model(models, "a", 1, [img(1), img(2)], 20, files=("pic1", "pic2"),
-                        **{"activation text": "my words", "notes": "mine"})
-    api.get_model_version.return_value = version(1, [img(3), img(2)],
-                                                 stats={"downloadCount": 99})
+    sidecar = add_model(
+        models,
+        "a",
+        1,
+        [img(1), img(2)],
+        20,
+        files=("pic1", "pic2"),
+        **{"activation text": "my words", "notes": "mine"},
+    )
+    api.get_model_version.return_value = version(1, [img(3), img(2)], stats={"downloadCount": 99})
     runner = job(config, api)
     assert runner.run()
 
@@ -125,10 +148,11 @@ def test_version_404_flags_and_deletes_nothing(lib):
 
     data = json.loads(sidecar.read_text())
     assert data[NAMESPACE]["removed"]["what"] == "version"
-    assert {k: v for k, v in data.items() if k not in (NAMESPACE, "parentModel",
-                                                       "siblingVersions",
-                                                       "siblingVersionsFetchedAt")} == {
-        k: v for k, v in before.items() if k != NAMESPACE}
+    assert {
+        k: v
+        for k, v in data.items()
+        if k not in (NAMESPACE, "parentModel", "siblingVersions", "siblingVersionsFetchedAt")
+    } == {k: v for k, v in before.items() if k != NAMESPACE}
     assert (models / "a.preview1.jpeg").read_bytes() == b"pic1"
     assert (models / "a.html").read_text() != "old page"  # page regenerated, not removed
     assert runner.summary["removed"] == 1 and runner.summary["not_found"] == 0
@@ -175,12 +199,14 @@ def test_refusal_only_moves_the_check_date(lib):
 def test_forge_only_sidecar_is_looked_up_and_its_keys_kept(lib):
     config, models, api = lib
     (models / "f.safetensors").write_bytes(b"forge")
-    (models / "f.json").write_text(json.dumps({"activation text": "forge words",
-                                               "preferred weight": 0.7}))
+    (models / "f.json").write_text(
+        json.dumps({"activation text": "forge words", "preferred weight": 0.7})
+    )
     api.get_model_version_by_hash.return_value = version(5, [img(1)])
     runner = job(config, api)
     assert runner.discover() and [os.path.basename(f) for f in runner.filtered_files] == [
-        "f.safetensors"]
+        "f.safetensors"
+    ]
     runner = job(config, api)
     assert runner.run()
     data = json.loads((models / "f.json").read_text())
