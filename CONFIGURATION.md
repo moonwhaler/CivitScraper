@@ -10,6 +10,7 @@ At start-up CivitScraper warns about keys it does not know, since those are igno
 - [HTML Generation Configuration](#html-generation-configuration)
 - [Advanced Organization Settings](#advanced-organization-settings)
 - [Keeping Models Up to Date](#keeping-models-up-to-date)
+- [Sorting Models into the Right Folders](#sorting-models-into-the-right-folders)
 - [Scanner Settings (Caching)](#scanner-settings-caching)
 - [Logging Configuration](#logging-configuration)
 - [Batch Processing Details](#batch-processing-details)
@@ -259,6 +260,84 @@ scanner:
 -   `skip_existing: false` refreshes every file now (by hash), with the same rules. Offline jobs (`use_cached_metadata: true`) never refresh.
 -   Sidecars Forge wrote on its own (without CivitAI data) are looked up like new files; their keys are kept.
 -   The job summary counts new, refreshed and removed models.
+
+## Sorting Models into the Right Folders
+
+With many models it is easy to drop a LoRA into the wrong base model's folder. The `sort-models` job finds such files and moves them, with their sidecar, page and previews:
+
+```yaml
+input_paths:
+  lora:         { path: "models/Lora", type: LORA, patterns: ["*.safetensors"] }
+  unet:         { path: "models/unet", type: Checkpoint, patterns: ["*.safetensors", "*.gguf"] }
+  vae:          { path: "models/VAE", type: VAE, patterns: ["*.safetensors"] }                # optional
+  text_encoder: { path: "models/text_encoder", type: TextEncoder, patterns: ["*.safetensors"] }  # optional
+
+jobs:
+  sort:
+    type: sort-models
+    paths: ["lora", "unet", "vae", "text_encoder"]
+
+sorting:                       # all optional
+  regenerate_job: regenerate-html   # rebuilds pages and gallery after moving (default: regenerate-html)
+  decisions_file: sort-decisions.json   # your answers; relative to the config file
+  gallery_flag: true           # flag misplaced models in the gallery
+  base_folders:                # only needed where the folders cannot be learned
+    "Illustrious": SDXL         # put this base model into an existing folder
+    "Flux.1 D": { lora: Flux, checkpoint: flux1-dev }
+  krita:
+    enabled: true              # update Krita AI Diffusion's LoRA paths after moves
+    # loras_file: defaults to the sync-lora-triggers job's loras_file
+    # styles_dir: defaults to <krita data>/styles
+```
+
+```bash
+civitscraper -j sort --dry-run   # report only
+civitscraper -j sort             # walk through each suggestion in the terminal
+civitscraper -j sort --yes       # move only the confident ones, without asking
+civitscraper -j sort --undo      # move the last run's models back
+```
+
+**What a model really is.** Two independent sources are compared:
+
+-   The CivitAI sidecar: matched by the file's hash, so it describes this exact file. Its base model is chosen by the uploader and is sometimes wrong.
+-   The file itself: the header of a `.safetensors` or `.gguf` file lists every tensor. Its layout tells a LoRA from a LoKr, a full checkpoint, a VAE or a text encoder, and is compared with the files you already have CivitAI data for. Training metadata (`ss_base_model_version`) counts as a hint once your labelled files show what it stands for. Only the header is read; pickle files (`.pt`, `.ckpt`) are never opened.
+
+Base models built on the same architecture (Pony, Illustrious and SDXL, for example) cannot be told apart by the file. There, CivitAI's label decides and the file never contradicts it.
+
+**Where it belongs.** Below each input path, the first folder level is the base model folder (`Lora/SDXL`); deeper folders are your categories (`style`, `character`) and are kept when a file moves (`SDXL/style/x` goes to `Flux/style/x`; an existing `Style` folder is reused). Which folder stands for which base model is learned: a folder holds a base model when at least 60 % of its (at least 3) labelled files are of that base. `sorting.base_folders` overrides or extends this. An input path without base folders is not sorted. A file directly in the input path or in a folder that stands for no base model (an inbox such as `pre-sort`) is *not sorted yet* and gets a suggestion too.
+
+**The walk-through** shows, for each suggestion, what CivitAI says, what the file looks like and where it would go:
+
+```
+[1/2] Lora/SDXL/concept/ember_glow.safetensors  (LoRA · in another base model's folder)
+  CivitAI    Flux.1 D · LORA
+  Structure  Flux.1 D · 100% like your 2 labelled Flux.1 D LoRA file(s)
+  Move to    Lora/Flux/concept/ember_glow.safetensors  (+6 file(s))
+  [y] move  [n] keep here  [s] skip  [o] other folder  [a] all SDXL/concept → Flux/concept  [q] quit
+```
+
+-   `n` remembers to keep the file where it is; it is not suggested again (also not in the gallery). `s` skips it for this run only.
+-   `o` asks for another folder and can remember "this base model goes in that folder" for all its files.
+-   `a` moves every following file from the same folder to the same target without asking.
+-   When CivitAI and the file disagree, you choose `[c]` follow CivitAI or `[f]` follow the file; the choice is remembered.
+-   Files whose architecture is unknown are only asked about when they are not in a base model folder, and the default answer is to leave them.
+-   Answers are kept in `sorting.decisions_file`, keyed by the file's content, so they survive renames and moves.
+
+`--yes` moves only suggestions that are safe without a look: a single target inside the same input path, an existing folder, and CivitAI data (or an unambiguous file). New folders, moves between input paths (a checkpoint lying in `Lora/`), conflicts and unknown files always wait for the walk-through. VAE and text encoder files are only reported, never moved: they are often shared by several base models.
+
+**Safety.**
+
+-   Nothing is ever overwritten or deleted. Before a model moves, every target is checked; if any file is in the way, the model stays where it is. Each move is atomic and refuses an existing target; a move to another drive is refused rather than copied.
+-   If a move fails halfway, the files already moved go back.
+-   Files that changed in the last five minutes, or that have a `.part` download next to them, are left alone. So are models with an unfinished preview update.
+-   Every run is journaled in `<cache_dir>/sort-journal/`. An interrupted run is finished at the start of the next one. `--undo` moves the last run's models back, including previews downloaded since, and removes folders the run created if they are empty.
+-   Files next to a model that the sorter does not know (`<model>.notes.txt`) are left in place and listed.
+-   Hashes are carried over, so moved files are not hashed again.
+-   Afterwards the pages and the gallery are rebuilt by the `regenerate_job`, so all links point to the new places.
+
+**Krita.** Krita AI Diffusion refers to LoRAs by their path inside the LoRA folder (`SDXL/style/x.safetensors`). After moving LoRAs, the sorter replaces exactly those paths in Krita's `loras.json` and in the LoRA lists of its styles; nothing else in those files changes, and a timestamped backup is written first. If Krita is running you are asked first (with `--yes`, the update is skipped). `--undo` changes the paths back.
+
+**In the gallery,** `scan-paths` jobs flag misplaced models (*In the wrong folder*), with the suggested folder in the quick look, and the job summary reports how many there are. Set `sorting.gallery_flag: false` to turn this off.
 
 ## Scanner Settings (Caching)
 
