@@ -94,6 +94,7 @@ class HTMLGenerator:
         title: str = "Model Gallery",
         include_existing: bool = True,
         unmatched: Optional[List[Tuple[str, str]]] = None,
+        misplaced: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> str:
         """
         Generate gallery HTML for multiple models.
@@ -105,6 +106,8 @@ class HTMLGenerator:
             include_existing: Whether to include existing model card HTML files
             unmatched: (model file, reason) for scanned files without a card, shown
                 in the gallery's "Not on CivitAI / no metadata" panel
+            misplaced: Normalized model path -> ``{to, why}`` for models in the
+                wrong folder (``sorting.analysis.gallery_flags``)
 
         Returns:
             Path to generated HTML file
@@ -118,6 +121,7 @@ class HTMLGenerator:
         output_path = os.path.abspath(output_path)
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
+        self.context_builder.misplaced = misplaced or {}
         candidates: List[str] = list(file_paths)
 
         if include_existing:

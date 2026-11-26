@@ -27,6 +27,8 @@ from ..organization import FileOrganizer, OrganizationConfig
 from ..organization.organizer import is_in_organized_output
 from ..scanner.discovery import find_model_files, get_metadata_path
 from ..scanner.processor import ModelProcessor
+from ..sorting.analysis import gallery_flags
+from ..sorting.mover import pending_journals
 from ..scanner.sidecar import (
     bookkeeping,
     has_civitai_metadata,
@@ -86,6 +88,7 @@ class ScanJob:
         self.fresh_source: Dict[str, str] = {}
         # Files whose sidecar changed: their pages are regenerated
         self.updated: set = set()
+        self.misplaced_count = 0
         self.summary = {
             "new": 0,
             "refreshed": 0,
@@ -132,6 +135,11 @@ class ScanJob:
             False if the job has no paths to scan
         """
         job_config = self.job_config
+        if pending_journals(self.config):
+            logger.warning(
+                "A sort run was interrupted; run the sort-models job first so it can "
+                "finish moving those models (until then they may look new or unmatched)"
+            )
 
         path_ids = job_config.get("paths", [])
         if not path_ids:
@@ -603,7 +611,21 @@ class ScanJob:
             gallery_title,
             include_existing=include_existing,
             unmatched=self.unmatched_files(),
+            misplaced=self.misplaced_models(),
         )
+
+    def misplaced_models(self) -> Dict[str, Dict[str, Any]]:
+        """Models in the wrong folder, for the gallery's "misplaced" flag."""
+        if not (self.job_specific_config.get("sorting") or {}).get("gallery_flag", True):
+            return {}
+        try:
+            flags = gallery_flags(self.job_specific_config, self.path_ids)
+        except Exception as e:  # never let the hint break the gallery
+            logger.warning(f"Could not check which models are misplaced: {e}")
+            logger.debug("Traceback:", exc_info=True)
+            return {}
+        self.misplaced_count = len(flags)
+        return flags
 
     def unmatched_files(self) -> List[Tuple[str, str]]:
         """
@@ -631,6 +653,11 @@ class ScanJob:
 
     def log_summary(self) -> None:
         """Log what the job did."""
+        if self.misplaced_count:
+            logger.info(
+                f"{self.misplaced_count} model(s) seem to be in the wrong folder: "
+                "run the sort-models job (e.g. civitscraper -j sort) to review them"
+            )
         summary = self.summary
         summary["output_failed"] = sum(1 for _, meta in self.results if meta is None)
         skipped = len(self.files) - len(self.filtered_files) - len(self.refresh_files)
