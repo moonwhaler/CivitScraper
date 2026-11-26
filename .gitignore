@@ -70,4 +70,7 @@ model-gallery-details.md
 
 # Sort decisions (sort-models job)
 config/sort-decisions.json
+# Update decisions (download-updates job)
+config/update-decisions.json
+update-decisions.json
 sort-decisions.json

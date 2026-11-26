@@ -108,6 +108,16 @@ _SORTING = {
     "krita": {"enabled": LEAF, "loras_file": LEAF, "styles_dir": LEAF},
 }
 
+_UPDATES = {
+    "auto_max_size_mb": LEAF,
+    "min_free_gb": LEAF,
+    "archive_dir": LEAF,
+    "after_jobs": LEAF,
+    "decisions_file": LEAF,
+    "base_models": FREE,
+    "krita": {"enabled": LEAF},
+}
+
 # Sections a job may override (merged over the global configuration)
 _OVERRIDABLE: Dict[str, Any] = {
     "api": _API,
@@ -116,8 +126,9 @@ _OVERRIDABLE: Dict[str, Any] = {
     "output": _OUTPUT,
     "organization": _ORGANIZATION,
     "sorting": _SORTING,
+    "updates": _UPDATES,
     "dry_run": LEAF,
-    # Set from the command line (--yes, --undo) for the sort-models job
+    # Set from the command line (--yes, --undo) for the sort and update jobs
     "yes": LEAF,
     "undo": LEAF,
 }

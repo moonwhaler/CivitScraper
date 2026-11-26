@@ -8,7 +8,7 @@ import json
 import logging
 import os
 import shutil
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from ..scanner.discovery import cached_listings, find_html_files
 from ..utils.fs import atomic_write
@@ -44,6 +44,7 @@ class HTMLGenerator:
         """
         self.config = config
         self.dry_run = config.get("dry_run", False)
+        self.update_count = 0
 
         self.path_manager = PathManager(config)
         self.renderer = TemplateRenderer(template_dir)
@@ -95,6 +96,8 @@ class HTMLGenerator:
         include_existing: bool = True,
         unmatched: Optional[List[Tuple[str, str]]] = None,
         misplaced: Optional[Dict[str, Dict[str, Any]]] = None,
+        update_declined: Optional[Callable[[Any, List[Dict[str, Any]]], Set[Any]]] = None,
+        used_bases: Any = None,
     ) -> str:
         """
         Generate gallery HTML for multiple models.
@@ -108,6 +111,10 @@ class HTMLGenerator:
                 in the gallery's "Not on CivitAI / no metadata" panel
             misplaced: Normalized model path -> ``{to, why}`` for models in the
                 wrong folder (``sorting.analysis.gallery_flags``)
+            update_declined: ``(model_id, versions) -> version ids`` declined in the
+                update walk-through; they no longer flag an update
+            used_bases: ``updates.bases.UsedBases``: base models you use (versions
+                for them are listed as "Also for") and your base folders (grouping)
 
         Returns:
             Path to generated HTML file
@@ -167,7 +174,7 @@ class HTMLGenerator:
         # Context keys follow the file names: css_theme_path, js_gallery_path, ...
         assets_to_copy = {
             "css": ["theme.css", "gallery.css"],
-            "js": ["common.js", "gallery.js"],
+            "js": ["common.js", "grouping.js", "gallery.js"],
         }
 
         logger.debug(f"Copying assets to {output_dir}")
@@ -230,8 +237,12 @@ class HTMLGenerator:
         # Merge per-file cards so each CivitAI model is a single gallery card
         # (collapses multiple local versions; attaches local+remote version list).
         models_data = self.context_builder.merge_gallery_models(
-            models_data, self.context_builder.domains
+            models_data,
+            self.context_builder.domains,
+            update_declined,
+            set(used_bases.bases) if used_bases else None,
         )
+        self.update_count = sum(1 for card in models_data if card.get("update_version"))
         logger.debug(f"Merged into {len(models_data)} unique model cards")
 
         # Paths relative to the gallery keep links working when the collection is

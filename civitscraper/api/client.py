@@ -27,6 +27,11 @@ class CivitAIClient:
         return self._base_client.api_key
 
     @property
+    def download_rate_limiter(self) -> Any:
+        """Rate limiter shared by file downloads."""
+        return self._base_client.download_rate_limiter
+
+    @property
     def base_url(self) -> Any:
         """Get base URL."""
         return self._base_client.base_url
