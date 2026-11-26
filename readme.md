@@ -146,7 +146,7 @@ That's it! You've successfully scanned your models and created visual previews.
 
 ### Requirements
 
-*   Python 3.8 or higher
+*   Python 3.10 or higher
 *   An internet connection (to talk to the CivitAI API)
 
 ### Steps
