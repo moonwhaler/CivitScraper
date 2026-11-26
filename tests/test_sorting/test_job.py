@@ -203,3 +203,14 @@ def test_decisions_file_is_relative_to_the_config(tmp_path):
 
     config = {"_config_dir": str(tmp_path), "sorting": {"decisions_file": "d.json"}}
     assert decisions_path(config) == str(tmp_path / "d.json")
+
+
+def test_walk_through_links_to_civitai_on_both_domains(library):
+    config, models = library
+    p = write_safetensors(models / "Lora" / "Alpha" / "style" / "wrong.safetensors", beta_lora(9))
+    sidecar(p, "Beta", version_id=999, nsfwLevel=16)
+    text, _ = run(config, ["s"])
+    lines = text.splitlines()
+    page = next(i for i, line in enumerate(lines) if line.strip().startswith("Page"))
+    assert "https://civitai.red/models/1000?modelVersionId=999" in lines[page]
+    assert "https://civitai.com/models/1000?modelVersionId=999" in lines[page + 1]

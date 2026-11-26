@@ -12,9 +12,11 @@ import sys
 from collections import Counter
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from ..api.domains import build_model_url, get_domain_settings, is_nsfw
 from ..config.loader import merge_configs
 from ..html.context import _version_index_cache
 from .analysis import Analysis, analyze
+from .classifier import Item
 from .decisions import KEEP, Decisions, decisions_path, file_key
 from .fingerprint import CHECKPOINT, EMBEDDING, LOHA, LOKR, LORA, TEXT_ENCODER, VAE
 from .krita import KritaReferences, krita_running
@@ -268,17 +270,22 @@ class SortJob:
         item = v.item
         if item.civitai_base:
             lines.append(f"  CivitAI    {item.civitai_base} · {item.civitai_type or '?'}")
+            for n, url in enumerate(self._links(item)):
+                lines.append(f"  {'Page' if n == 0 else '':<10} {url if n == 0 else s.dim(url)}")
         else:
             lines.append(f"  CivitAI    {s.dim('no data')}")
         vote = v.vote
         if vote:
             family = item.fingerprint.family or ""
             vote_family = analysis.classifier.structural_family(family, vote.base)
-            support = sum(analysis.classifier.support(family, b) for b in vote_family)
-            if item.civitai_base in vote_family:
+            # Built-alike base models only matter when CivitAI does not settle it.
+            ambiguous = len(vote_family) > 1 and item.civitai_base != vote.base
+            counted = vote_family if ambiguous else frozenset({vote.base})
+            support = sum(analysis.classifier.support(family, b) for b in counted)
+            if item.civitai_base in counted:
                 support -= 1  # the file itself
             kind = KIND_LABELS.get(item.fingerprint.kind, item.fingerprint.kind)
-            group = vote.base if len(vote_family) == 1 else "/".join(sorted(vote_family))
+            group = "/".join(sorted(counted))
             text = (
                 f"{vote.base} · {vote.similarity:.0%} like your {support} labelled "
                 f"{group} {kind} file(s)"
@@ -286,7 +293,7 @@ class SortJob:
             if vote.runner_up and vote.runner_up[0] not in vote_family:
                 text += s.dim(f" (next: {vote.runner_up[0]} {vote.runner_up[1]:.0%})")
             lines.append(f"  Structure  {text}")
-            if len(vote_family) > 1:
+            if ambiguous:
                 alike = ", ".join(sorted(vote_family))
                 lines.append(
                     s.dim(
@@ -306,6 +313,20 @@ class SortJob:
         if shown:
             lines.append(f"  Header     {' · '.join(shown)}")
         return lines
+
+    def _links(self, item: Item) -> List[str]:
+        """Return the CivitAI pages of the file's version, its routed domain first."""
+        meta = item.metadata or {}
+        model_id = (meta.get("parentModel") or {}).get("id") or meta.get("modelId")
+        version_id = meta.get("id")
+        if not model_id or not version_id:
+            return []
+        domains, threshold, _ = get_domain_settings(self.config)
+        nsfw = is_nsfw(meta, threshold)
+        return [
+            build_model_url(model_id, version_id, nsfw, domains),
+            build_model_url(model_id, version_id, not nsfw, domains),
+        ]
 
     def _describe(self, option: Option, plan_companions: int) -> str:
         extra = f"  (+{plan_companions} file(s))" if plan_companions else ""
