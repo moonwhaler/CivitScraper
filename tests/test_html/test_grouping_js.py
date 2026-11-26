@@ -23,7 +23,8 @@ def run_js(body):
 MODELS = """
 const M = [
   {name: 'a', type: 'LORA', base_model: 'Krea 2', group_path: ['style'], file_size: 100,
-   file_modified: '2026-01-01T00:00:00Z', health: ['update'], preview_image_path: 'a.mp4', is_video: true},
+   file_modified: '2026-01-01T00:00:00Z', health: ['update'],
+   preview_image_path: 'a.mp4', is_video: true},
   {name: 'b', type: 'LORA', base_model: 'Krea 2', group_path: ['style', 'anime'], file_size: 50,
    file_modified: '2026-03-01T00:00:00Z', preview_image_path: 'b.jpg'},
   {name: 'c', type: 'LORA', base_model: 'MOSS Image', group_path: [], file_size: 7},

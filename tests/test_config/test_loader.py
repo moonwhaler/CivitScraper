@@ -116,8 +116,7 @@ def test_load_config_expands_env_in_paths(temp_dir: Path, monkeypatch: pytest.Mo
     monkeypatch.setenv("MY_DIR", "/mnt/ssd")
 
     config_file = temp_dir / "env.yaml"
-    config_file.write_text(
-        """
+    config_file.write_text("""
     api:
       key: "k"
       base_url: "https://civitai.com/api/v1"
@@ -126,8 +125,7 @@ def test_load_config_expands_env_in_paths(temp_dir: Path, monkeypatch: pytest.Mo
         path: "${MY_DIR}/loras"
         type: "LORA"
         patterns: ["*.safetensors"]
-    """
-    )
+    """)
 
     config = load_and_validate_config(str(config_file))
 
@@ -177,8 +175,7 @@ def test_load_config_with_default_values(temp_dir: Path, monkeypatch: pytest.Mon
 
     # Create a minimal config file
     minimal_config_file = temp_dir / "minimal.yaml"
-    minimal_config_file.write_text(
-        """
+    minimal_config_file.write_text("""
     api:
       key: "minimal_api_key"
       base_url: "https://civitai.com/api/v1"
@@ -187,8 +184,7 @@ def test_load_config_with_default_values(temp_dir: Path, monkeypatch: pytest.Mon
         path: "/test/path"
         type: "LORA"
         patterns: ["*.safetensors"]
-    """
-    )
+    """)
 
     # Load the config
     config = load_and_validate_config(str(minimal_config_file))
